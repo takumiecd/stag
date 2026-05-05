@@ -50,7 +50,7 @@ class Planner:
         """
         Outputs:
         - Candidate next states
-        - Expected value for each (speedup expectation, risk)
+        - Expected value for each (improvement expectation, risk)
         - Recommended action
         """
         pass
@@ -77,7 +77,7 @@ class PredictedState:
     action: str  # "propose", "implement", "evaluate", etc.
     target: str
     expected_result: str
-    estimated_speedup: float
+    estimated_improvement: float
     risk_score: float
 ```
 
@@ -94,14 +94,14 @@ def rollout(state: OptimizationState, depth: int = 3) -> List[FuturePath]:
     """
     Virtually expand future from current state.
     
-    Each path predicts expected final speedup.
+    Each path predicts expected final improvement.
     
     Example:
     Path A: h1 → implement → evaluate → accepted → promote
-            Expected speedup: 1.3x, Risk: LOW
+            Expected improvement: 1.3x, Risk: LOW
             
     Path B: h2 → implement → evaluate → rejected → retry
-            Expected speedup: 1.5x, Risk: HIGH (uncertainty)
+            Expected improvement: 1.5x, Risk: HIGH (uncertainty)
     """
 ```
 
@@ -189,19 +189,21 @@ Output as JSON.
 
 This is structurally identical to AlphaZero:
 
-| AlphaZero | Kernel Optimization |
+| AlphaZero | Optimization Agent |
 |-----------|---------------------|
 | Policy network (trained) | LLM (pre-trained, fixed) |
 | MCTS (exploration) | Hypothesis tree search |
-| Win/loss (reward) | Speedup × correctness (reward) |
+| Win/loss (reward) | Improvement × validity (reward) |
 
 ### 6.2 Why This Works
 
 1. **Reward is naturally defined**
    ```
-   Reward = speedup × correctness × eligibility
-          = (baseline_ms / candidate_ms) × 1{correct} × 1{eligible}
+   Reward = improvement × validity × applicability
+          = (metric_baseline / metric_candidate) × 1{valid} × 1{applicable}
    ```
+   
+   *Note: `metric` depends on domain — latency reduction for kernels, accuracy gain for configs, throughput increase for queries, etc.*
    
 2. **Search space is structured**
    ```
@@ -223,7 +225,7 @@ This is structurally identical to AlphaZero:
 class MCTSOptimizer:
     def __init__(self, llm_policy, reward_fn):
         self.policy = llm_policy      # Fixed LLM
-        self.reward = reward_fn       # Speedup measurement
+        self.reward = reward_fn       # Domain-specific improvement metric
     
     def search(self, state: OptimizationState, n_simulations: int = 10):
         for _ in range(n_simulations):
@@ -256,12 +258,12 @@ class ValuePredictor:
             'similarity_to_past_winners': ...,   # Has this worked before?
             'complexity_estimate': ...,           # How complex is the change?
             'risk_score': ...,                    # Probability of failure
-            'expected_compile_success': ...,      # Will it compile?
+            'expected_validation_success': ...,   # Will it validate?
         }
         return self.model.predict(features)
 ```
 
-This filters unpromising hypotheses before expensive compilation/benchmarking.
+This filters unpromising hypotheses before expensive evaluation.
 
 ---
 
@@ -329,7 +331,7 @@ class RolloutSimulator:
             if predicted_evidence.decision == "rejected":
                 return ExpectedOutcome(success=False)
             state = state.advance(...)
-        return ExpectedOutcome(success=True, expected_speedup=...)
+        return ExpectedOutcome(success=True, expected_improvement=...)
 ```
 
 ### Phase 3: MCTS Integration (Long-term)
