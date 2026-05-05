@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from optagent.core.manager import ManagerAgent as ManagerAgentV1
-from optagent.core.state_model import OptimizerState
+from optagent.v1.core.manager import ManagerAgent as ManagerAgentV1
+from optagent.v1.core.state_model import OptimizerState
 from optagent.v2.state import State
 from optagent.v2.bridge import state_v1_to_v2, state_v2_to_v1
 from optagent.v2.planner import DefaultPlanner

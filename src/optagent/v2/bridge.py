@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from optagent.core.state_model import (
+from optagent.v1.core.state_model import (
     OptimizerState as OptimizerStateV1,
     AlgorithmState,
     Requirements,
