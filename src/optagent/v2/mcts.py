@@ -23,12 +23,14 @@ class MCTSNode:
     def is_terminal(self) -> bool:
         return len(self.children) == 0 and self.visit_count > 0
 
-    def ucb(self, parent_visit: int, c: float = 1.414) -> float:
+    def ucb(self, parent_visit: int, c: float = 1.414, cost: float = 1.0) -> float:
         if self.visit_count == 0:
             return float('inf')
         exploitation = self.value_sum / self.visit_count
         exploration = c * (parent_visit ** 0.5) / (1 + self.visit_count)
-        return exploitation + exploration
+        # Cost-aware: penalize expensive actions
+        cost_penalty = 1.0 / (1.0 + cost)
+        return (exploitation + exploration) * cost_penalty
 
 
 class MCTSOptimizer:

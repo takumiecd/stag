@@ -99,7 +99,13 @@ class BatchOptimizer:
         report.results.sort(key=lambda r: r.requirement_id)
         speedups = []
         for result in report.results:
-            if result.state and result.state.evidence:
+            # v2 compatibility
+            if result.state and hasattr(result.state, 'algorithm'):
+                for ev in result.state.algorithm.evidence:
+                    if hasattr(ev, 'speedup') and ev.speedup is not None:
+                        speedups.append(ev.speedup)
+            # v1.5 compatibility
+            elif result.state and hasattr(result.state, 'evidence'):
                 for evidence in result.state.evidence:
                     if evidence.speedup is not None:
                         speedups.append(evidence.speedup)
@@ -135,11 +141,22 @@ class BatchOptimizer:
     def _update_stats(report: BatchReport, result: BatchResult) -> None:
         if result.success:
             report.successful += 1
-            if result.state and result.state.decisions:
-                if result.state.decisions[-1].accepted:
-                    report.accepted += 1
-                else:
-                    report.rejected += 1
+            # v2 compatibility: check algorithm.evidence for decisions
+            if result.state and hasattr(result.state, 'algorithm'):
+                evidence = result.state.algorithm.evidence
+                if evidence:
+                    last_ev = evidence[-1]
+                    if getattr(last_ev, 'decision_recommendation', '') == 'accepted':
+                        report.accepted += 1
+                    else:
+                        report.rejected += 1
+            elif result.state and hasattr(result.state, 'decisions'):
+                # v1.5 compatibility
+                if result.state.decisions:
+                    if result.state.decisions[-1].accepted:
+                        report.accepted += 1
+                    else:
+                        report.rejected += 1
         else:
             report.failed += 1
 

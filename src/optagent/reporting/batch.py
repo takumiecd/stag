@@ -22,6 +22,16 @@ class BatchResult:
     duration_sec: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
+        decision = None
+        if self.state:
+            # v2 compatibility
+            if hasattr(self.state, 'algorithm') and self.state.algorithm.evidence:
+                last_ev = self.state.algorithm.evidence[-1]
+                decision = getattr(last_ev, 'decision_recommendation', None)
+            # v1.5 compatibility
+            elif hasattr(self.state, 'decisions') and self.state.decisions:
+                decision = self.state.decisions[-1].to_dict()
+        
         return {
             "requirement_id": self.requirement_id,
             "requirement": self.requirement.to_dict(),
@@ -29,7 +39,7 @@ class BatchResult:
             "error": self.error,
             "duration_sec": self.duration_sec,
             "state_path": str(self.state.work_dir) if self.state else None,
-            "decision": self.state.decisions[-1].to_dict() if self.state and self.state.decisions else None,
+            "decision": decision,
         }
 
 
@@ -85,11 +95,18 @@ class BatchReport:
             lines.append(f"- **Type**: {result.requirement.target_type}")
             lines.append(f"- **Duration**: {result.duration_sec:.1f}s")
             
-            if result.success and result.state and result.state.decisions:
-                decision = result.state.decisions[-1]
-                lines.append(f"- **Decision**: {'Accepted' if decision.accepted else 'Rejected'}")
-                if decision.reason:
-                    lines.append(f"- **Reason**: {decision.reason}")
+            if result.success and result.state:
+                # v2 compatibility
+                if hasattr(result.state, 'algorithm') and result.state.algorithm.evidence:
+                    last_ev = result.state.algorithm.evidence[-1]
+                    decision_rec = getattr(last_ev, 'decision_recommendation', 'unknown')
+                    lines.append(f"- **Decision**: {decision_rec}")
+                # v1.5 compatibility
+                elif hasattr(result.state, 'decisions') and result.state.decisions:
+                    decision = result.state.decisions[-1]
+                    lines.append(f"- **Decision**: {'Accepted' if decision.accepted else 'Rejected'}")
+                    if decision.reason:
+                        lines.append(f"- **Reason**: {decision.reason}")
             elif result.error:
                 lines.append(f"- **Error**: {result.error}")
             lines.append("")

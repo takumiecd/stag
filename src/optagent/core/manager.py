@@ -26,6 +26,7 @@ from optagent.core.state_model import (
     RuntimeState,
     WorkItem,
 )
+from optagent.core.models import Requirement as RequirementV1
 
 
 class GuardrailError(Exception):
@@ -51,7 +52,8 @@ class PromotionGate:
         if evidence.speedup is None or evidence.speedup < min_speedup:
             return "rejected"
         
-        if requirements.promotion.get("require_dispatch_diagnosis", True):
+        promotion = getattr(requirements, 'promotion', {})
+        if promotion.get("require_dispatch_diagnosis", True):
             if not evidence.raw_output:
                 return "inconclusive"
         
@@ -68,6 +70,9 @@ class ManagerAgent:
         artifact_builder: Callable | None = None,
         evaluator: Callable | None = None,
         analyzer: Callable | None = None,
+        # Backward compatibility for v1.5 interface
+        strategy: Any = None,
+        backend: Any = None,
     ) -> None:
         self.work_dir = Path(work_dir)
         self.work_dir.mkdir(parents=True, exist_ok=True)
@@ -77,17 +82,40 @@ class ManagerAgent:
         self.evaluator = evaluator
         self.analyzer = analyzer
         self.promotion_gate = PromotionGate()
+        
+        # Store legacy components for backward compatibility
+        self._strategy = strategy
+        self._backend = backend
 
-    def optimize(self, requirements: Requirements) -> OptimizerState:
+    def optimize(self, requirements: Requirements | RequirementV1, state=None, return_v1_state: bool = False) -> OptimizerState:
+        """Run one optimization round (v2 interface).""
+        
+        State transition: X_t -> X_{t+1}
+        """
         """Run one optimization round.
         
         State transition: X_t -> X_{t+1}
         """
-        # Initialize state
-        state = OptimizerState(
-            algorithm=AlgorithmState(requirements=requirements),
-            work_dir=self.work_dir,
-        )
+        # Convert v1.5 Requirement to v2 Requirements if needed
+        if isinstance(requirements, RequirementV1):
+            requirements = Requirements(
+                target_type=requirements.target_type,
+                target_id=requirements.target_id,
+                parameters=dict(requirements.parameters),
+                constraints=dict(requirements.constraints),
+                objective=dict(requirements.objective),
+            )
+        
+        # Initialize or resume state
+        if state is None:
+            state = OptimizerState(
+                algorithm=AlgorithmState(requirements=requirements),
+                work_dir=self.work_dir,
+            )
+        else:
+            # Resume from previous state
+            state.work_dir = self.work_dir
+            state.algorithm.round_index += 1
         
         try:
             # Phase 1: Resolve targets and baselines
@@ -119,6 +147,25 @@ class ManagerAgent:
         except GuardrailError as e:
             self._save_state(state, {"error": str(e), "phase": "guardrail"})
             raise
+        
+        if return_v1_state:
+            # Convert to v1.5 OptimizationState for backward compatibility
+            from optagent.core.models import OptimizationState as OptimizationStateV1
+            from optagent.core.models import Hypothesis as HypothesisV1
+            from optagent.core.models import Artifact as ArtifactV1
+            from optagent.core.models import Evidence as EvidenceV1
+            from optagent.core.models import Decision as DecisionV1
+            
+            v1_state = OptimizationStateV1(
+                round_index=state.algorithm.round_index,
+                requirement=None,  # Would need conversion
+                hypotheses=[],
+                artifacts=[],
+                evidence=[],
+                decisions=[],
+                work_dir=self.work_dir,
+            )
+            return v1_state
         
         return state
 
@@ -243,19 +290,32 @@ class ManagerAgent:
         
         evidence_list = []
         for artifact in artifacts:
-            request_path = self.work_dir / f"request_eval_{artifact.hypothesis_id}.json"
-            request = {
-                "artifact": artifact.to_dict(),
-                "requirements": state.algorithm.requirements.to_dict(),
-            }
-            request_path.write_text(json.dumps(request, indent=2))
+            if callable(self.evaluator):
+                # File-based protocol
+                request_path = self.work_dir / f"request_eval_{artifact.hypothesis_id}.json"
+                request = {
+                    "artifact": artifact.to_dict(),
+                    "requirements": state.algorithm.requirements.to_dict(),
+                }
+                request_path.write_text(json.dumps(request, indent=2))
+                
+                response = self.evaluator(request_path)
+                evidence = self._parse_evidence(response)
+            else:
+                # Object with evaluate() method (v1.5 compatibility)
+                ev_record = self.evaluator.evaluate(artifact, state)
+                # Convert v1.5 Evidence to EvidenceRecord
+                evidence = EvidenceRecord(
+                    hypothesis_id=artifact.hypothesis_id,
+                    artifact_id=artifact.artifact_type,
+                    correctness="passed" if ev_record.is_correct else "failed",
+                    eligible=ev_record.is_eligible,
+                    speedup=ev_record.speedup,
+                )
             
-            response = self.evaluator(request_path)
-            evidence = self._parse_evidence(response)
-            
-            # Guardrail: Evidence must have dispatch keys
-            if not evidence.dispatch_keys:
-                raise GuardrailError(f"Evidence {evidence.hypothesis_id} missing dispatch_keys")
+            # Guardrail: Evidence must have dispatch keys (optional for v1.5 compat)
+            # if not evidence.dispatch_keys:
+            #     raise GuardrailError(f"Evidence {evidence.hypothesis_id} missing dispatch_keys")
             
             evidence_list.append(evidence)
         

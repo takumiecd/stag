@@ -83,8 +83,10 @@ class TestMCTS(unittest.TestCase):
         node = MCTSNode(state=State(requirement={}))
         node.visit_count = 5
         node.value_sum = 10.0
-        ucb = node.ucb(20, c=1.414)
-        self.assertGreater(ucb, 2.0)  # exploitation=2.0 + exploration
+        ucb = node.ucb(20, c=1.414, cost=1.0)
+        # exploitation=2.0, exploration ~0.89, cost_penalty=0.5
+        self.assertGreater(ucb, 1.0)
+        self.assertLess(ucb, 2.0)  # Cost penalty reduces value
 
     def test_mcts_search(self):
         class MockProposer:
