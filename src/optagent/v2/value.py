@@ -1,4 +1,7 @@
-"""§9 Value Predictor — lightweight hypothesis value prediction."""
+"""§9 Value Predictor — lightweight hypothesis value prediction.
+
+Corresponds to PLANNING_AND_RL.md §9.
+"""
 
 from __future__ import annotations
 

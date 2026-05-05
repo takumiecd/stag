@@ -1,4 +1,7 @@
-"""§3 Action Space — domain-specific action kinds."""
+"""§3 Action Space — domain-specific action kinds.
+
+Corresponds to PLANNING_AND_RL.md §3.
+"""
 
 from __future__ import annotations
 

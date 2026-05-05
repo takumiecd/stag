@@ -1,4 +1,7 @@
-"""§2 State Schema — domain-agnostic optimization state."""
+"""§2 State Schema — domain-agnostic optimization state.
+
+Corresponds to PLANNING_AND_RL.md §2.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,7 @@
-"""§7 Policy: LLM as Stochastic Policy — calibration strategies."""
+"""§7 Policy: LLM as Stochastic Policy — calibration strategies.
+
+Corresponds to PLANNING_AND_RL.md §7.
+"""
 
 from __future__ import annotations
 

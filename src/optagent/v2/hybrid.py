@@ -1,4 +1,7 @@
-"""§10 Plan⟷Policy Hybrid — two-tier architecture."""
+"""§10 Plan⟷Policy Hybrid — two-tier architecture.
+
+Corresponds to PLANNING_AND_RL.md §10.
+"""
 
 from __future__ import annotations
 

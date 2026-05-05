@@ -1,4 +1,7 @@
-"""§5 Planner & Replanning — plan as predicted trajectory."""
+"""§5 Planner & Replanning — plan as predicted trajectory.
+
+Corresponds to PLANNING_AND_RL.md §5.
+"""
 
 from __future__ import annotations
 

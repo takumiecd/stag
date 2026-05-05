@@ -1,4 +1,7 @@
-"""§8 MCTS — cost-aware UCB for stochastic environments."""
+"""§8 MCTS — cost-aware UCB for stochastic environments.
+
+Corresponds to PLANNING_AND_RL.md §8.
+"""
 
 from __future__ import annotations
 

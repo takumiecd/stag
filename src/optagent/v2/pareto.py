@@ -1,4 +1,7 @@
-"""Pareto front operations for multi-objective optimization."""
+"""Pareto front operations for multi-objective optimization.
+
+Shared utility for §8.2/§8.4 Pareto-MCTS.
+"""
 
 from __future__ import annotations
 

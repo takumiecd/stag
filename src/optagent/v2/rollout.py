@@ -1,4 +1,7 @@
-"""§6 Rollout: Horizon vs Branching — virtual future expansion."""
+"""§6 Rollout: Horizon vs Branching — virtual future expansion.
+
+Corresponds to PLANNING_AND_RL.md §6.
+"""
 
 from __future__ import annotations
 

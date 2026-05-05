@@ -1,4 +1,7 @@
-"""§4 Reward Spec — multi-objective, constrained, cost-aware."""
+"""§4 Reward Spec — multi-objective, constrained, cost-aware.
+
+Corresponds to PLANNING_AND_RL.md §4.
+"""
 
 from __future__ import annotations
 
