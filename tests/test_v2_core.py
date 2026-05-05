@@ -4,7 +4,7 @@ import unittest
 from optagent.v2.state import State, ArtifactSet, Artifact, Transition, Knowledge, Observation
 from optagent.v2.action import ApplyHypothesis, RunEvaluation
 from optagent.v2.reward import RewardSpec, Objective, Constraint, WeightedSum, Lexicographic
-from optagent.v2.planner import DefaultPlanner, Plan
+from optagent.v2.planner import DefaultPlanner, Plan, PlannedStep
 from optagent.v2.mcts import MCTSOptimizer, MCTSNode
 from optagent.v2.value import ValuePredictor
 from optagent.v2.hybrid import HybridOptimizer
@@ -83,15 +83,18 @@ class TestMCTS(unittest.TestCase):
         node = MCTSNode(state=State(requirement={}))
         node.visit_count = 5
         node.value_sum = 10.0
-        ucb = node.ucb(20, c=1.414, cost=1.0)
-        # exploitation=2.0, exploration ~0.89, cost_penalty=0.5
+        ucb = node.ucb(20, c=1.414)
+        # exploitation=2.0, exploration ~1.26 (ln(20)/5)^0.5 * c
         self.assertGreater(ucb, 1.0)
-        self.assertLess(ucb, 2.0)  # Cost penalty reduces value
+        self.assertGreater(ucb, 2.0)  # exploitation alone is 2.0
 
     def test_mcts_search(self):
         class MockProposer:
             def generate_actions(self, state, n, temperature):
                 return [ApplyHypothesis(hypothesis_id=f"h{i}", hypothesis_content="test") for i in range(3)]
+
+            def score_actions(self, state, actions):
+                return [1.0 / len(actions)] * len(actions) if actions else []
 
         mcts = MCTSOptimizer()
         state = State(requirement={"target": "test"})

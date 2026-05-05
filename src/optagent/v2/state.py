@@ -33,11 +33,12 @@ class Observation:
 @dataclass
 class Transition:
     """One step in the optimization trajectory."""
-    action: "Action"
-    observation: Observation
+    action: Optional[Any] = None  # Action protocol (imported from action.py to avoid circular)
+    observation: Optional[Observation] = None
     reward_contribution: dict[str, float] = field(default_factory=dict)
     cost: float = 0.0
     timestamp: int = 0
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -57,18 +58,70 @@ class State:
     trajectory: List[Transition] = field(default_factory=list)
     knowledge: Knowledge = field(default_factory=Knowledge)
 
+    def advance(self, action: Any, observation: Observation, reward_spec: Optional[Any] = None) -> "State":
+        """Transition to next state by executing action and observing result (§1).
 
-class Action(Protocol):
-    """§3 Action Protocol — domain-pluggable state transition."""
+        Returns a new State with:
+        - Updated trajectory (appended transition)
+        - Updated artifact (new candidate added, pareto_front recomputed if possible)
+        - Preserved knowledge (can be updated separately via learning)
 
-    def apply(self, state: State) -> Artifact:
-        """Produce a new candidate artifact (does not yet update knowledge)."""
-        ...
+        Args:
+            action: The action that produced this transition
+            observation: The observed result of the action
+            reward_spec: Optional RewardSpec for incumbent comparison
 
-    def cost(self, state: State) -> float:
-        """Estimated cost of executing this action."""
-        ...
+        Returns:
+            New State representing the transitioned state
+        """
+        from copy import deepcopy
 
-    def observability(self) -> dict[str, str]:
-        """Declares what will be observed after execution."""
-        ...
+        new_state = deepcopy(self)
+
+        # Create the artifact from the action
+        new_artifact = action.apply(new_state)
+
+        # Store observation metrics in artifact metadata for Pareto/value calculations
+        if observation.metrics:
+            new_artifact.metadata["metrics"] = observation.metrics
+
+        # Add to candidates if not already present
+        if new_artifact.artifact_id not in [a.artifact_id for a in new_state.artifact.candidates]:
+            new_state.artifact.candidates.append(new_artifact)
+
+        # Update incumbent based on reward_spec or simple Pareto logic
+        if observation.metrics:
+            if new_state.artifact.incumbent is None:
+                # First artifact becomes incumbent
+                new_state.artifact.incumbent = new_artifact
+            elif reward_spec:
+                # Use reward spec to compare
+                from optagent.v2.reward import RewardSpec
+                if isinstance(reward_spec, RewardSpec):
+                    incumbent_eval = reward_spec.evaluate(new_state, Observation(
+                        action_id="incumbent",
+                        metrics=new_state.artifact.incumbent.metadata.get("metrics", {}),
+                    ))
+                    new_artifact_eval = reward_spec.evaluate(new_state, observation)
+
+                    # Update if new artifact is better (higher scalar reward)
+                    if new_artifact_eval.aggregated_scalar > incumbent_eval.aggregated_scalar:
+                        new_state.artifact.incumbent = new_artifact
+            else:
+                # Fall back to simple Pareto: prefer non-dominated solutions
+                # For now, just keep the first incumbent (no update without reward_spec)
+                pass
+
+        # Append transition to trajectory
+        transition = Transition(
+            action=action,
+            observation=observation,
+            reward_contribution=observation.metrics,
+            cost=action.cost(new_state),
+            timestamp=len(new_state.trajectory),
+        )
+        new_state.trajectory.append(transition)
+
+        return new_state
+
+
