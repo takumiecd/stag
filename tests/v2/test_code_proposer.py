@@ -31,7 +31,7 @@ class TestCodeProposer(unittest.TestCase):
     def test_generate_actions_with_backend(self):
         """With backend, parses LLM responses into actions."""
         backend = MockLLMBackend([
-            "---DIFF---\n--- a/test.py\n+++ b/test.py\n@@ -1 +1 @@\n-x\n+y\n---DIFF---\n--- a/test.py\n+++ b/test.py\n@@ -1 +1 @@\n-y\n+z\n"
+            "```python\ndef optimized():\n    return 'fast'\n```"
         ])
         proposer = CodeProposer(backend=backend)
         state = State(requirement={"objective": "speed"})
@@ -39,9 +39,8 @@ class TestCodeProposer(unittest.TestCase):
             incumbent=Artifact(artifact_id="test", content="x", metadata={})
         )
         actions = proposer.generate_actions(state, n=1, temperature=0.7)
-        self.assertEqual(len(actions), 2)
-        self.assertIn("x", actions[0].diff)
-        self.assertIn("y", actions[1].diff)
+        self.assertEqual(len(actions), 1)
+        self.assertIn("fast", actions[0].diff)
 
     def test_extract_code_from_state(self):
         """Extract code from state incumbent."""

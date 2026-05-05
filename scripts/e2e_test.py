@@ -39,7 +39,7 @@ opt = CodeOptimizer(
 
 print("Starting optimization...")
 try:
-    result = opt.optimize(objective="minimize latency", max_rounds=1)
+    result = opt.optimize(objective="minimize latency", max_rounds=3)
     print("Optimization completed!")
     print(f"\nFinal code:\n{result.code.content}")
     print(f"\nTest results: {result.code.test_results}")

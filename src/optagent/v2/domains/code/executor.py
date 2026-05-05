@@ -40,15 +40,18 @@ class CodeExecutor:
         if not target.exists():
             return {"success": False, "error": f"Target not found: {target}"}
 
-        diff = action.diff.strip()
+        diff = action.diff
 
         # Check if diff is a complete file replacement (no ---/+++ header)
-        if not diff.startswith("---"):
+        if not diff.lstrip().startswith("---"):
             # Treat as complete file replacement
-            return {"success": True, "patched_content": diff}
+            return {"success": True, "patched_content": diff.strip()}
 
         # Unified diff: use patch command
         cleaned_diff = "\n".join(line.rstrip() for line in diff.splitlines())
+        # Ensure trailing newline for patch command
+        if not cleaned_diff.endswith("\n"):
+            cleaned_diff += "\n"
         diff_hash = hash(cleaned_diff) & 0xFFFFFFFF
         diff_file = self.work_dir / f"{diff_hash:08x}.diff"
         diff_file.write_text(cleaned_diff)
@@ -147,12 +150,18 @@ class CodeExecutor:
 
     @staticmethod
     def _parse_timeit_output(output: str) -> float:
-        """Parse `python -m timeit` output to latency in milliseconds.
+        """Parse timeit output to latency in milliseconds.
 
-        Expected format: '1 loop, best of 5: 1.23 msec per loop'
+        Supports formats:
+        - 'best of 5: 1.23 msec per loop' (standard timeit)
+        - '1.23 msec per loop' (custom script)
         """
         import re
+        # Try standard timeit format first
         match = re.search(r'best of \d+: ([\d.]+)\s+(sec|msec|usec|nsec) per loop', output)
+        if not match:
+            # Fallback to simple format
+            match = re.search(r'([\d.]+)\s+(sec|msec|usec|nsec) per loop', output)
         if not match:
             return 0.0
         value = float(match.group(1))

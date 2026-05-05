@@ -43,7 +43,7 @@ class TestCodeExecutor(unittest.TestCase):
         self.assertIn("return 'world'", result["patched_content"])
 
     def test_apply_diff_failure(self):
-        """Invalid diff returns success=False."""
+        """Invalid unified diff returns success=False."""
         source = self.work_dir / "source.py"
         source.write_text("def hello():\n    return 'hello'\n")
 
@@ -55,7 +55,8 @@ class TestCodeExecutor(unittest.TestCase):
                 content=source.read_text(),
             ),
         )
-        action = EditCode(diff="garbage", target_path=source)
+        # Invalid unified diff (malformed hunk)
+        action = EditCode(diff="--- a/source.py\n+++ b/source.py\n@@ -1 +1 @@\n-garbage\n", target_path=source)
         result = self.executor.apply_diff(state, action)
 
         self.assertFalse(result["success"])
