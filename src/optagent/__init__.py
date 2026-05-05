@@ -1,4 +1,4 @@
-"""optagent - Generalized optimization agent framework."""
+"""optagent - State-transition optimization agent framework."""
 
 __version__ = "0.1.0"
 

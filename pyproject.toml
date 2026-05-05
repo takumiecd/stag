@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "optagent"
 version = "0.1.0"
-description = "Generalized optimization agent for kernels, configurations, and more"
+description = "State-transition optimization agent framework for auditable code and kernel optimization loops"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -39,8 +39,8 @@ kernel = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/optimization-agent"
-Repository = "https://github.com/yourusername/optimization-agent"
+Homepage = "https://github.com/takumiecd/optimization-agent"
+Repository = "https://github.com/takumiecd/optimization-agent"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/optagent"]
