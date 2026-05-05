@@ -700,12 +700,158 @@ The following questions remain after v2 (resolved questions from v1 are removed)
 
 ## §15. Next Steps
 
-1. **Refactor `OptimizationState`** in the current codebase to match §2 schema, with hypothesis-test instantiation per §11.1. Preserve existing optagent behavior as a regression baseline.
-2. **Define `RewardSpec`** as user-facing input; replace hardcoded reward functions.
-3. **Implement `Planner` + `DefaultPlanner`** with one explicit replan trigger (deviation), then expand.
-4. **Prototype LLM-as-evaluator** as the first value predictor (§9.3); begin logging features for future learned variants.
-5. **Implement cost-aware UCB1 MCTS** on top of the new state/action/reward layer.
-6. **Pick one domain from §11.2–§11.4** for second-domain validation. HPO is the lowest-hanging fruit (well-known baselines exist).
+1. ✅ **Refactor `OptimizationState`** — Done. v1 code moved to `src/optagent/v1/`, v2 framework in `src/optagent/v2/`.
+2. ✅ **Define `RewardSpec`** — Done. User-facing `RewardSpec` with configurable aggregators.
+3. ✅ **Implement `Planner` + `DefaultPlanner`** — Done. With explicit replan triggers.
+4. ✅ **Prototype LLM-as-evaluator** — Done. `CodeProposer` integrates with OpenCode/Claude backends.
+5. ✅ **Implement cost-aware UCB1 MCTS** — Done. With Pareto tracking and incumbent updates.
+6. ✅ **Pick one domain from §11.2–§11.4** — Done. §11.3 Code Optimization shipped.
+7. **Remaining**: §11.2 HPO, §11.4 Compositional Optimization.
+
+---
+
+# Appendix A — Code Optimization Domain (§11.3) API
+
+## Quick Start
+
+```python
+from pathlib import Path
+from optagent.v2.domains.code import CodeOptimizer
+from optagent.v2.domains.code.backends import OpenCodeBackendAdapter
+
+# Configure backend (OpenCode CLI)
+backend = OpenCodeBackendAdapter(
+    command="/home/ware10sai/.opencode/bin/opencode",
+    timeout=300.0,
+)
+
+# Create optimizer
+opt = CodeOptimizer(
+    source_path=Path("./my_module.py"),
+    backend=backend,
+)
+
+# Run optimization
+result = opt.optimize(
+    objective="minimize latency",
+    max_rounds=3,
+)
+
+# Result: optimized code written back to source_path
+print(result.code.content)
+```
+
+## How It Works
+
+### Pipeline
+
+```
+1. Read source file
+2. Baseline benchmark (original code)
+3. For each round:
+   a. LLM generates optimized code
+   b. Apply diff / replace file content
+   c. Run pytest (extract test functions from original)
+   d. Run timeit benchmark
+   e. Keep best if tests pass and latency improves
+4. Write best code back to source file
+```
+
+### Architecture
+
+```
+optagent.v2.domains.code/
+  state.py      — CodeState, CodeArtifact (v2.State wrapper)
+  action.py     — EditCode, RunTests, RunBenchmark
+  reward.py     — Lexicographic: correctness ≫ test_count ≫ style
+  proposer.py   — CodeProposer (LLM prompt + response parsing)
+  executor.py   — CodeExecutor (patch, pytest, timeit)
+  optimizer.py  — CodeOptimizer (main loop)
+  backends.py   — OpenCodeBackendAdapter (v1 backend wrapper)
+```
+
+### Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `source_path` | required | Path to Python file to optimize |
+| `backend` | `None` | LLM backend (OpenCodeBackendAdapter, ClaudeBackend, or None for mock) |
+| `work_dir` | temp dir | Working directory for temp files |
+| `objective` | required | Natural language objective (e.g., "minimize latency") |
+| `max_rounds` | 5 | Number of optimization rounds |
+
+### Return Value
+
+`CodeState` with fields:
+- `code.content` — optimized source code
+- `code.test_results` — pytest results (passed, test_count, output)
+- `code.benchmark_results` — timeit results (latency_ms, raw_output)
+- `code.source_path` — path to optimized file
+
+## Backend Configuration
+
+### OpenCode
+
+```python
+from optagent.v2.domains.code.backends import OpenCodeBackendAdapter
+
+backend = OpenCodeBackendAdapter(
+    command="/path/to/opencode",
+    model="opencode-go/kimi-k2.6",
+    timeout=300.0,  # idle timeout (not wall-clock)
+)
+```
+
+Uses streaming JSONL parsing with idle detection. The timeout resets on each token, so long reasoning/thinking periods do not abort the process.
+
+### Claude
+
+```python
+from optagent.v1.backends.claude import ClaudeBackend
+from optagent.v2.domains.code.backends import OpenCodeBackendAdapter
+
+v1_backend = ClaudeBackend(model="claude-sonnet")
+backend = OpenCodeBackendAdapter(command="claude")  # or wrap similarly
+```
+
+### Mock (testing)
+
+```python
+opt = CodeOptimizer(source_path=Path("./test.py"), backend=None)
+```
+
+Returns mock actions. Useful for testing the pipeline without LLM costs.
+
+## Testing
+
+```bash
+# All tests
+python3 -m pytest tests/v1/ tests/v2/ -v
+
+# Code domain only
+python3 -m pytest tests/v2/test_code_domain.py tests/v2/test_code_proposer.py tests/v2/test_code_optimizer.py -v
+
+# Smoke test with real backend
+python3 -m pytest tests/v2/test_code_smoke.py -v -s
+```
+
+## Implementation Notes
+
+### Diff vs Complete Replacement
+
+The proposer requests complete optimized code (not unified diffs) from the LLM. The executor detects whether the response is:
+- **Complete code** (no `---` header) → direct file replacement
+- **Unified diff** → `patch` command application
+
+This avoids `patch` command failures with malformed diffs.
+
+### Test Extraction
+
+Test functions (`def test_*`) are extracted from the original file and appended to the candidate code. This ensures pytest discovers tests even when the optimized code changes function names or signatures.
+
+### Benchmark Isolation
+
+Each candidate is written to a temporary file and benchmarked in isolation. The original file is only overwritten after all rounds complete and the best candidate is selected.
 
 ---
 

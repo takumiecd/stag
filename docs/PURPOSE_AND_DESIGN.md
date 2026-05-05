@@ -204,6 +204,40 @@ print(f"OpenCode: {state_oc.evidence[-1].speedup:.2f}x")
 print(f"Claude: {state_claude.evidence[-1].speedup:.2f}x")
 ```
 
+### シナリオ4: コード最適化（v2 Iterative Refinement）
+
+```python
+from pathlib import Path
+from optagent.v2.domains.code import CodeOptimizer
+from optagent.v2.domains.code.backends import OpenCodeBackendAdapter
+
+# 1. バックエンド設定
+backend = OpenCodeBackendAdapter(
+    command="/home/ware10sai/.opencode/bin/opencode",
+    timeout=300.0,
+)
+
+# 2. 最適化実行
+opt = CodeOptimizer(
+    source_path=Path("./slow_module.py"),
+    backend=backend,
+)
+result = opt.optimize(objective="minimize latency", max_rounds=3)
+
+# 3. 結果確認
+print(f"最適化後のコード:\n{result.code.content}")
+print(f"テスト結果: {result.code.test_results}")
+print(f"ベンチマーク: {result.code.benchmark_results}")
+```
+
+v2 のコード最適化は以下の流れで動作します：
+1. 元のコードをベンチマーク（baseline）
+2. LLM に最適化コードを生成させる
+3. 生成コードを適用してテスト実行
+4. テスト通過ならベンチマーク計測
+5. 改善があればベストとして記録
+6. 全ラウンド終了後、ベストなコードをファイルに書き戻し
+
 ## 失敗パターンと対処法
 
 ### パターン1: 小さいテンソルでは速いが、大きいテンソルでは遅い
