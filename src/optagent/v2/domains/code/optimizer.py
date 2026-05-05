@@ -58,6 +58,7 @@ class CodeOptimizer:
         """
         # Read initial code
         initial_code = self.source_path.read_text()
+        current_code = initial_code
 
         # Build initial state
         code = CodeArtifact(
@@ -94,7 +95,8 @@ class CodeOptimizer:
                 )
                 # Update code content if patch succeeded
                 if result["success"]:
-                    state.code.content = result["patched_content"]
+                    current_code = result["patched_content"]
+                    state.code.content = current_code
                     # Sync v2_state with updated content for next iteration
                     v2_state = state.to_v2_state()
             elif isinstance(action, RunTests):
@@ -115,8 +117,7 @@ class CodeOptimizer:
             # Advance state
             v2_state = v2_state.advance(action, obs, reward_spec=self.reward_spec)
             state = CodeState.from_v2_state(v2_state)
-            # Ensure code content stays as patched version (not the diff)
-            if isinstance(action, EditCode) and result.get("success"):
-                state.code.content = result["patched_content"]
+            # Restore patched content (advance overwrites with diff)
+            state.code.content = current_code
 
         return state

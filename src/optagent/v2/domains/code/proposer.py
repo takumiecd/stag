@@ -77,29 +77,37 @@ class CodeProposer:
         return str(req)
 
     def _parse_responses(self, responses: list[str]) -> List[Any]:
-        """Parse LLM responses into EditCode actions."""
+        """Parse LLM responses into EditCode actions.
+
+        Extracts complete code blocks and creates a diff against the current code.
+        """
         import re
         actions = []
         for resp in responses:
-            # Extract diff from markdown code blocks
-            diffs = re.findall(r"```diff\n(.*?)\n```", resp, re.DOTALL)
-            if not diffs:
-                # Fallback: split by ---DIFF--- marker
-                diffs = [d.strip() for d in resp.split("---DIFF---") if d.strip()]
-            for diff in diffs:
-                actions.append(EditCode(diff=diff, target_path=Path(".")))
+            # Extract complete code from markdown python blocks
+            code_blocks = re.findall(r"```python\n(.*?)\n```", resp, re.DOTALL)
+            if not code_blocks:
+                # Fallback: any code block
+                code_blocks = re.findall(r"```\n(.*?)\n```", resp, re.DOTALL)
+            for code in code_blocks:
+                code = code.strip()
+                if not code:
+                    continue
+                # Create a simple "replace entire file" diff
+                # (avoids patch command issues with complex diffs)
+                actions.append(EditCode(diff=code, target_path=Path(".")))
         return actions
 
     def _default_prompt(self) -> str:
         return """You are a code optimization expert.
 
 Current code:
-```
+```python
 {code}
 ```
 
-Please suggest {n} optimization diffs. Each diff should be a unified diff.
+Please suggest {n} optimized version of the code. Return ONLY the complete optimized code as a markdown code block (```python ... ```).
 Focus on: {objectives}
 
-Return only the diffs, separated by ---DIFF---.
+Do NOT return diffs. Return the complete optimized code only.
 """

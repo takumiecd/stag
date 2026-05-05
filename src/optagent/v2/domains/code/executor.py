@@ -30,6 +30,9 @@ class CodeExecutor:
     def apply_diff(self, state: CodeState, action: EditCode) -> Dict[str, Any]:
         """Apply diff to source file.
 
+        If the diff looks like a complete file (not a unified diff), replaces the entire file.
+        Otherwise, uses the patch command.
+
         Returns:
             dict with keys: success (bool), patched_content (str), error (str)
         """
@@ -37,10 +40,18 @@ class CodeExecutor:
         if not target.exists():
             return {"success": False, "error": f"Target not found: {target}"}
 
-        # Write diff to temp file and apply with patch command
-        diff_hash = hash(action.diff) & 0xFFFFFFFF
+        diff = action.diff.strip()
+
+        # Check if diff is a complete file replacement (no ---/+++ header)
+        if not diff.startswith("---"):
+            # Treat as complete file replacement
+            return {"success": True, "patched_content": diff}
+
+        # Unified diff: use patch command
+        cleaned_diff = "\n".join(line.rstrip() for line in diff.splitlines())
+        diff_hash = hash(cleaned_diff) & 0xFFFFFFFF
         diff_file = self.work_dir / f"{diff_hash:08x}.diff"
-        diff_file.write_text(action.diff)
+        diff_file.write_text(cleaned_diff)
 
         # Copy original to work dir (use a different name to avoid collision), apply patch there
         work_copy = self.work_dir / f"copy_{target.name}"
