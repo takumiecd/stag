@@ -19,7 +19,7 @@
   -> 学習する
 ```
 
-ここで重要なのは、**調査も action である** ということです。
+このモデルでは、**調査も action として扱います**。
 調査は前処理ではありません。
 
 例えば profile を取る、baseline matrix を回す、dispatch を trace する、
@@ -42,11 +42,14 @@ StateNode_t
 ```
 
 action は、現在の状態をより良い次の状態に進めるために選ばれます。
-ただし、action そのものに実行結果を書き込みません。
+このとき、実行前の計画と実行後の結果を分けて記録します。
 
-`ActionSpec` は「これから何をするか」の仕様です。
-`ActionResult` は実行して出てきた副産物です。
+`ActionSpec` は「これから何をするか」と「何が観測されるはずか」の仕様です。
+`ActionResult` は実行して出てきた artifact、log、metric、error などです。
 `TransitionRecord` は、それらに観測、証拠、判断、学習、状態差分を加えた矢印です。
+
+この分け方により、agent は「予測通りだったか」「外れたなら何を学ぶべきか」を
+各試行ごとに追跡できます。
 
 ```text
 StateNode_t

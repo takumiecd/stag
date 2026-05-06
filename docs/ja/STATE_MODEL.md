@@ -6,11 +6,19 @@ optagent の状態モデルは、次の考え方を中心に置きます。
 
 > 最適化は、状態から action を選び、その実行結果を解釈して、次の状態を作る過程である。
 
-ここで重要なのは、`Action` に結果を書き込まないことです。
+最適化では、実行前に「何をすれば、何が観測されるはずか」を予測します。
+実行後には、artifact、log、metric、error などの結果が得られます。
+その結果を評価して、予測が当たったか、外れたなら何を学ぶべきかを決めます。
 
-`Action` は「これから何をするか」という仕様です。
-実行して出てきた副産物は `ActionResult` に置きます。
-予測、観測、証拠、判断、状態差分をまとめたものを `TransitionRecord` として扱います。
+そのため、状態モデルでは以下を分けて扱います。
+
+- 実行前に決める計画
+- 実行して得た結果
+- 結果から作る証拠
+- 証拠にもとづく判断
+- 次の状態に反映する学習
+
+この一連の変化を `TransitionRecord` として記録します。
 
 ```text
 StateNode
@@ -42,7 +50,7 @@ StateNode:
 
 ActionSpec:
   これから実行する action の仕様。
-  実行結果は持たない。
+  期待する観測、入力、コスト見積もり、安全条件を持つ。
 
 ActionResult:
   action を実行して出てきた副産物。
@@ -53,8 +61,12 @@ TransitionRecord:
   StateNode から StateNode への遷移を、予測・結果・証拠・判断込みで記録する。
 ```
 
-この分解により、`ActionSpec` は immutable にできます。
-実行後に action に結果を書き込む必要はありません。
+この分解の目的は、予測と観測を比較できる形で試行を残すことです。
+あとから同じ試行を読み返したり、別の evaluator や promotion policy で再評価したりできます。
+
+`ActionSpec` は実行前の計画です。
+`ActionResult` は実行後に得られた事実です。
+この二つを分けることで、「何を期待していたか」と「実際に何が起きたか」を明確に比較できます。
 
 ## State と Tree
 
@@ -195,12 +207,15 @@ state_snapshot
 └──────────────────────────────────────────────┘
 ```
 
-ここに action の実行結果は入れません。
-実行結果は `ActionResult`、矢印全体は `TransitionRecord` に置きます。
+`StateNode` は、その時点で agent が何を知っているかを表します。
+個別の実行 log や benchmark output は node に直接混ぜず、
+`TransitionRecord` から辿れる形で保存します。
+これにより、状態の比較と実行履歴の検証を分けて扱えます。
 
 ## ActionSpec
 
 `ActionSpec` は、状態から選ばれる「これから何をするか」の仕様です。
+実行前に作られ、実行の意図と期待する観測を記録します。
 
 ```text
 ActionSpec
@@ -214,8 +229,9 @@ ActionSpec
 └── safety_policy
 ```
 
-`ActionSpec` は結果を持ちません。
-実行後に `ActionSpec` を変更しません。
+`ActionSpec` には、実行後に生成された artifact、log、metric は含めません。
+それらは `ActionResult` として保存します。
+この区別があると、実行前の予測と実行後の事実をそのまま比較できます。
 
 ### action_type
 
@@ -258,6 +274,7 @@ ScopeRefinementAction:
 ## ActionResult
 
 `ActionResult` は、`ActionSpec` を実行して出てきた副産物です。
+成功した場合だけでなく、失敗した場合の error、timeout、partial output も含めます。
 
 ```text
 ActionResult
@@ -294,6 +311,8 @@ ActionResult:
 ## TransitionRecord
 
 `TransitionRecord` が矢印です。
+一つの試行について、実行前の計画、実行後の結果、そこから作った証拠、
+判断、学習、状態差分をまとめます。
 
 ```text
 TransitionRecord
@@ -331,8 +350,14 @@ TransitionRecord
 └──────────────┘
 ```
 
-`TransitionRecord` は、単なる action ではありません。
-action の仕様、実行結果、観測、判断、学習、状態差分をまとめたものです。
+`TransitionRecord` を読めば、次の問いに答えられる必要があります。
+
+- どの状態から始めたのか
+- 何をしようとしたのか
+- 何が起きると予測していたのか
+- 実際には何が起きたのか
+- どの証拠をもとに判断したのか
+- 次の状態に何を反映したのか
 
 ## PredictionTree
 
@@ -443,7 +468,8 @@ S7_observed
 ```
 
 このとき、`ActionSpec` は変更しません。
-実行結果は `ActionResult` に置き、予測との差分は `PredictionError` に置きます。
+実行前の予測は `ActionSpec` に残し、実行後の事実は `ActionResult` に残します。
+予測との差分は `PredictionError` として保存します。
 
 ## 状態遷移の 1 step
 
@@ -754,4 +780,4 @@ EvidenceTree:
 ```
 
 この形にすると、`State -> Action -> Result -> State` の反復推論を保ちながら、
-action に実行結果を書き込む責務混在を避けられます。
+実行前の予測、実行後の事実、証拠にもとづく判断、次に使う知識を一つの遷移として追跡できます。

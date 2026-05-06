@@ -42,8 +42,11 @@ Requirement
 
 `StateNode` は点です。
 `TransitionRecord` は矢印です。
-`ActionSpec` はその矢印の中に含まれる「これから何をするか」の仕様であり、
-実行結果は `ActionResult` として別に残します。
+`ActionSpec` は実行前の計画です。
+`ActionResult` は実行後に得られた artifact、log、metric、error などの結果です。
+
+この分解により、各試行について「何を期待していたか」「実際に何が起きたか」
+「その差から何を学んだか」を追跡できます。
 
 LLM、探索アルゴリズム、planner、heuristic は差し替え可能です。
 しかし、証拠、判断、学習結果が残らない最適化は optagent の対象ではありません。
