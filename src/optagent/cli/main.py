@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from optagent.cli.commands.init import cli_init
+from optagent.cli.commands.plan import cli_plan
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -39,6 +40,26 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Directory to save runs (default: .optagent/runs)",
     )
 
+    # plan subcommand
+    plan_parser = subparsers.add_parser("plan", help="Create plans from current state")
+    plan_parser.add_argument("run_id", help="Run identifier")
+    plan_parser.add_argument(
+        "--planner",
+        default="default",
+        help="Planner name (default: default)",
+    )
+    plan_parser.add_argument(
+        "--max-plans",
+        type=int,
+        default=1,
+        help="Maximum number of plans to create (default: 1)",
+    )
+    plan_parser.add_argument(
+        "--store-dir",
+        default=".optagent/runs",
+        help="Directory where runs are stored (default: .optagent/runs)",
+    )
+
     return parser
 
 
@@ -54,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "init":
         return cli_init(args)
+    if args.command == "plan":
+        return cli_plan(args)
 
     return 1
 
