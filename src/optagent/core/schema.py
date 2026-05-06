@@ -7,6 +7,8 @@ The new model uses points and arrows:
 ``ActionSpec`` captures the plan made before execution. ``ActionResult``
 captures the facts produced by execution. ``TransitionRecord`` binds them to
 evidence, decision, finding, and the state delta that creates the next node.
+``StateContext`` is the view used by an agent when it needs to read past
+evidence and predicted futures around the current state.
 """
 
 from __future__ import annotations
@@ -69,19 +71,112 @@ class Requirement:
 
 
 @dataclass(frozen=True)
+class ArtifactRef:
+    """Reference to an artifact known by a state."""
+
+    artifact_id: str
+    artifact_type: str
+    path: str | None = None
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return to_jsonable(self)  # type: ignore[return-value]
+
+
+@dataclass(frozen=True)
+class FindingRef:
+    """Reference to reusable knowledge known by a state."""
+
+    finding_id: str
+    summary: str
+    scope: str = ""
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return to_jsonable(self)  # type: ignore[return-value]
+
+
+@dataclass(frozen=True)
+class PredictionRef:
+    """Compact prediction kept in a state snapshot."""
+
+    prediction_id: str
+    summary: str
+    confidence: float | None = None
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return to_jsonable(self)  # type: ignore[return-value]
+
+
+@dataclass(frozen=True)
+class Budget:
+    """Remaining resources available from a state."""
+
+    max_transitions: int | None = None
+    remaining_transitions: int | None = None
+    max_wall_seconds: float | None = None
+    remaining_wall_seconds: float | None = None
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return to_jsonable(self)  # type: ignore[return-value]
+
+
+@dataclass(frozen=True)
+class StateSnapshot:
+    """The information available at a state.
+
+    This is the state content. It does not store how to traverse the tree.
+    """
+
+    requirement: Requirement
+    artifacts: tuple[ArtifactRef, ...] = ()
+    knowledge: tuple[FindingRef, ...] = ()
+    open_questions: tuple[str, ...] = ()
+    active_branches: tuple[str, ...] = ()
+    predictions: tuple[PredictionRef, ...] = ()
+    budget: Budget | None = None
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return to_jsonable(self)  # type: ignore[return-value]
+
+
+@dataclass(frozen=True)
 class StateNode:
-    """A point in a prediction or evidence tree."""
+    """A state point.
+
+    The node stores state content only. Past and future traversal is handled by
+    EvidenceTree, PredictionTree, and StateContext.
+    """
 
     state_id: str
-    depth: int
-    requirement_id: str
-    branch_id: str = "main"
-    parent_state_ids: tuple[str, ...] = ()
-    state_snapshot: dict[str, JSONValue] = field(default_factory=dict)
+    snapshot: StateSnapshot
     assumptions: tuple[str, ...] = ()
     confidence: float | None = None
     status: NodeStatus = "predicted"
-    linked_transition_id: str | None = None
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return to_jsonable(self)  # type: ignore[return-value]
+
+
+@dataclass(frozen=True)
+class StateContext:
+    """View of a current state inside past evidence and predicted futures."""
+
+    current_state_id: str
+    evidence_tree_id: str | None = None
+    prediction_tree_id: str | None = None
+    current_depth: int | None = None
+    active_branch_ids: tuple[str, ...] = ()
+    focus_transition_ids: tuple[str, ...] = ()
+    past_depth: int | None = None
+    future_depth: int | None = None
+    include_pruned: bool = False
+    include_unsafe: bool = True
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, JSONValue]:
         return to_jsonable(self)  # type: ignore[return-value]

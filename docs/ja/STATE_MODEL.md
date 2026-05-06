@@ -98,6 +98,26 @@ EvidenceTree:
 `PredictionTree` の edge は「こうすればこうなるはず」という予測です。
 `EvidenceTree` の edge は「実際にこうしたらこうなった」という記録です。
 
+`StateNode` 自体には、過去や未来の transition id を直接持たせません。
+`StateNode` は状態そのものを表します。
+過去へ遡るための index は `EvidenceTree` が持ち、未来を見るための index は `PredictionTree` が持ちます。
+
+現在の state をどの範囲の過去・未来と一緒に読むかは `StateContext` で指定します。
+
+```text
+StateNode:
+  状態そのもの。
+
+EvidenceTree:
+  過去を遡るための incoming / outgoing index を持つ。
+
+PredictionTree:
+  未来予測を見るための outgoing / incoming index を持つ。
+
+StateContext:
+  現在の StateNode を中心に、どの過去と未来を見るかを指定する。
+```
+
 ## Tree / Depth / StateNode
 
 tree は depth を持ちます。
@@ -161,22 +181,23 @@ comparison:
 ```text
 StateNode
 ├── state_id
-├── depth
-├── branch_id
-├── parent_state_ids
-├── state_snapshot
+├── snapshot
 ├── assumptions
 ├── confidence
 ├── status
-└── linked_transition_id
+└── metadata
 ```
 
-### state_snapshot
+`depth`、`branch_id`、`parent_state_ids`、`transition_id` は `StateNode` の中身ではなく、
+tree 側の index や `StateContext` で扱います。
+これにより、同じ状態を別の tree view から読むことができます。
 
-`state_snapshot` は、その node で agent が持っている状態です。
+### snapshot
+
+`snapshot` は、その node で agent が持っている状態です。
 
 ```text
-state_snapshot
+StateSnapshot
 ├── requirement
 ├── artifacts
 ├── knowledge
@@ -190,7 +211,7 @@ state_snapshot
 
 ```text
 ┌──────────────────────────────────────────────┐
-│ StateNode S2 depth=1 branch=launch_overhead   │
+│ StateNode S2                                  │
 ├──────────────────────────────────────────────┤
 │ StateSnapshot                                 │
 │  requirement: csc_linear_forward latency      │
@@ -203,7 +224,6 @@ state_snapshot
 │  assumptions: launch overhead dominates       │
 │  confidence: 0.62                             │
 │  status: predicted                            │
-│  linked_transition_id: none                   │
 └──────────────────────────────────────────────┘
 ```
 
@@ -211,6 +231,47 @@ state_snapshot
 個別の実行 log や benchmark output は node に直接混ぜず、
 `TransitionRecord` から辿れる形で保存します。
 これにより、状態の比較と実行履歴の検証を分けて扱えます。
+
+## StateContext
+
+`StateContext` は、現在の `StateNode` を tree の中で読むための視点です。
+状態そのものではありません。
+
+```text
+StateContext
+├── current_state_id
+├── evidence_tree_id
+├── prediction_tree_id
+├── current_depth
+├── active_branch_ids
+├── focus_transition_ids
+├── past_depth
+├── future_depth
+├── include_pruned
+└── include_unsafe
+```
+
+例えば、agent が `S7` にいるとします。
+`S7` の `StateNode` だけを見ると、現在の knowledge や open questions は分かります。
+しかし、なぜその状態になったのか、どの失敗を踏んだのか、次にどの未来が予測されているのかは分かりません。
+
+その読み方を指定するのが `StateContext` です。
+
+```text
+StateContext:
+  current_state_id: S7
+  evidence_tree_id: E_run_001
+  prediction_tree_id: P_run_001
+  past_depth: 3
+  future_depth: 2
+  focus_transition_ids:
+    - T5: fused dispatch implementation
+    - T6: large shape benchmark regression
+    - P8: scoped dispatch prediction
+```
+
+この context があると、agent は「現在状態を中心に、過去 3 step と未来 2 step を読んで判断する」
+という推論ができます。
 
 ## ActionSpec
 
