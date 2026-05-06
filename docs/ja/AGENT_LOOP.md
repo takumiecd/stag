@@ -39,6 +39,9 @@ StateNode_t
   + predicted futures
 ```
 
+この `StateNode_t` は source of truth ではなく、次の action を選ぶための working memory です。
+`requirement` は固定入力、`artifacts` は fact への参照、`compressed knowledge` や `predicted futures` は derived cache です。
+
 action は、現在の状態をより良い次の状態に進めるために選ばれます。
 このとき、実行前の計画と実行後の結果を分けて記録します。
 

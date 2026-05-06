@@ -81,7 +81,7 @@ class Requirement:
 
 @dataclass(frozen=True)
 class ArtifactRef:
-    """Reference to an artifact known by a state."""
+    """Reference to a source-of-truth artifact known by a state."""
 
     artifact_id: str
     artifact_type: str
@@ -94,7 +94,7 @@ class ArtifactRef:
 
 @dataclass(frozen=True)
 class FindingRef:
-    """Reference to reusable knowledge known by a state."""
+    """Reference to compressed derived knowledge known by a state."""
 
     finding_id: str
     summary: str
@@ -107,7 +107,7 @@ class FindingRef:
 
 @dataclass(frozen=True)
 class PredictionRef:
-    """Compact prediction kept in a state snapshot."""
+    """Compact forecast cache kept in a state snapshot."""
 
     prediction_id: str
     summary: str
@@ -120,7 +120,7 @@ class PredictionRef:
 
 @dataclass(frozen=True)
 class Budget:
-    """Remaining resources available from a state."""
+    """Execution/resource state available from a state."""
 
     max_transitions: int | None = None
     remaining_transitions: int | None = None
@@ -134,9 +134,11 @@ class Budget:
 
 @dataclass(frozen=True)
 class StateSnapshot:
-    """The information available at a state.
+    """Working memory used to choose the next action.
 
-    This is the state content. It does not store how to traverse the tree.
+    A snapshot is not source of truth. It combines fixed inputs, references to
+    facts, resource state, and compressed derived knowledge. It does not store
+    how to traverse the tree.
     """
 
     requirement: Requirement

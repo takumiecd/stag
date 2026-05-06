@@ -115,6 +115,23 @@ LLM や evaluator は確率的・設定依存に振る舞うため、同じ raw 
 例えば `knowledge` は source of truth ではありません。
 過去の `TransitionRecord` と derived record から作った、次の action 選択用の要約です。
 
+ただし、`StateSnapshot` の中身がすべて同じ意味で derived というわけではありません。
+
+```text
+StateSnapshot
+├── requirement      # fixed input / run truth
+├── artifacts        # source-of-truth artifact への参照
+├── knowledge        # derived knowledge の圧縮
+├── open_questions   # 現在の未解決問い
+├── active_branches  # 探索中の方針
+├── predictions      # future forecast の cache
+└── budget           # 実行資源・残り試行回数
+```
+
+`StateSnapshot` は source of truth ではありません。
+しかし、すべてが LLM の解釈でもありません。
+固定入力、fact への参照、実行管理状態、derived knowledge を、次の action 選択のためにまとめた working memory です。
+
 ## State と Tree
 
 `State` と tree は分けます。
@@ -241,7 +258,7 @@ tree 側の index や `StateContext` で扱います。
 
 ### snapshot
 
-`snapshot` は、その node で agent が持っている状態です。
+`snapshot` は、その node で agent が次の action を選ぶために読む working memory です。
 
 ```text
 StateSnapshot
@@ -252,6 +269,36 @@ StateSnapshot
 ├── active_branches
 ├── predictions
 └── budget
+```
+
+各フィールドの責務は以下です。
+
+```text
+requirement:
+  run の固定入力。何を最適化しているか。
+
+artifacts:
+  baseline、candidate、patch、raw output などへの参照。
+  artifact の中身そのものではなく、source-of-truth fact への入口。
+
+knowledge:
+  derived record や過去 transition から圧縮した知識。
+  次の action 選択に使うが、原本ではない。
+
+open_questions:
+  まだ答えが出ていない問い。
+  investigation action の候補になる。
+
+active_branches:
+  まだ探索中の仮説や方針。
+  tree の branch view と対応する。
+
+predictions:
+  近い未来についての予測 cache。
+  PredictionTree 全体ではなく、今の判断に必要な要約。
+
+budget:
+  残り試行回数、時間、コストなどの実行管理状態。
 ```
 
 図にすると次のようになります。
