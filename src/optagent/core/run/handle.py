@@ -110,6 +110,7 @@ from optagent.core.run.promote import (  # noqa: E402
     promote_impl as _promote_impl,
 )
 from optagent.core.run.trace import refresh_impl as _refresh_impl, trace_impl as _trace_impl  # noqa: E402
+from optagent.core.run.note import note_impl as _note_impl  # noqa: E402
 
 RunHandle._find_plan = _find_plan
 RunHandle._make_predicted_state = _make_predicted_state
@@ -125,3 +126,4 @@ RunHandle.result = _observe_impl
 RunHandle.trace = _trace_impl
 RunHandle.history = _trace_impl
 RunHandle.refresh = _refresh_impl
+RunHandle.note = _note_impl

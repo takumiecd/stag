@@ -11,6 +11,7 @@ from optagent.cli.commands.observe import add_parser as add_observe_parser, cli_
 from optagent.cli.commands.plan import add_parser as add_plan_parser, cli_plan
 from optagent.cli.commands.predict import add_parser as add_predict_parser, cli_predict
 from optagent.cli.commands.promote import add_parser as add_promote_parser, cli_promote
+from optagent.cli.commands.note import add_parser as add_note_parser, cli_note
 from optagent.cli.commands.refresh import add_parser as add_refresh_parser, cli_refresh
 from optagent.cli.commands.show import add_parser as add_show_parser, cli_show
 from optagent.cli.commands.trace import add_parser as add_trace_parser, cli_trace
@@ -29,6 +30,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_plan_parser(subparsers)
     add_predict_parser(subparsers)
     add_promote_parser(subparsers)
+    add_note_parser(subparsers)
     add_refresh_parser(subparsers)
     add_show_parser(subparsers)
     add_trace_parser(subparsers)
@@ -58,6 +60,8 @@ def main(argv: list[str] | None = None) -> int:
         return cli_predict(args)
     if args.command == "promote":
         return cli_promote(args)
+    if args.command == "note":
+        return cli_note(args)
     if args.command == "refresh":
         return cli_refresh(args)
     if args.command == "show":
