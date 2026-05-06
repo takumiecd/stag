@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from optagent.core.schema.plans import ExecutionPlan, PredictionPlan
 from optagent.core.schema.state import StateNode
 from optagent.core.schema.transitions import ObservedTransition, PredictedTransition
+from optagent.core.types import to_jsonable
 
 
 @dataclass
@@ -68,6 +69,9 @@ class PredictionDAG:
     def predicted_transition_ids_for_plan(self, plan_id: str) -> list[str]:
         return list(self.transitions_by_plan.get(plan_id, ()))
 
+    def to_dict(self) -> dict:
+        return to_jsonable(self)  # type: ignore[return-value]
+
 
 @dataclass
 class TraceDAG:
@@ -128,3 +132,6 @@ class TraceDAG:
 
     def plan_ids_from_state(self, state_id: str) -> list[str]:
         return list(self.plans_by_state.get(state_id, ()))
+
+    def to_dict(self) -> dict:
+        return to_jsonable(self)  # type: ignore[return-value]

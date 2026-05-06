@@ -383,6 +383,45 @@ $ optagent list
 
 storeが空の場合、空の配列 ``[]`` を出力します。
 
-## 今後追加予定のコマンド
+## ``optagent refresh``
 
-- ``optagent refresh`` — PredictionDAGを作り直す
+現在の observed state に ``PredictionDAG`` を作り直してアンカーします。
+
+実行結果を記録すると current observed state が進み、古い未来予測は現在の状態とズレるため、必要に応じて ``refresh`` します。
+
+```bash
+optagent refresh <run_id> [options]
+```
+
+### 引数
+
+| 引数 | 必須 | 説明 |
+|-----|------|------|
+| ``run_id`` | ○ | 対象のrun識別子 |
+
+### オプション
+
+| オプション | デフォルト | 説明 |
+|-----------|-----------|------|
+| ``--mode`` | ``reset`` | ``reset`` または ``stale`` |
+| ``--store-dir`` | ``.optagent/runs`` | runの保存先ディレクトリ |
+
+``--mode stale`` を指定すると、古い ``PredictionDAG`` を ``stale=True`` にしてから新しいDAGを作ります。
+
+### 出力
+
+成功時、新しい ``PredictionDAG`` をJSONで標準出力に出力します。
+
+```bash
+$ optagent refresh run_001
+{
+  "dag_id": "prediction_dag_0002",
+  "anchor_observed_state_id": "s_obs_0001",
+  "root_predicted_state_id": "s_pred_0003",
+  "stale": false
+}
+```
+
+### エラー
+
+- ``KeyError`` — 指定した ``run_id`` が存在しない場合
