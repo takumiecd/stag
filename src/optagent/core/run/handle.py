@@ -111,6 +111,7 @@ from optagent.core.run.promote import (  # noqa: E402
 )
 from optagent.core.run.trace import refresh_impl as _refresh_impl, trace_impl as _trace_impl  # noqa: E402
 from optagent.core.run.derive import derive_impl as _derive_impl  # noqa: E402
+from optagent.core.run.snapshot import snapshot_rebuild_impl as _snapshot_rebuild_impl  # noqa: E402
 from optagent.core.run.state_impl import (  # noqa: E402
     state_show_impl as _state_show_impl,
     state_update_impl as _state_update_impl,
@@ -134,3 +135,4 @@ RunHandle.refresh = _refresh_impl
 RunHandle.derive = _derive_impl
 RunHandle.state_show = _state_show_impl
 RunHandle.state_update = _state_update_impl
+RunHandle.snapshot_rebuild = _snapshot_rebuild_impl
