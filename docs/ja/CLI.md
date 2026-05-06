@@ -343,7 +343,46 @@ $ optagent trace run_001 --depth 3
 
 - ``KeyError`` — 指定した ``run_id`` が存在しない場合
 
+## ``optagent list``
+
+保存済みのrun一覧を表示します。
+
+```bash
+optagent list [options]
+```
+
+### オプション
+
+| オプション | デフォルト | 説明 |
+|-----------|-----------|------|
+| ``--store-dir`` | ``.optagent/runs`` | runの保存先ディレクトリ |
+
+### 出力
+
+成功時、runの一覧をJSON配列で標準出力に出力します。
+
+```bash
+$ optagent list
+[
+  {
+    "run_id": "run_a",
+    "requirement_id": "req_kernel",
+    "target_type": "kernel",
+    "target_id": "csc_linear",
+    "current_observed_state_id": "s_obs_0000"
+  },
+  {
+    "run_id": "run_b",
+    "requirement_id": "req_code",
+    "target_type": "code",
+    "target_id": "module_b",
+    "current_observed_state_id": "s_obs_0000"
+  }
+]
+```
+
+storeが空の場合、空の配列 ``[]`` を出力します。
+
 ## 今後追加予定のコマンド
 
 - ``optagent refresh`` — PredictionDAGを作り直す
-- ``optagent list`` — 保存済みrunの一覧を表示
