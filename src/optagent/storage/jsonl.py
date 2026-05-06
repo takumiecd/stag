@@ -101,11 +101,7 @@ class JsonlRunStore:
         )
         self._write_jsonl(
             run_path / "prediction_plans.jsonl",
-            (
-                plan.to_dict()
-                for plan in run.prediction_dag.plans.values()
-                if isinstance(plan, PredictionPlan)
-            ),
+            (plan.to_dict() for plan in run.prediction_dag.plans.values()),
         )
         self._write_jsonl(
             run_path / "predicted_transitions.jsonl",

@@ -67,7 +67,6 @@ def refresh_impl(
     self,
     *,
     from_state_id: str | None = None,
-    mode: str = "reset",
 ) -> PredictionDAG:
     """Re-anchor the PredictionDAG to an observed state."""
 
@@ -75,10 +74,6 @@ def refresh_impl(
     observed_state = self.trace_dag.nodes.get(observed_state_id)
     if observed_state is None or observed_state.state_kind != "observed":
         raise KeyError(f"unknown observed state_id: {observed_state_id}")
-    if mode not in {"reset", "stale"}:
-        raise ValueError("refresh mode must be 'reset' or 'stale'")
-    if mode == "stale":
-        self.prediction_dag.stale = True
     self.prediction_dag = _new_prediction_dag(self, observed_state)
     return self.prediction_dag
 
