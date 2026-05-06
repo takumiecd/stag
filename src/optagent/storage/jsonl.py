@@ -37,6 +37,39 @@ class JsonlRunStore:
     def run_path(self, run_id: str) -> Path:
         return self.root / run_id
 
+    def list_runs(self) -> list[dict]:
+        """Return a list of run summaries from the store root.
+
+        Each summary contains run_id, requirement fields, and
+        current_observed_state_id. Invalid run directories are skipped.
+        """
+        if not self.root.exists():
+            return []
+
+        runs: list[dict] = []
+        for entry in sorted(self.root.iterdir()):
+            if not entry.is_dir():
+                continue
+            run_json = entry / "run.json"
+            if not run_json.exists():
+                continue
+            try:
+                data = json.loads(run_json.read_text(encoding="utf-8"))
+                runs.append(
+                    {
+                        "run_id": data["run_id"],
+                        "requirement_id": data["requirement"]["requirement_id"],
+                        "target_type": data["requirement"]["target_type"],
+                        "target_id": data["requirement"]["target_id"],
+                        "current_observed_state_id": data.get(
+                            "current_observed_state_id", ""
+                        ),
+                    }
+                )
+            except (KeyError, json.JSONDecodeError):
+                continue
+        return runs
+
     def save_run(self, run: RunHandle) -> Path:
         """Write the whole run snapshot to a run directory."""
 

@@ -113,3 +113,37 @@ def test_run_handle_can_save_with_store(tmp_path):
     run_path = run.save(store)
 
     assert run_path == tmp_path / "run_test"
+
+
+def test_jsonl_store_list_runs_returns_summaries(tmp_path):
+    req_a = Requirement(requirement_id="req_a", target_type="code", target_id="mod_a")
+    req_b = Requirement(requirement_id="req_b", target_type="kernel", target_id="mod_b")
+    store = JsonlRunStore(tmp_path)
+
+    run_a = optagent.init(req_a, run_id="run_a")
+    run_b = optagent.init(req_b, run_id="run_b")
+    store.save_run(run_a)
+    store.save_run(run_b)
+
+    summaries = store.list_runs()
+    assert len(summaries) == 2
+    ids = {s["run_id"] for s in summaries}
+    assert ids == {"run_a", "run_b"}
+
+    by_id = {s["run_id"]: s for s in summaries}
+    assert by_id["run_a"]["requirement_id"] == "req_a"
+    assert by_id["run_a"]["target_type"] == "code"
+    assert by_id["run_a"]["current_observed_state_id"] == "s_obs_0000"
+
+
+def test_jsonl_store_list_runs_empty(tmp_path):
+    store = JsonlRunStore(tmp_path)
+    assert store.list_runs() == []
+
+
+def test_jsonl_store_list_runs_ignores_invalid_directories(tmp_path):
+    store = JsonlRunStore(tmp_path)
+    (tmp_path / "not_a_run").mkdir()
+    (tmp_path / "not_a_run" / "foo.txt").write_text("bar")
+
+    assert store.list_runs() == []
