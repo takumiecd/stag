@@ -248,9 +248,102 @@ $ optagent observe run_001 p_exec_0001 --result-id r_0001 --status completed \
 
 - ``KeyError`` — 指定した ``run_id`` または ``plan_id`` が存在しない場合
 
+## ``optagent promote``
+
+予測outcome（PredictedTransition）と実測結果を対応づけ、``TraceDAG`` に記録します。
+
+```bash
+optagent promote <run_id> \
+    --predicted-transition-id <predicted_id> \
+    --result-id <result_id> [options]
+```
+
+### 引数
+
+| 引数 | 必須 | 説明 |
+|-----|------|------|
+| ``run_id`` | ○ | 対象のrun識別子 |
+
+### オプション
+
+| オプション | デフォルト | 説明 |
+|-----------|-----------|------|
+| ``--predicted-transition-id`` | （必須） | 対応づける予測outcomeの識別子 |
+| ``--result-id`` | （必須） | 結果の識別子 |
+| ``--status`` | ``completed`` | 実行ステータス |
+| ``--execution-plan-id`` | （推論） | 実行planの識別子 |
+| ``--metric`` | （なし） | メトリクス（``key=value``、複数可） |
+| ``--store-dir`` | ``.optagent/runs`` | runの保存先ディレクトリ |
+
+### 出力
+
+成功時、作成された ``ObservedTransition`` をJSONで標準出力に出力します。
+
+```bash
+$ optagent promote run_001 \
+    --predicted-transition-id t_pred_0001 \
+    --result-id r_0001 \
+    --execution-plan-id p_exec_0001
+{
+  "transition_id": "t_obs_0001",
+  "transition_kind": "observed",
+  "execution_plan_id": "p_exec_0001",
+  "matched_predicted_transition_id": "t_pred_0001",
+  "action_result": {
+    "result_id": "r_0001",
+    "status": "completed"
+  }
+}
+```
+
+### エラー
+
+- ``KeyError`` — 指定した ``run_id`` または ``predicted_transition_id`` が存在しない場合
+
+## ``optagent trace``
+
+現在のobserved stateから過去の実行履歴を辿ります。
+
+```bash
+optagent trace <run_id> [options]
+```
+
+### 引数
+
+| 引数 | 必須 | 説明 |
+|-----|------|------|
+| ``run_id`` | ○ | 対象のrun識別子 |
+
+### オプション
+
+| オプション | デフォルト | 説明 |
+|-----------|-----------|------|
+| ``--depth`` | （制限なし） | 辿る遷移数の上限 |
+| ``--store-dir`` | ``.optagent/runs`` | runの保存先ディレクトリ |
+
+### 出力
+
+成功時、``TraceContext`` をJSONで標準出力に出力します。
+
+```bash
+$ optagent trace run_001 --depth 3
+{
+  "current_state_id": "s_obs_0002",
+  "past_state_ids": ["s_obs_0001", "s_obs_0000"],
+  "observed_transition_ids": ["t_obs_0002", "t_obs_0001"],
+  "execution_plan_ids": ["p_exec_0002", "p_exec_0001"],
+  "action_result_ids": ["r_0002", "r_0001"],
+  "matched_predicted_transition_ids": [],
+  "derived_record_ids": [],
+  "artifact_refs": []
+}
+```
+
+### エラー
+
+- ``KeyError`` — 指定した ``run_id`` が存在しない場合
+
 ## 今後追加予定のコマンド
 
-- ``optagent promote`` — 予測を実行結果に対応づける
-- ``optagent trace`` — 実行履歴を辿る
 - ``optagent refresh`` — PredictionDAGを作り直す
 - ``optagent list`` — 保存済みrunの一覧を表示
