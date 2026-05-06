@@ -1,14 +1,13 @@
-"""Canonical state-transition records.
+"""Canonical prediction and trace records.
 
-The new model uses points and arrows:
+The rebuilt model separates unexecuted futures from observed facts:
 
-``StateNode -- TransitionRecord --> StateNode``.
+``PredictionDAG`` stores predicted states, plans, and predicted transitions.
+``TraceDAG`` stores observed states, execution plans, and observed transitions.
 
-``ActionSpec`` captures the plan made before execution. ``ActionResult``
-captures the facts produced by execution. ``TransitionRecord`` stores those
-source-of-truth records plus optional derived interpretations.
-``StateContext`` is the view used by an agent when it needs to read past
-evidence and predicted futures around the current state.
+Plans hold the executable intent directly. There is no separate ``ActionSpec``.
+``ActionResult`` is only attached to an ``ObservedTransition`` after execution.
+Derived records are structured notes made from source-of-truth facts.
 """
 
 from __future__ import annotations
@@ -28,6 +27,10 @@ ActionType = Literal[
     "scope_refinement",
 ]
 
+StateKind = Literal["observed", "predicted"]
+PlanKind = Literal["execution", "prediction"]
+TransitionKind = Literal["observed", "predicted"]
+MatchStatus = Literal["exact", "compatible", "partial", "mismatch"]
 DecisionStatus = Literal[
     "accepted",
     "rejected",
@@ -36,7 +39,8 @@ DecisionStatus = Literal[
     "unsafe",
 ]
 
-NodeStatus = Literal["predicted", "observed", "pruned", "merged"]
+PlanStatus = Literal["active", "promoted", "executed", "stale", "pruned", "cancelled"]
+NodeStatus = Literal["active", "stale", "pruned", "merged"]
 ResultStatus = Literal["completed", "failed", "timeout", "skipped"]
 DerivedType = Literal[
     "observation",
@@ -159,14 +163,17 @@ class StateNode:
     """A state point.
 
     The node stores state content only. Past and future traversal is handled by
-    EvidenceTree, PredictionTree, and StateContext.
+    TraceDAG, PredictionDAG, and StateContext.
     """
 
     state_id: str
+    state_kind: StateKind
     snapshot: StateSnapshot
+    snapshot_hash: str | None = None
+    anchor_observed_state_id: str | None = None
     assumptions: tuple[str, ...] = ()
     confidence: float | None = None
-    status: NodeStatus = "predicted"
+    status: NodeStatus = "active"
     metadata: dict[str, JSONValue] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, JSONValue]:
@@ -178,8 +185,8 @@ class StateContext:
     """View of a current state inside past evidence and predicted futures."""
 
     current_state_id: str
-    evidence_tree_id: str | None = None
-    prediction_tree_id: str | None = None
+    trace_dag_id: str | None = None
+    prediction_dag_id: str | None = None
     current_depth: int | None = None
     active_branch_ids: tuple[str, ...] = ()
     focus_transition_ids: tuple[str, ...] = ()
@@ -194,10 +201,12 @@ class StateContext:
 
 
 @dataclass(frozen=True)
-class ActionSpec:
-    """Execution plan chosen from a state before any side effect happens."""
+class PredictionPlan:
+    """Hypothetical plan that only exists inside a PredictionDAG."""
 
-    action_id: str
+    plan_id: str
+    plan_kind: Literal["prediction"]
+    from_predicted_state_id: str
     action_type: ActionType
     intent: str
     inputs: dict[str, JSONValue] = field(default_factory=dict)
@@ -205,6 +214,9 @@ class ActionSpec:
     expected_state_delta: dict[str, JSONValue] = field(default_factory=dict)
     estimated_cost: dict[str, JSONValue] = field(default_factory=dict)
     safety_policy: dict[str, JSONValue] = field(default_factory=dict)
+    assumptions: tuple[str, ...] = ()
+    confidence: float | None = None
+    status: PlanStatus = "active"
     metadata: dict[str, JSONValue] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, JSONValue]:
@@ -212,10 +224,36 @@ class ActionSpec:
 
 
 @dataclass(frozen=True)
-class ActionResult:
-    """Artifacts and raw outputs produced by executing an ActionSpec."""
+class ExecutionPlan:
+    """Plan grounded in an observed state and safe to pass to an executor."""
 
-    action_id: str
+    plan_id: str
+    plan_kind: Literal["execution"]
+    from_observed_state_id: str
+    action_type: ActionType
+    intent: str
+    inputs: dict[str, JSONValue] = field(default_factory=dict)
+    expected_observation: dict[str, JSONValue] = field(default_factory=dict)
+    expected_state_delta: dict[str, JSONValue] = field(default_factory=dict)
+    estimated_cost: dict[str, JSONValue] = field(default_factory=dict)
+    safety_policy: dict[str, JSONValue] = field(default_factory=dict)
+    assumptions: tuple[str, ...] = ()
+    status: PlanStatus = "active"
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return to_jsonable(self)  # type: ignore[return-value]
+
+
+Plan = PredictionPlan | ExecutionPlan
+
+
+@dataclass(frozen=True)
+class ActionResult:
+    """Artifacts and raw outputs produced by executing an ExecutionPlan."""
+
+    result_id: str
+    execution_plan_id: str
     status: ResultStatus
     artifacts: tuple[str, ...] = ()
     raw_outputs: tuple[str, ...] = ()
@@ -268,6 +306,19 @@ class PredictionError:
     missed: tuple[str, ...] = ()
     unexpected: tuple[str, ...] = ()
     severity: str = "unknown"
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return to_jsonable(self)  # type: ignore[return-value]
+
+
+@dataclass(frozen=True)
+class PredictionMatch:
+    """How an observed transition matches a previously predicted outcome."""
+
+    matched_predicted_transition_id: str
+    match_status: MatchStatus
+    prediction_error: dict[str, JSONValue] = field(default_factory=dict)
     metadata: dict[str, JSONValue] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, JSONValue]:
@@ -335,15 +386,80 @@ class DerivedRecord:
 
 
 @dataclass(frozen=True)
-class TransitionRecord:
-    """The source-of-truth arrow from one StateNode to another."""
+class PredictedTransition:
+    """Predicted outcome of running a plan."""
 
     transition_id: str
+    transition_kind: Literal["predicted"]
+    parent_plan_id: str
+    parent_plan_kind: PlanKind
     from_state_id: str
-    to_state_id: str
-    action_spec: ActionSpec
+    outcome_id: str
+    outcome_label: str
+    predicted_result: dict[str, JSONValue]
+    predicted_state_delta: dict[str, JSONValue]
+    to_predicted_state_id: str
+    confidence: float | None = None
+    assumptions: tuple[str, ...] = ()
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return to_jsonable(self)  # type: ignore[return-value]
+
+
+@dataclass(frozen=True)
+class ObservedTransition:
+    """Observed source-of-truth transition in the TraceDAG."""
+
+    transition_id: str
+    transition_kind: Literal["observed"]
+    execution_plan_id: str
+    from_observed_state_id: str
+    to_observed_state_id: str
     action_result: ActionResult
+    matched_predicted_transition_id: str | None = None
+    prediction_match: PredictionMatch | None = None
     derived_records: tuple[DerivedRecord, ...] = ()
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return to_jsonable(self)  # type: ignore[return-value]
+
+
+@dataclass(frozen=True)
+class PredictionStepRef:
+    """Selected prediction step inside a PredictionPath."""
+
+    prediction_plan_id: str
+    selected_predicted_transition_id: str
+    from_predicted_state_id: str
+    to_predicted_state_id: str
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return to_jsonable(self)  # type: ignore[return-value]
+
+
+@dataclass(frozen=True)
+class PredictionPath:
+    """Selected path through the PredictionDAG."""
+
+    path_id: str
+    anchor_observed_state_id: str
+    steps: tuple[PredictionStepRef, ...]
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return to_jsonable(self)  # type: ignore[return-value]
+
+
+@dataclass(frozen=True)
+class PredictionSelection:
+    """Selection of predicted transitions to promote or compare."""
+
+    selection_id: str
+    selected_transition_ids: tuple[str, ...]
+    selected_path_id: str | None = None
+    reason: str = ""
     metadata: dict[str, JSONValue] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, JSONValue]:

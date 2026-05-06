@@ -4,20 +4,20 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from optagent.core.schema import ActionResult, ActionSpec, Evidence, Observation, StateNode
+from optagent.core.schema import ActionResult, Evidence, ExecutionPlan, Observation, Plan, StateNode
 
 
 class SearchPolicy(Protocol):
-    """Proposes one or more actions from a state."""
+    """Proposes one or more plans from a state."""
 
-    def propose(self, state: StateNode) -> list[ActionSpec]:
+    def propose(self, state: StateNode) -> list[Plan]:
         ...
 
 
 class Executor(Protocol):
-    """Runs an action and returns raw execution results."""
+    """Runs a grounded execution plan and returns raw execution results."""
 
-    def execute(self, action: ActionSpec) -> ActionResult:
+    def execute(self, plan: ExecutionPlan) -> ActionResult:
         ...
 
 

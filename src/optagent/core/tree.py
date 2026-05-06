@@ -1,45 +1,58 @@
-"""Depth-oriented prediction and evidence trees."""
+"""Depth-oriented PredictionDAG and TraceDAG indexes."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from optagent.core.schema import ActionSpec, StateNode, TransitionRecord
-
-
-@dataclass(frozen=True)
-class PlannedTransition:
-    """Predicted edge in a PredictionTree."""
-
-    transition_id: str
-    from_state_id: str
-    to_predicted_state_id: str
-    action_spec: ActionSpec
-    depth: int
-    branch_id: str = "main"
-    assumptions: tuple[str, ...] = ()
-    confidence: float | None = None
+from optagent.core.schema import (
+    ExecutionPlan,
+    ObservedTransition,
+    PredictionPlan,
+    PredictedTransition,
+    StateNode,
+)
 
 
 @dataclass
-class PredictionTree:
-    """Future state tree grouped by depth."""
+class PredictionDAG:
+    """Unexecuted future expansion grouped by depth.
 
-    tree_id: str
+    The DAG owns future-facing indexes. A plan may have multiple predicted
+    transitions because one intended action can have several plausible outcomes.
+    """
+
+    dag_id: str
+    anchor_observed_state_id: str
+    root_predicted_state_id: str
     nodes: dict[str, StateNode] = field(default_factory=dict)
     node_depths: dict[str, int] = field(default_factory=dict)
     nodes_by_depth: dict[int, list[str]] = field(default_factory=dict)
-    planned_transitions: dict[str, PlannedTransition] = field(default_factory=dict)
+    plans: dict[str, PredictionPlan | ExecutionPlan] = field(default_factory=dict)
+    transitions: dict[str, PredictedTransition] = field(default_factory=dict)
+    plans_by_state: dict[str, list[str]] = field(default_factory=dict)
+    transitions_by_plan: dict[str, list[str]] = field(default_factory=dict)
     outgoing_index: dict[str, list[str]] = field(default_factory=dict)
     incoming_index: dict[str, list[str]] = field(default_factory=dict)
+    stale: bool = False
 
     def add_node(self, node: StateNode, depth: int) -> None:
         self.nodes[node.state_id] = node
         self.node_depths[node.state_id] = depth
         self.nodes_by_depth.setdefault(depth, []).append(node.state_id)
 
-    def add_transition(self, transition: PlannedTransition) -> None:
-        self.planned_transitions[transition.transition_id] = transition
+    def add_plan(self, plan: PredictionPlan | ExecutionPlan) -> None:
+        self.plans[plan.plan_id] = plan
+        if isinstance(plan, PredictionPlan):
+            from_state_id = plan.from_predicted_state_id
+        else:
+            from_state_id = plan.from_observed_state_id
+        self.plans_by_state.setdefault(from_state_id, []).append(plan.plan_id)
+
+    def add_transition(self, transition: PredictedTransition) -> None:
+        self.transitions[transition.transition_id] = transition
+        self.transitions_by_plan.setdefault(transition.parent_plan_id, []).append(
+            transition.transition_id
+        )
         self.outgoing_index.setdefault(transition.from_state_id, []).append(
             transition.transition_id
         )
@@ -53,16 +66,30 @@ class PredictionTree:
     def future_transition_ids(self, state_id: str) -> list[str]:
         return list(self.outgoing_index.get(state_id, ()))
 
+    def plan_ids_from_state(self, state_id: str) -> list[str]:
+        return list(self.plans_by_state.get(state_id, ()))
+
+    def predicted_transition_ids_for_plan(self, plan_id: str) -> list[str]:
+        return list(self.transitions_by_plan.get(plan_id, ()))
+
 
 @dataclass
-class EvidenceTree:
-    """Observed transition tree grouped by depth."""
+class TraceDAG:
+    """Observed execution history grouped by depth.
 
-    tree_id: str
+    The TraceDAG is source-of-truth history. Observed transitions are append-only
+    records that connect an execution plan, an action result, and optional
+    derived records.
+    """
+
+    dag_id: str
     nodes: dict[str, StateNode] = field(default_factory=dict)
     node_depths: dict[str, int] = field(default_factory=dict)
     nodes_by_depth: dict[int, list[str]] = field(default_factory=dict)
-    transitions: dict[str, TransitionRecord] = field(default_factory=dict)
+    execution_plans: dict[str, ExecutionPlan] = field(default_factory=dict)
+    transitions: dict[str, ObservedTransition] = field(default_factory=dict)
+    plans_by_state: dict[str, list[str]] = field(default_factory=dict)
+    transition_by_execution_plan: dict[str, str] = field(default_factory=dict)
     outgoing_index: dict[str, list[str]] = field(default_factory=dict)
     incoming_index: dict[str, list[str]] = field(default_factory=dict)
 
@@ -71,12 +98,26 @@ class EvidenceTree:
         self.node_depths[node.state_id] = depth
         self.nodes_by_depth.setdefault(depth, []).append(node.state_id)
 
-    def append_transition(self, transition: TransitionRecord) -> None:
+    def add_execution_plan(self, plan: ExecutionPlan) -> None:
+        self.execution_plans[plan.plan_id] = plan
+        self.plans_by_state.setdefault(plan.from_observed_state_id, []).append(
+            plan.plan_id
+        )
+
+    def append_transition(self, transition: ObservedTransition) -> None:
+        if transition.execution_plan_id in self.transition_by_execution_plan:
+            raise ValueError(
+                "an ExecutionPlan can have only one ObservedTransition; "
+                "create a new ExecutionPlan to rerun the same operation"
+            )
         self.transitions[transition.transition_id] = transition
-        self.outgoing_index.setdefault(transition.from_state_id, []).append(
+        self.transition_by_execution_plan[transition.execution_plan_id] = (
             transition.transition_id
         )
-        self.incoming_index.setdefault(transition.to_state_id, []).append(
+        self.outgoing_index.setdefault(transition.from_observed_state_id, []).append(
+            transition.transition_id
+        )
+        self.incoming_index.setdefault(transition.to_observed_state_id, []).append(
             transition.transition_id
         )
 
@@ -88,3 +129,6 @@ class EvidenceTree:
 
     def next_transition_ids(self, state_id: str) -> list[str]:
         return list(self.outgoing_index.get(state_id, ()))
+
+    def plan_ids_from_state(self, state_id: str) -> list[str]:
+        return list(self.plans_by_state.get(state_id, ()))
