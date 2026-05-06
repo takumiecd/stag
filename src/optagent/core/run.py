@@ -55,6 +55,11 @@ class RunHandle:
     def current_observed_state(self) -> StateNode:
         return self.trace_dag.nodes[self.current_observed_state_id]
 
+    def save(self, store) -> object:
+        """Save this run through a storage adapter."""
+
+        return store.save_run(self)
+
     def plan(
         self,
         state_id: str,

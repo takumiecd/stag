@@ -1,0 +1,115 @@
+import json
+
+import optagent
+from optagent import ActionResult, DerivedRecord, Requirement
+from optagent.storage import JsonlRunStore
+
+
+def _requirement() -> Requirement:
+    return Requirement(
+        requirement_id="req_kernel",
+        target_type="kernel",
+        target_id="csc_linear",
+    )
+
+
+def _run_with_history():
+    run = optagent.init(_requirement(), run_id="run_test")
+    plan = run.plan(state_id=run.current_observed_state_id)[0]
+    predicted = run.predict(plan.plan_id, max_outcomes=2)
+    result = ActionResult(
+        result_id="r_0001",
+        execution_plan_id=plan.plan_id,
+        status="completed",
+        raw_outputs=("raw/profile.txt",),
+        metrics={"latency_ms": 1.5},
+    )
+    derived = DerivedRecord(
+        derived_id="d_0001",
+        source_transition_id="t_obs_0001",
+        derived_type="evidence",
+        payload={"latency_ms": 1.5},
+        generator="test",
+    )
+    run.promote(
+        mode="transition",
+        predicted_transition_id=predicted[1].transition_id,
+        execution_plan_id=plan.plan_id,
+        action_result=result,
+        derived_records=[derived],
+    )
+    return run
+
+
+def _read_jsonl(path):
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def test_jsonl_store_saves_run_directory(tmp_path):
+    run = _run_with_history()
+    store = JsonlRunStore(tmp_path)
+
+    run_path = store.save_run(run)
+
+    assert run_path == tmp_path / "run_test"
+    assert (run_path / "run.json").exists()
+    assert (run_path / "states.jsonl").exists()
+    assert (run_path / "execution_plans.jsonl").exists()
+    assert (run_path / "prediction_plans.jsonl").exists()
+    assert (run_path / "predicted_transitions.jsonl").exists()
+    assert (run_path / "observed_transitions.jsonl").exists()
+    assert (run_path / "derived_records.jsonl").exists()
+
+
+def test_jsonl_store_writes_human_readable_records(tmp_path):
+    run = _run_with_history()
+    store = JsonlRunStore(tmp_path)
+
+    run_path = store.save_run(run)
+
+    manifest = json.loads((run_path / "run.json").read_text())
+    assert manifest["run_id"] == "run_test"
+    assert manifest["current_observed_state_id"] == run.current_observed_state_id
+    assert manifest["requirement"]["requirement_id"] == "req_kernel"
+
+    states = _read_jsonl(run_path / "states.jsonl")
+    assert {row["state_id"] for row in states} >= {"s_obs_0000", "s_pred_0000"}
+    assert {row["dag"] for row in states} == {"trace", "prediction"}
+
+    observed = _read_jsonl(run_path / "observed_transitions.jsonl")
+    assert observed[0]["transition_id"] == "t_obs_0001"
+    assert observed[0]["action_result"]["raw_outputs"] == ["raw/profile.txt"]
+    assert observed[0]["matched_predicted_transition_id"] == "t_pred_0002"
+
+    derived = _read_jsonl(run_path / "derived_records.jsonl")
+    assert derived[0]["derived_id"] == "d_0001"
+    assert derived[0]["payload"]["latency_ms"] == 1.5
+
+
+def test_jsonl_store_loads_run_and_can_continue_ids(tmp_path):
+    run = _run_with_history()
+    store = JsonlRunStore(tmp_path)
+    store.save_run(run)
+
+    loaded = store.load_run("run_test")
+
+    assert loaded.run_id == run.run_id
+    assert loaded.current_observed_state_id == run.current_observed_state_id
+    assert loaded.trace().observed_transition_ids == ("t_obs_0001",)
+    assert loaded.trace().derived_record_ids == ("d_0001",)
+    assert loaded.prediction_dag.predicted_transition_ids_for_plan("p_exec_0001") == [
+        "t_pred_0001",
+        "t_pred_0002",
+    ]
+
+    next_plan = loaded.plan(state_id=loaded.current_observed_state_id)[0]
+    assert next_plan.plan_id == "p_exec_0002"
+
+
+def test_run_handle_can_save_with_store(tmp_path):
+    run = _run_with_history()
+    store = JsonlRunStore(tmp_path)
+
+    run_path = run.save(store)
+
+    assert run_path == tmp_path / "run_test"

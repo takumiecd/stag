@@ -51,10 +51,10 @@ TraceDAG:
 - `observe` / `result`
 - `refresh`
 - `trace` / `history`
+- run directory / JSONL への保存と読み込み
 
 未実装:
 
-- run directory / JSONL への永続化
 - CLI
 - 実用的な planner / predictor
 - executor / evaluator 連携
@@ -65,6 +65,7 @@ TraceDAG:
 ```python
 import optagent
 from optagent import ActionResult, Requirement
+from optagent.storage import JsonlRunStore
 
 requirement = Requirement(
     requirement_id="req_kernel",
@@ -93,6 +94,10 @@ observed = run.promote(
 )
 
 history = run.trace()
+
+store = JsonlRunStore("runs")
+run.save(store)
+loaded = store.load_run("demo")
 ```
 
 ## 主な用語
@@ -127,7 +132,7 @@ src/optagent
 ├── domains/    # domain plugin。まだ初期段階
 ├── execution/  # executor / evaluator interface。まだ初期段階
 ├── search/     # search policy。まだ初期段階
-├── storage/    # 永続化。まだ未実装
+├── storage/    # run directory / JSONL storage
 └── legacy/     # 以前の実装。参考用
 ```
 

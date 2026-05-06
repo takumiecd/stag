@@ -369,8 +369,31 @@ optagent の API は、次のルールを守ります。
 
 未実装または今後追加するもの:
 
-- JSONL / run directory への永続化
 - 実用的な planner / predictor
 - executor との統合
 - domain-specific workflow
 - CLI command
+
+## `JsonlRunStore`
+
+```python
+from optagent.storage import JsonlRunStore
+
+store = JsonlRunStore("runs")
+run.save(store)
+loaded = store.load_run("demo")
+```
+
+`JsonlRunStore` は、run をディレクトリとして保存します。
+
+保存される主なファイル:
+
+- `run.json`
+- `states.jsonl`
+- `execution_plans.jsonl`
+- `prediction_plans.jsonl`
+- `predicted_transitions.jsonl`
+- `observed_transitions.jsonl`
+- `derived_records.jsonl`
+
+保存形式は、人間と AI が読みやすいことを優先しています。

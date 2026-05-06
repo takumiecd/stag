@@ -64,8 +64,8 @@ optagent は次の機能を提供します。
 - derived record を実行履歴に紐づける
 - 過去の履歴を辿れるようにする
 
-現在の core 実装は in-memory です。
-永続化、CLI、domain-specific workflow は今後追加します。
+現在の core 実装は in-memory run API と JSONL run directory storage を持っています。
+CLI、domain-specific workflow は今後追加します。
 
 ## optagent がやらないこと
 
@@ -98,12 +98,11 @@ optagent の core は、それらが生み出す plan、prediction、result、de
 
 ## 近い実装予定
 
-1. in-memory API を安定させる
-2. JSONL / run directory storage を追加する
-3. CLI から run を作成、更新、参照できるようにする
-4. executor / evaluator の protocol を整える
-5. code optimization の小さな workflow を作る
-6. kernel optimization の workflow を作る
+1. in-memory API と JSONL storage を安定させる
+2. CLI から run を作成、更新、参照できるようにする
+3. executor / evaluator の protocol を整える
+4. code optimization の小さな workflow を作る
+5. kernel optimization の workflow を作る
 
 ## ドキュメント
 
