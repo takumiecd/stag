@@ -1,4 +1,4 @@
-"""Tests for optagent CLI note command."""
+"""Tests for optagent CLI derive command."""
 
 from __future__ import annotations
 
@@ -11,12 +11,12 @@ import pytest
 from optagent.cli.commands.init import run_init_command
 from optagent.cli.commands.plan import run_plan_command
 from optagent.cli.commands.observe import run_observe_command
-from optagent.cli.commands.note import run_note_command, cli_note
+from optagent.cli.commands.derive import run_derive_command, cli_derive
 from optagent.cli.main import parse_args, main
 
 
-class TestCliNoteCommand:
-    """TDD for optagent note CLI."""
+class TestCliDeriveCommand:
+    """TDD for optagent derive CLI."""
 
     def _create_run_with_observation(self, store_dir: Path) -> tuple[str, str]:
         """Helper: create run with plan and observation → return (run_id, transition_id)."""
@@ -48,13 +48,13 @@ class TestCliNoteCommand:
         )
         return run_id, observe_result["transition"]["transition_id"]
 
-    def test_note_attaches_finding(self):
-        """note should attach a DerivedRecord to an observed transition."""
+    def test_derive_attaches_finding(self):
+        """derive should attach a DerivedRecord to an observed transition."""
         with tempfile.TemporaryDirectory() as tmpdir:
             store_dir = Path(tmpdir) / "runs"
             run_id, transition_id = self._create_run_with_observation(store_dir)
 
-            result = run_note_command(
+            result = run_derive_command(
                 run_id=run_id,
                 transition_id=transition_id,
                 derived_type="finding",
@@ -70,13 +70,13 @@ class TestCliNoteCommand:
             assert result["record"]["generator"] == "cli"
             assert result["record"]["derived_id"].startswith("d_")
 
-    def test_note_unknown_transition(self):
-        """note with unknown transition_id should raise KeyError."""
+    def test_derive_unknown_transition(self):
+        """derive with unknown transition_id should raise KeyError."""
         with tempfile.TemporaryDirectory() as tmpdir:
             store_dir = Path(tmpdir) / "runs"
             run_id, _ = self._create_run_with_observation(store_dir)
             with pytest.raises(KeyError):
-                run_note_command(
+                run_derive_command(
                     run_id=run_id,
                     transition_id="nonexistent",
                     derived_type="finding",
@@ -87,13 +87,13 @@ class TestCliNoteCommand:
                     store_dir=str(store_dir),
                 )
 
-    def test_note_with_explicit_id(self):
-        """note --id should set explicit derived_id."""
+    def test_derive_with_explicit_id(self):
+        """derive --id should set explicit derived_id."""
         with tempfile.TemporaryDirectory() as tmpdir:
             store_dir = Path(tmpdir) / "runs"
             run_id, transition_id = self._create_run_with_observation(store_dir)
 
-            result = run_note_command(
+            result = run_derive_command(
                 run_id=run_id,
                 transition_id=transition_id,
                 derived_type="evidence",
@@ -106,13 +106,13 @@ class TestCliNoteCommand:
             assert result["record"]["derived_id"] == "d_custom_001"
             assert result["record"]["confidence"] == 0.95
 
-    def test_note_persists_after_save(self):
-        """note should persist after save and reload."""
+    def test_derive_persists_after_save(self):
+        """derive should persist after save and reload."""
         with tempfile.TemporaryDirectory() as tmpdir:
             store_dir = Path(tmpdir) / "runs"
             run_id, transition_id = self._create_run_with_observation(store_dir)
 
-            run_note_command(
+            run_derive_command(
                 run_id=run_id,
                 transition_id=transition_id,
                 derived_type="finding",
@@ -130,18 +130,18 @@ class TestCliNoteCommand:
             assert len(transition.derived_records) == 1
             assert transition.derived_records[0].payload["text"] == "speedup achieved"
 
-    def test_cli_parse_args_note(self):
-        """argparse should correctly parse note subcommand."""
-        args = parse_args(["note", "my_run", "t_obs_0001"])
-        assert args.command == "note"
+    def test_cli_parse_args_derive(self):
+        """argparse should correctly parse derive subcommand."""
+        args = parse_args(["derive", "my_run", "t_obs_0001"])
+        assert args.command == "derive"
         assert args.run_id == "my_run"
         assert args.transition_id == "t_obs_0001"
         assert args.derived_type == "finding"
 
-    def test_cli_parse_args_note_with_options(self):
-        """argparse should handle all note options."""
+    def test_cli_parse_args_derive_with_options(self):
+        """argparse should handle all derive options."""
         args = parse_args([
-            "note", "my_run", "t_obs_0001",
+            "derive", "my_run", "t_obs_0001",
             "--type", "evidence",
             "--id", "d_custom",
             "--text", "latency improved",
@@ -154,34 +154,34 @@ class TestCliNoteCommand:
         assert args.confidence == 0.9
         assert args.store_dir == "/tmp/runs"
 
-    def test_main_note_command(self, capsys):
-        """main() should execute note and print record JSON to stdout."""
+    def test_main_derive_command(self, capsys):
+        """main() should execute derive and print record JSON to stdout."""
         with tempfile.TemporaryDirectory() as tmpdir:
             store_dir = Path(tmpdir) / "runs"
             run_id, transition_id = self._create_run_with_observation(store_dir)
 
             exit_code = main([
-                "note", run_id, transition_id,
-                "--text", "test note",
+                "derive", run_id, transition_id,
+                "--text", "test derive",
                 "--store-dir", str(store_dir),
             ])
             assert exit_code == 0
             captured = capsys.readouterr()
             record = json.loads(captured.out)
             assert record["derived_type"] == "finding"
-            assert record["payload"]["text"] == "test note"
+            assert record["payload"]["text"] == "test derive"
 
-    def test_note_returns_json_serializable(self):
-        """run_note_command result must be JSON serializable."""
+    def test_derive_returns_json_serializable(self):
+        """run_derive_command result must be JSON serializable."""
         with tempfile.TemporaryDirectory() as tmpdir:
             store_dir = Path(tmpdir) / "runs"
             run_id, transition_id = self._create_run_with_observation(store_dir)
 
-            result = run_note_command(
+            result = run_derive_command(
                 run_id=run_id,
                 transition_id=transition_id,
                 derived_type="finding",
-                payload={"text": "note text"},
+                payload={"text": "derive text"},
                 derived_id=None,
                 generator="cli",
                 confidence=None,

@@ -1,4 +1,4 @@
-"""optagent CLI note command."""
+"""optagent CLI derive command."""
 
 from __future__ import annotations
 
@@ -9,8 +9,10 @@ from optagent.storage.jsonl import JsonlRunStore
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
-    """Register the ``note`` subcommand parser."""
-    parser = subparsers.add_parser("note", help="Attach a derived note to an observed transition")
+    """Register the ``derive`` subcommand parser."""
+    parser = subparsers.add_parser(
+        "derive", help="Attach a derived record to an observed transition"
+    )
     parser.add_argument("run_id", help="Run identifier")
     parser.add_argument("transition_id", help="Observed transition identifier")
     parser.add_argument(
@@ -44,7 +46,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     return parser
 
 
-def run_note_command(
+def run_derive_command(
     *,
     run_id: str,
     transition_id: str,
@@ -91,7 +93,7 @@ def run_note_command(
         raise KeyError(f"unknown run_id: {run_id}")
     handle = store.load_run(run_id)
 
-    record = handle.note(
+    record = handle.derive(
         transition_id=transition_id,
         derived_type=derived_type,
         payload=payload,
@@ -104,8 +106,8 @@ def run_note_command(
     return {"record": record.to_dict()}
 
 
-def cli_note(args) -> int:
-    """Entry point for ``optagent note`` subcommand.
+def cli_derive(args) -> int:
+    """Entry point for ``optagent derive`` subcommand.
 
     Prints the created derived record as JSON to stdout.
     """
@@ -113,7 +115,7 @@ def cli_note(args) -> int:
     if args.text is not None:
         payload["text"] = args.text
 
-    result = run_note_command(
+    result = run_derive_command(
         run_id=args.run_id,
         transition_id=args.transition_id,
         derived_type=args.derived_type,

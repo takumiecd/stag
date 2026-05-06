@@ -1,4 +1,4 @@
-"""RunHandle.note implementation."""
+"""RunHandle.derive implementation."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from optagent.core.schema.transitions import ObservedTransition
 from optagent.core.types import JSONValue
 
 
-def note_impl(
+def derive_impl(
     self,
     transition_id: str,
     derived_type: str,
@@ -25,7 +25,8 @@ def note_impl(
         Identifier of the observed transition to annotate.
     derived_type:
         Type of derived record (e.g. ``"finding"``, ``"evidence"``,
-        ``"decision"``, ``"observation"``, ``"prediction_error"``).
+        ``"decision"``, ``"observation"``, ``"prediction_error"``,
+        ``"state_delta"``, ``"summary"``).
     payload:
         Key-value content for the derived record.
     derived_id:
