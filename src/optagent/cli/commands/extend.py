@@ -1,4 +1,4 @@
-"""optagent CLI plan command."""
+"""optagent CLI extend command."""
 
 from __future__ import annotations
 
@@ -10,15 +10,16 @@ from optagent.storage.jsonl import JsonlRunStore
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
-    """Register the ``plan`` subcommand parser."""
+    """Register the ``extend`` subcommand parser."""
     parser = subparsers.add_parser(
-        "plan", help="Create an ExecutionPlan from an observed state"
+        "extend",
+        help="Create a PredictionPlan from a predicted state",
     )
     parser.add_argument("--run", default=None, help="Run identifier (optional if current run is set)")
     parser.add_argument(
         "--state-id",
-        default=None,
-        help="Source observed state (default: current observed state)",
+        required=True,
+        help="Source predicted state",
     )
     parser.add_argument(
         "--planner",
@@ -67,31 +68,31 @@ def _parse_inputs(input_list: list[str] | None) -> dict[str, str]:
     return inputs
 
 
-def run_plan_command(
+def run_extend_command(
     *,
     run_id: str,
+    state_id: str,
     planner: str,
     max_plans: int,
     store_dir: str,
-    state_id: str | None = None,
     action_type: str = "analysis",
     intent: str | None = None,
     inputs: dict[str, str] | None = None,
 ) -> dict:
-    """Create one or more ``ExecutionPlan``s from an observed state.
+    """Create one or more ``PredictionPlan``s from a predicted state.
 
     Parameters
     ----------
     run_id:
-        Identifier of the run to plan against.
+        Identifier of the run.
+    state_id:
+        Predicted state to plan from.
     planner:
         Name of the planner to use.
     max_plans:
         Maximum number of plans to create.
     store_dir:
         Directory where runs are stored.
-    state_id:
-        Observed state to plan from (default: current observed state).
     action_type:
         Category of action for the plan.
     intent:
@@ -106,8 +107,8 @@ def run_plan_command(
     Raises
     ------
     KeyError
-        If the run_id does not exist or *state_id* is not an
-        observed state in the run.
+        If the run_id does not exist or *state_id* is not a
+        predicted state in the run.
     """
     store = JsonlRunStore(store_dir)
     run_path = store.run_path(run_id)
@@ -115,12 +116,11 @@ def run_plan_command(
         raise KeyError(f"unknown run_id: {run_id}")
     handle = store.load_run(run_id)
 
-    target_state_id = state_id or handle.current_observed_state_id
-    if target_state_id not in handle.trace_dag.nodes:
-        raise KeyError(f"not an observed state: {target_state_id}")
+    if state_id not in handle.prediction_dag.nodes:
+        raise KeyError(f"not a predicted state: {state_id}")
 
     plans = handle.plan(
-        state_id=target_state_id,
+        state_id=state_id,
         planner=planner,
         max_plans=max_plans,
         action_type=action_type,
@@ -132,18 +132,18 @@ def run_plan_command(
     return {"plans": [plan.to_dict() for plan in plans]}
 
 
-def cli_plan(args) -> int:
-    """Entry point for ``optagent plan`` subcommand.
+def cli_extend(args) -> int:
+    """Entry point for ``optagent extend`` subcommand.
 
-    Prints the created plans as JSON to stdout.
+    Prints the created prediction plans as JSON to stdout.
     """
     inputs = _parse_inputs(getattr(args, "input", None))
-    result = run_plan_command(
+    result = run_extend_command(
         run_id=resolve_run_id_from_args(args),
+        state_id=args.state_id,
         planner=args.planner,
         max_plans=args.max_plans,
         store_dir=args.store_dir,
-        state_id=args.state_id,
         action_type=args.action_type,
         intent=args.intent,
         inputs=inputs,

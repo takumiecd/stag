@@ -13,6 +13,7 @@ from optagent.cli.commands.plan import add_parser as add_plan_parser, cli_plan
 from optagent.cli.commands.predict import add_parser as add_predict_parser, cli_predict
 from optagent.cli.commands.promote import add_parser as add_promote_parser, cli_promote
 from optagent.cli.commands.derive import add_parser as add_derive_parser, cli_derive
+from optagent.cli.commands.extend import add_parser as add_extend_parser, cli_extend
 from optagent.cli.commands.refresh import add_parser as add_refresh_parser, cli_refresh
 from optagent.cli.commands.snapshot import add_parser as add_snapshot_parser, cli_snapshot
 from optagent.cli.commands.state import add_parser as add_state_parser, cli_state
@@ -36,6 +37,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_predict_parser(subparsers)
     add_promote_parser(subparsers)
     add_derive_parser(subparsers)
+    add_extend_parser(subparsers)
     add_refresh_parser(subparsers)
     add_show_parser(subparsers)
     add_snapshot_parser(subparsers)
@@ -72,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
         return cli_promote(args)
     if args.command == "derive":
         return cli_derive(args)
+    if args.command == "extend":
+        return cli_extend(args)
     if args.command == "refresh":
         return cli_refresh(args)
     if args.command == "show":

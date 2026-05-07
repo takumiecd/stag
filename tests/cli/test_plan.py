@@ -216,3 +216,33 @@ class TestCliPlanCommand:
         assert args.action_type == "edit"
         assert args.intent == "optimize loop"
         assert args.input == ["file=main.py", "strategy=unroll"]
+
+    def test_plan_explicit_state_id(self):
+        """--state-id should let plan target a non-current observed state."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store_dir = Path(tmpdir) / "runs"
+            run_id = self._create_run(store_dir)
+
+            result = run_plan_command(
+                run_id=run_id,
+                planner="default",
+                max_plans=1,
+                store_dir=str(store_dir),
+                state_id="s_obs_0000",
+            )
+            assert result["plans"][0]["from_observed_state_id"] == "s_obs_0000"
+
+    def test_plan_rejects_predicted_state(self):
+        """plan should refuse a predicted state_id (use 'extend' instead)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store_dir = Path(tmpdir) / "runs"
+            run_id = self._create_run(store_dir)
+
+            with pytest.raises(KeyError, match="not an observed state"):
+                run_plan_command(
+                    run_id=run_id,
+                    planner="default",
+                    max_plans=1,
+                    store_dir=str(store_dir),
+                    state_id="s_pred_0000",
+                )
