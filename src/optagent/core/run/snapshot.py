@@ -109,7 +109,7 @@ def snapshot_rebuild_impl(
         state_id=target.state_id,
         state_kind=target.state_kind,
         snapshot=new_snap,
-        snapshot_hash=target.snapshot_hash,
+        snapshot_hash=new_snap.compute_hash(),
         anchor_observed_state_id=target.anchor_observed_state_id,
         assumptions=target.assumptions,
         confidence=target.confidence,

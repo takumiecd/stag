@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from optagent.cli.context import resolve_run_id
+from optagent.cli.context import resolve_run_id_from_args
 from optagent.storage.jsonl import JsonlRunStore
 
 
@@ -70,7 +70,7 @@ def cli_trace(args) -> int:
     Prints the trace history as JSON to stdout.
     """
     result = run_trace_command(
-        run_id=resolve_run_id(getattr(args, 'run', None), args.store_dir),
+        run_id=resolve_run_id_from_args(args),
         depth=args.depth,
         store_dir=args.store_dir,
     )

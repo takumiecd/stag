@@ -2,19 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass, field
 
 from optagent.core.ids import sequential_id, slugify, timestamp_id
 from optagent.core.schema.requirements import Requirement
 from optagent.core.schema.state import StateNode, StateSnapshot
 from optagent.core.dag import PredictionDAG, TraceDAG
-
-
-def _snapshot_hash(snapshot: StateSnapshot) -> str:
-    encoded = json.dumps(snapshot.to_dict(), sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 @dataclass
@@ -55,7 +48,7 @@ def init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle:
         state_id="s_obs_0000",
         state_kind="observed",
         snapshot=initial_snapshot,
-        snapshot_hash=_snapshot_hash(initial_snapshot),
+        snapshot_hash=initial_snapshot.compute_hash(),
     )
     trace_dag = TraceDAG(dag_id=f"{rid}_trace")
     trace_dag.add_node(observed, depth=0)
@@ -116,7 +109,6 @@ from optagent.core.run.state_impl import (  # noqa: E402
     state_show_impl as _state_show_impl,
     state_update_impl as _state_update_impl,
 )
-from optagent.core.run.trace import refresh_impl as _refresh_impl, trace_impl as _trace_impl  # noqa: E402
 
 RunHandle._find_plan = _find_plan
 RunHandle._make_predicted_state = _make_predicted_state

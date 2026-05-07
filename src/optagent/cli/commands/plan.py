@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from optagent.cli.context import resolve_run_id
+from optagent.cli.context import resolve_run_id_from_args
 from optagent.storage.jsonl import JsonlRunStore
 
 
@@ -125,7 +125,7 @@ def cli_plan(args) -> int:
     """
     inputs = _parse_inputs(getattr(args, "input", None))
     result = run_plan_command(
-        run_id=resolve_run_id(getattr(args, 'run', None), args.store_dir),
+        run_id=resolve_run_id_from_args(args),
         planner=args.planner,
         max_plans=args.max_plans,
         store_dir=args.store_dir,

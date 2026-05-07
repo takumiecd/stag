@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 
 from optagent.core.schema.requirements import Requirement
@@ -76,6 +78,11 @@ class StateSnapshot:
 
     def to_dict(self) -> dict[str, JSONValue]:
         return to_jsonable(self)  # type: ignore[return-value]
+
+    def compute_hash(self) -> str:
+        """Compute a stable SHA-256 hash of this snapshot's JSON form."""
+        encoded = json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)

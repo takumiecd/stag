@@ -62,3 +62,13 @@ def resolve_run_id(
     if env:
         return env
     return load_current_run(store_dir)
+
+
+def resolve_run_id_from_args(args) -> str:
+    """Resolve a run_id from a parsed argparse namespace.
+
+    Combines the ``--run`` flag and the optional positional ``run_id``
+    before falling back to env/current.json.
+    """
+    explicit = getattr(args, "run", None) or getattr(args, "run_id", None)
+    return resolve_run_id(explicit, args.store_dir)
