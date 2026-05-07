@@ -36,7 +36,8 @@ def _active_leaf_state_id(handle) -> str:
             tid for tid in handle.trace_dag.next_transition_ids(state_id) if tid not in inactive
         ]
         if not active_outgoing:
-            candidates.append((handle.trace_dag.node_depths[state_id], state_id))
+            depth = len(handle.trace_dag.ancestors_of(state_id))
+            candidates.append((depth, state_id))
     return sorted(candidates)[-1][1]
 
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from optagent.core.schema.state import StateNode
 from optagent.core.schema.transitions import (
     PredictionSelection,
     PredictedTransition,
@@ -23,8 +22,7 @@ def predict_impl(
     transitions: list[PredictedTransition] = []
     for index in range(count):
         predicted_state = self._make_predicted_state(plan, index)
-        depth = self._predicted_depth_for_plan(plan) + 1
-        self.prediction_dag.add_node(predicted_state, depth=depth)
+        self.prediction_dag.add_node(predicted_state)
         transition = PredictedTransition(
             transition_id=self._next_id("t_pred"),
             transition_kind="predicted",

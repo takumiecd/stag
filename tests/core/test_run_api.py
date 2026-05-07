@@ -23,7 +23,7 @@ def test_init_creates_trace_and_prediction_roots():
 
     assert run.run_id == "run_test"
     assert run.root_observed_state_id == "s_obs_0000"
-    assert run.trace_dag.depth(0)[0].state_kind == "observed"
+    assert run.trace_dag.observed_root_ids() == ("s_obs_0000",)
     assert run.prediction_dag.root_predicted_state_id == "s_pred_0000"
 
     prediction_root = run.prediction_dag.nodes[run.prediction_dag.root_predicted_state_id]

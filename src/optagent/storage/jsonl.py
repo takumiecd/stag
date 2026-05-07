@@ -133,9 +133,9 @@ class JsonlRunStore:
         for row in self._read_jsonl(run_path / "states.jsonl"):
             node = _state_node_from_dict(row["record"])
             if row["dag"] == "trace":
-                trace_dag.add_node(node, depth=int(row["depth"]))
+                trace_dag.add_node(node)
             elif row["dag"] == "prediction":
-                prediction_dag.add_node(node, depth=int(row["depth"]))
+                prediction_dag.add_node(node)
             else:
                 raise ValueError(f"unknown state dag: {row['dag']}")
 
@@ -168,14 +168,12 @@ class JsonlRunStore:
             yield {
                 "dag": "trace",
                 "state_id": state_id,
-                "depth": run.trace_dag.node_depths[state_id],
                 "record": node.to_dict(),
             }
         for state_id, node in run.prediction_dag.nodes.items():
             yield {
                 "dag": "prediction",
                 "state_id": state_id,
-                "depth": run.prediction_dag.node_depths[state_id],
                 "record": node.to_dict(),
             }
 

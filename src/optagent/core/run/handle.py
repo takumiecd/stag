@@ -31,11 +31,12 @@ class RunHandle:
 
     @property
     def root_observed_state_id(self) -> str:
-        for state_id, depth in self.trace_dag.node_depths.items():
-            node = self.trace_dag.nodes[state_id]
-            if depth == 0 and node.state_kind == "observed":
-                return state_id
-        raise KeyError("run has no root observed state")
+        roots = self.trace_dag.observed_root_ids()
+        if len(roots) != 1:
+            raise KeyError(
+                f"expected exactly one observed root, got {list(roots)}"
+            )
+        return roots[0]
 
     def _ensure_active_observed_state(self, state_id: str) -> None:
         """Reject state IDs that are unknown or sit inside a cut subtree.
@@ -69,7 +70,7 @@ def init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle:
         snapshot_hash=initial_snapshot.compute_hash(),
     )
     trace_dag = TraceDAG(dag_id=f"{rid}_trace")
-    trace_dag.add_node(observed, depth=0)
+    trace_dag.add_node(observed)
     predicted_root = StateNode(
         state_id="s_pred_0000",
         state_kind="predicted",
@@ -82,7 +83,7 @@ def init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle:
         anchor_observed_state_id=observed.state_id,
         root_predicted_state_id=predicted_root.state_id,
     )
-    prediction_dag.add_node(predicted_root, depth=0)
+    prediction_dag.add_node(predicted_root)
     return RunHandle(
         run_id=rid,
         requirement=requirement,
@@ -108,7 +109,6 @@ from optagent.core.run.helpers import (  # noqa: E402
     find_plan_impl as _find_plan,
     make_predicted_state_impl as _make_predicted_state,
     plan_from_state_id_impl as _plan_from_state_id,
-    predicted_depth_for_plan_impl as _predicted_depth_for_plan,
 )
 from optagent.core.run.observe import observe_impl as _observe_impl  # noqa: E402
 from optagent.core.run.plan import (  # noqa: E402
@@ -135,7 +135,6 @@ from optagent.core.run.state_impl import (  # noqa: E402
 RunHandle._find_plan = _find_plan
 RunHandle._make_predicted_state = _make_predicted_state
 RunHandle._plan_from_state_id = _plan_from_state_id
-RunHandle._predicted_depth_for_plan = _predicted_depth_for_plan
 RunHandle._append_observed_transition = _append_observed_transition_impl
 RunHandle.plan = _plan_impl
 RunHandle.extend = _extend_impl

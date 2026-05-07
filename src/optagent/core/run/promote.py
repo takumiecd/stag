@@ -161,8 +161,7 @@ def _append_observed_transition(
         snapshot=self.trace_dag.nodes[plan.from_observed_state_id].snapshot,
         snapshot_hash=self.trace_dag.nodes[plan.from_observed_state_id].snapshot_hash,
     )
-    next_depth = self.trace_dag.node_depths.get(plan.from_observed_state_id, 0) + 1
-    self.trace_dag.add_node(next_state, depth=next_depth)
+    self.trace_dag.add_node(next_state)
     transition = ObservedTransition(
         transition_id=self._next_id("t_obs"),
         transition_kind="observed",

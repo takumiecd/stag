@@ -90,5 +90,5 @@ def _new_prediction_dag(self, observed_state: StateNode) -> PredictionDAG:
         anchor_observed_state_id=observed_state.state_id,
         root_predicted_state_id=root.state_id,
     )
-    dag.add_node(root, depth=0)
+    dag.add_node(root)
     return dag

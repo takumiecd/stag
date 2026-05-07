@@ -1,10 +1,10 @@
 """PredictionDAG and TraceDAG indexes.
 
-``node_depths`` / ``nodes_by_depth`` are kept for storage and display
-compatibility but are *not* the source of truth for correctness checks
-(rewind, ancestor relationships, plan creation). Treat them as derived
-indexes scheduled for deprecation; new logic must use the incoming-edge
-walks instead.
+Pure directed-graph data structures: nodes are stored in ``nodes`` and the
+edge topology lives in ``incoming_index`` / ``outgoing_index``. Roots, depth,
+and rewind/ancestor relationships are derived from edges — no cached layer
+index. View helpers that need a depth-grouped layout should compute it on
+demand from the edges.
 """
 
 from __future__ import annotations
@@ -23,18 +23,16 @@ from optagent.core.types import to_jsonable
 
 @dataclass
 class PredictionDAG:
-    """Unexecuted future expansion grouped by depth.
+    """Unexecuted future expansion as a pure directed graph.
 
-    The DAG owns future-facing indexes. A plan may have multiple predicted
-    transitions because one intended action can have several plausible outcomes.
+    A plan may have multiple predicted transitions because one intended
+    action can have several plausible outcomes.
     """
 
     dag_id: str
     anchor_observed_state_id: str
     root_predicted_state_id: str
     nodes: dict[str, StateNode] = field(default_factory=dict)
-    node_depths: dict[str, int] = field(default_factory=dict)
-    nodes_by_depth: dict[int, list[str]] = field(default_factory=dict)
     plans: dict[str, PredictionPlan] = field(default_factory=dict)
     transitions: dict[str, PredictedTransition] = field(default_factory=dict)
     plans_by_state: dict[str, list[str]] = field(default_factory=dict)
@@ -43,10 +41,8 @@ class PredictionDAG:
     incoming_index: dict[str, list[str]] = field(default_factory=dict)
     stale: bool = False
 
-    def add_node(self, node: StateNode, depth: int) -> None:
+    def add_node(self, node: StateNode) -> None:
         self.nodes[node.state_id] = node
-        self.node_depths[node.state_id] = depth
-        self.nodes_by_depth.setdefault(depth, []).append(node.state_id)
 
     def add_plan(self, plan: PredictionPlan) -> None:
         self.plans[plan.plan_id] = plan
@@ -64,9 +60,6 @@ class PredictionDAG:
             transition.transition_id
         )
 
-    def depth(self, depth: int) -> list[StateNode]:
-        return [self.nodes[state_id] for state_id in self.nodes_by_depth.get(depth, ())]
-
     def future_transition_ids(self, state_id: str) -> list[str]:
         return list(self.outgoing_index.get(state_id, ()))
 
@@ -82,17 +75,14 @@ class PredictionDAG:
 
 @dataclass
 class TraceDAG:
-    """Observed execution history grouped by depth.
+    """Observed execution history as a pure directed graph.
 
-    The TraceDAG is source-of-truth history. Observed transitions are append-only
-    records that connect an execution plan, an action result, and optional
-    derived records.
+    Observed transitions are append-only records that connect an execution
+    plan, an action result, and optional derived records.
     """
 
     dag_id: str
     nodes: dict[str, StateNode] = field(default_factory=dict)
-    node_depths: dict[str, int] = field(default_factory=dict)
-    nodes_by_depth: dict[int, list[str]] = field(default_factory=dict)
     execution_plans: dict[str, ExecutionPlan] = field(default_factory=dict)
     transitions: dict[str, ObservedTransition] = field(default_factory=dict)
     plans_by_state: dict[str, list[str]] = field(default_factory=dict)
@@ -102,10 +92,8 @@ class TraceDAG:
     cuts: dict[str, TraceCut] = field(default_factory=dict)
     cut_order: list[str] = field(default_factory=list)
 
-    def add_node(self, node: StateNode, depth: int) -> None:
+    def add_node(self, node: StateNode) -> None:
         self.nodes[node.state_id] = node
-        self.node_depths[node.state_id] = depth
-        self.nodes_by_depth.setdefault(depth, []).append(node.state_id)
 
     def add_cut(self, cut: TraceCut) -> None:
         """Append a ``TraceCut`` record. Append-only — never replaces an existing cut."""
@@ -197,8 +185,17 @@ class TraceDAG:
             transition.transition_id
         )
 
-    def depth(self, depth: int) -> list[StateNode]:
-        return [self.nodes[state_id] for state_id in self.nodes_by_depth.get(depth, ())]
+    def observed_root_ids(self) -> tuple[str, ...]:
+        """Observed states with no incoming observed transition.
+
+        These are the roots of the trace DAG — the starting states from
+        which every observed history begins.
+        """
+        return tuple(
+            sid
+            for sid, node in self.nodes.items()
+            if node.state_kind == "observed" and not self.incoming_index.get(sid)
+        )
 
     def past_transition_ids(self, state_id: str) -> list[str]:
         return list(self.incoming_index.get(state_id, ()))

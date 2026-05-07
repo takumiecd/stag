@@ -175,9 +175,9 @@ def test_prediction_dag_allows_multiple_predicted_outcomes_per_plan():
         anchor_observed_state_id=source.state_id,
         root_predicted_state_id=predicted_root.state_id,
     )
-    prediction_dag.add_node(predicted_root, depth=0)
-    prediction_dag.add_node(success_state, depth=1)
-    prediction_dag.add_node(regression_state, depth=1)
+    prediction_dag.add_node(predicted_root)
+    prediction_dag.add_node(success_state)
+    prediction_dag.add_node(regression_state)
     prediction_dag.add_plan(plan)
     prediction_dag.add_transition(
         PredictedTransition(
@@ -217,7 +217,8 @@ def test_prediction_dag_allows_multiple_predicted_outcomes_per_plan():
         "t_pred_0001a",
         "t_pred_0001b",
     ]
-    assert prediction_dag.depth(1) == [success_state, regression_state]
+    assert prediction_dag.future_transition_ids(success_state.state_id) == []
+    assert prediction_dag.future_transition_ids(regression_state.state_id) == []
 
 
 def test_trace_dag_records_one_observed_transition_per_execution_plan():
@@ -252,15 +253,15 @@ def test_trace_dag_records_one_observed_transition_per_execution_plan():
     )
 
     trace_dag = TraceDAG(dag_id="trace_run_001")
-    trace_dag.add_node(source, depth=0)
-    trace_dag.add_node(observed, depth=1)
+    trace_dag.add_node(source)
+    trace_dag.add_node(observed)
     trace_dag.add_execution_plan(plan)
     trace_dag.append_transition(transition)
 
     assert trace_dag.plan_ids_from_state(source.state_id) == ["p_exec_0001"]
     assert trace_dag.past_transition_ids(observed.state_id) == ["t_obs_0001"]
     assert trace_dag.next_transition_ids(source.state_id) == ["t_obs_0001"]
-    assert trace_dag.depth(1) == [observed]
+    assert trace_dag.observed_root_ids() == (source.state_id,)
 
     with pytest.raises(ValueError):
         trace_dag.append_transition(

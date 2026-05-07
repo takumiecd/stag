@@ -20,11 +20,6 @@ def plan_from_state_id_impl(self, plan: ExecutionPlan | PredictionPlan) -> str:
     return plan.from_predicted_state_id
 
 
-def predicted_depth_for_plan_impl(self, plan: ExecutionPlan | PredictionPlan) -> int:
-    state_id = plan_from_state_id_impl(self, plan)
-    return self.prediction_dag.node_depths.get(state_id, 0)
-
-
 def make_predicted_state_impl(
     self,
     plan: ExecutionPlan | PredictionPlan,
