@@ -47,8 +47,8 @@ def run_rewind_command(
 
     Returns
     -------
-    dict with the new ``state`` (post-rewind StateNode), the new
-    ``prediction_dag`` summary, and the ``cut`` record that was appended.
+    dict with the appended ``cut`` record. The new current observed
+    state ID is available as ``cut["rewound_to_state_id"]``.
 
     Raises
     ------
@@ -65,21 +65,16 @@ def run_rewind_command(
         raise KeyError(f"unknown run_id: {run_id}")
     handle = store.load_run(run_id)
 
-    state = handle.rewind(transition_id, reason=reason)
-    cut = handle.trace_dag.cuts[handle.trace_dag.cut_order[-1]]
+    cut = handle.rewind(transition_id, reason=reason)
     store.save_run(handle)
 
-    return {
-        "state": state.to_dict(),
-        "prediction_dag": handle.prediction_dag.to_dict(),
-        "cut": cut.to_dict(),
-    }
+    return {"cut": cut.to_dict()}
 
 
 def cli_rewind(args) -> int:
     """Entry point for ``optagent rewind`` subcommand.
 
-    Prints the post-rewind state node as JSON to stdout.
+    Prints the appended ``TraceCut`` record as JSON to stdout.
     """
     result = run_rewind_command(
         run_id=resolve_run_id_from_args(args),
@@ -87,5 +82,5 @@ def cli_rewind(args) -> int:
         reason=args.reason,
         store_dir=args.store_dir,
     )
-    print(json.dumps(result["state"], ensure_ascii=False, indent=2))
+    print(json.dumps(result["cut"], ensure_ascii=False, indent=2))
     return 0

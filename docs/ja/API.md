@@ -297,10 +297,10 @@ run.rewind(
     transition_id: str,
     *,
     reason: str | None = None,
-) -> StateNode
+) -> TraceCut
 ```
 
-指定した observed transition を cut します。`current_observed_state_id` は cut された transition の `from_observed_state_id`（cut の起点）に移動します。
+指定した observed transition を cut します。戻り値は append された `TraceCut` レコードで、新 current の state ID は `cut.rewound_to_state_id` で取れます。`current_observed_state_id` は cut された transition の `from_observed_state_id`（cut の起点）に移動します。
 
 `rewind` は **既存レコードを変更しません**。state / transition / plan / result はすべて TraceDAG に残り、TraceDAG に **1本の `TraceCut` レコードが append** されるだけです。`TraceCut` は「どの transition を cut したか」を名指す最小レコードで、下流の cut 集合は read-time に `trace_dag.cut_state_ids()` / `cut_transition_ids()` で導出します。この append-only な記録によって、cut されたことを知らない読み手にも「この枝は cut 済み」が見えるようになります。
 
@@ -315,7 +315,9 @@ s0 = run.current_observed_state_id
 plan = run.plan()[0]
 observed = run.observe(plan.plan_id, ActionResult(...))
 
-run.rewind(observed.transition_id, reason="wrong observe")
+cut = run.rewind(observed.transition_id, reason="wrong observe")
+assert cut.cut_transition_id == observed.transition_id
+assert cut.rewound_to_state_id == s0
 assert run.current_observed_state_id == s0
 # trace_dag は何も消えていない
 assert observed.transition_id in run.trace_dag.transitions

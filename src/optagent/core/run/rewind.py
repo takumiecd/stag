@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from optagent.core.schema.state import StateNode
 from optagent.core.schema.transitions import TraceCut
 
 
@@ -24,7 +23,7 @@ def rewind_impl(
     transition_id: str,
     *,
     reason: str | None = None,
-) -> StateNode:
+) -> TraceCut:
     """Cut the observed transition *transition_id* and rewind to its source.
 
     The transition must be on the active path walking backward from
@@ -42,8 +41,9 @@ def rewind_impl(
 
     Returns
     -------
-    The :class:`StateNode` now pointed to by ``current_observed_state_id``
-    (i.e. the source of the cut transition).
+    The :class:`TraceCut` record that was appended to the TraceDAG.
+    The new current observed state ID is available as
+    ``cut.rewound_to_state_id``.
 
     Raises
     ------
@@ -85,7 +85,7 @@ def rewind_impl(
 
     self.current_observed_state_id = transition.from_observed_state_id
     self.refresh(from_state_id=transition.from_observed_state_id)
-    return self.trace_dag.nodes[transition.from_observed_state_id]
+    return cut
 
 
 def _is_on_active_path_back(self, *, transition_id: str, from_state_id: str) -> bool:

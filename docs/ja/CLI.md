@@ -659,15 +659,18 @@ cut 後、PredictionDAG は新しい current observed state を anchor として
 
 ### 出力
 
-成功時、cut の起点（新 current）の StateNode を JSON で出力します。
+成功時、append された ``TraceCut`` レコードを JSON で出力します。新 current の state ID は ``rewound_to_state_id`` で参照できます。
 
 ```bash
 $ optagent rewind t_obs_0001 --reason "wrong observe"
 {
-  "state_id": "s_obs_0000",
-  "state_kind": "observed",
-  "snapshot": { ... },
-  "snapshot_hash": "..."
+  "cut_id": "cut_0001",
+  "cut_at": "2026-05-07T12:34:56+00:00",
+  "rewound_to_state_id": "s_obs_0000",
+  "cut_transition_id": "t_obs_0001",
+  "reason": "wrong observe",
+  "actor_id": null,
+  "metadata": {}
 }
 ```
 

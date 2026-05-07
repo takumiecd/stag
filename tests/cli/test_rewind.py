@@ -48,9 +48,11 @@ class TestRunHandleRewind:
         s0 = run.current_observed_state_id
         _, t1 = _advance(run, "first", "r_0001")
 
-        new_state = run.rewind(t1, reason="bad observe")
+        cut = run.rewind(t1, reason="bad observe")
 
-        assert new_state.state_id == s0
+        assert cut.cut_transition_id == t1
+        assert cut.rewound_to_state_id == s0
+        assert cut.reason == "bad observe"
         assert run.current_observed_state_id == s0
         assert t1 in run.trace_dag.cut_transition_ids()
 
@@ -226,8 +228,8 @@ class TestCliRewind:
                 reason="undo bad observe",
                 store_dir=str(store_dir),
             )
-            assert result["state"]["state_id"] == source
             assert result["cut"]["cut_transition_id"] == t1
+            assert result["cut"]["rewound_to_state_id"] == source
             assert result["cut"]["reason"] == "undo bad observe"
 
             # Storage retained the cut.
@@ -245,7 +247,7 @@ class TestCliRewind:
         with pytest.raises(SystemExit):
             parse_args(["rewind"])
 
-    def test_main_rewind_prints_state_json(self, capsys):
+    def test_main_rewind_prints_cut_json(self, capsys):
         with tempfile.TemporaryDirectory() as tmpdir:
             store_dir = Path(tmpdir) / "runs"
             run_id, source, t1 = self._setup(store_dir)
@@ -257,5 +259,6 @@ class TestCliRewind:
             ])
             assert exit_code == 0
             captured = capsys.readouterr()
-            state = json.loads(captured.out)
-            assert state["state_id"] == source
+            cut = json.loads(captured.out)
+            assert cut["cut_transition_id"] == t1
+            assert cut["rewound_to_state_id"] == source
