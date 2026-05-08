@@ -27,7 +27,8 @@ class Dag:
     transitions: dict[str, Transition] = field(default_factory=dict)
     plans: dict[str, Plan] = field(default_factory=dict)
     payloads: dict[str, Payload] = field(default_factory=dict)
-    payloads_by_target: dict[str, list[str]] = field(default_factory=dict)
+    payloads_by_node: dict[str, list[str]] = field(default_factory=dict)
+    payloads_by_transition: dict[str, list[str]] = field(default_factory=dict)
     child_dags: dict[str, "Dag"] = field(default_factory=dict)
     incoming_index: dict[str, list[str]] = field(default_factory=dict)
     outgoing_index: dict[str, list[str]] = field(default_factory=dict)
@@ -84,19 +85,73 @@ class Dag:
         else:
             raise ValueError(f"unknown target_kind: {payload.target_kind!r}")
         self.payloads[payload.payload_id] = payload
-        self.payloads_by_target.setdefault(payload.target_id, []).append(payload.payload_id)
+        if payload.target_kind == "node":
+            self.payloads_by_node.setdefault(payload.target_id, []).append(
+                payload.payload_id
+            )
+        else:
+            self.payloads_by_transition.setdefault(payload.target_id, []).append(
+                payload.payload_id
+            )
 
     def payloads_for(
         self,
         target_id: str,
         *,
+        target_kind: str | None = None,
         payload_type: str | None = None,
     ) -> list[Payload]:
-        ids = self.payloads_by_target.get(target_id, [])
+        ids = self._payload_ids_for_target(target_id, target_kind=target_kind)
         items = [self.payloads[pid] for pid in ids]
         if payload_type is None:
             return items
         return [p for p in items if p.payload_type == payload_type]
+
+    def payloads_for_node(
+        self,
+        node_id: str,
+        *,
+        payload_type: str | None = None,
+    ) -> list[Payload]:
+        return self.payloads_for(
+            node_id,
+            target_kind="node",
+            payload_type=payload_type,
+        )
+
+    def payloads_for_transition(
+        self,
+        transition_id: str,
+        *,
+        payload_type: str | None = None,
+    ) -> list[Payload]:
+        return self.payloads_for(
+            transition_id,
+            target_kind="transition",
+            payload_type=payload_type,
+        )
+
+    def _payload_ids_for_target(
+        self,
+        target_id: str,
+        *,
+        target_kind: str | None,
+    ) -> list[str]:
+        if target_kind == "node":
+            return list(self.payloads_by_node.get(target_id, ()))
+        if target_kind == "transition":
+            return list(self.payloads_by_transition.get(target_id, ()))
+        if target_kind is not None:
+            raise ValueError(f"unknown target_kind: {target_kind!r}")
+
+        node_ids = self.payloads_by_node.get(target_id, ())
+        transition_ids = self.payloads_by_transition.get(target_id, ())
+        if node_ids and transition_ids:
+            raise ValueError(
+                f"ambiguous payload target_id {target_id!r}; "
+                "pass target_kind='node' or target_kind='transition'"
+            )
+        return list(node_ids or transition_ids)
 
     # ----- child dags -------------------------------------------------
 

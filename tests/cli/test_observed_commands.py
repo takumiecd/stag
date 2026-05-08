@@ -86,7 +86,7 @@ def test_observe_attaches_result_and_show_can_fetch_payload(tmp_path):
 
     store = JsonlRunStore(store_dir)
     handle = store.load_run(run_id)
-    result_payload = handle.observed_dag.payloads_for(
+    result_payload = handle.observed_dag.payloads_for_transition(
         transition["transition_id"], payload_type="result"
     )[0]
 

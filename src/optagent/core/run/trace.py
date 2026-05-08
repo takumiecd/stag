@@ -44,7 +44,9 @@ def trace_impl(
         transition_ids.append(transition.transition_id)
         plan_ids.append(transition.parent_plan_id)
         past_node_ids.append(transition.from_node_id)
-        for payload in self.observed_dag.payloads_for(transition.transition_id):
+        for payload in self.observed_dag.payloads_for_transition(
+            transition.transition_id
+        ):
             if isinstance(payload, ResultPayload):
                 result_payload_ids.append(payload.payload_id)
                 if include_raw_refs:

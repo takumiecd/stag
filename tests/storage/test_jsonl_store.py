@@ -5,8 +5,11 @@ from __future__ import annotations
 import tempfile
 
 from optagent import init
-from optagent.core.schema.payloads import ResultPayload
+from optagent.core.schema.graph import Node, Transition
+from optagent.core.schema.payloads import ResultPayload, SnapshotPayload
+from optagent.core.schema.plans import Plan
 from optagent.core.schema.requirements import Requirement
+from optagent.core.schema.snapshots import StateSnapshot
 from optagent.storage.jsonl import JsonlRunStore
 
 
@@ -53,6 +56,53 @@ def test_round_trip_with_full_flow():
     assert len(loaded.predicted_dag.transitions) == 2
     assert len(loaded.selections) == 1
     assert any(p.payload_type == "derived" for p in loaded.observed_dag.payloads.values())
+
+
+def test_round_trip_preserves_separate_payload_indexes_for_colliding_target_ids():
+    run = init(_req(), run_id="rt_payload_indexes")
+    run.observed_dag.add_node(Node(node_id="same"))
+    run.observed_dag.attach_payload(
+        SnapshotPayload(
+            payload_id="pl_same_node",
+            target_id="same",
+            snapshot=StateSnapshot(requirement=_req()),
+        )
+    )
+    run.observed_dag.add_plan(
+        Plan(
+            plan_id="plan_same",
+            grounded_node_id="n_0000",
+            action_type="analysis",
+            intent="x",
+        )
+    )
+    run.observed_dag.add_transition(
+        Transition(
+            transition_id="same",
+            parent_plan_id="plan_same",
+            from_node_id="n_0000",
+            to_node_id="same",
+        )
+    )
+    run.observed_dag.attach_payload(
+        ResultPayload(
+            payload_id="pl_same_transition",
+            target_id="same",
+            status="completed",
+        )
+    )
+
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlRunStore(td)
+        store.save_run(run)
+        loaded = store.load_run("rt_payload_indexes")
+
+    assert [
+        p.payload_id for p in loaded.observed_dag.payloads_for_node("same")
+    ] == ["pl_same_node"]
+    assert [
+        p.payload_id for p in loaded.observed_dag.payloads_for_transition("same")
+    ] == ["pl_same_transition"]
 
 
 def test_list_runs_returns_summaries():

@@ -36,7 +36,9 @@ def snapshot_rebuild_impl(self, node_id: str) -> SnapshotPayload:
             break
         transition = self.observed_dag.transitions[incoming[-1]]
 
-        for payload in self.observed_dag.payloads_for(transition.transition_id):
+        for payload in self.observed_dag.payloads_for_transition(
+            transition.transition_id
+        ):
             if isinstance(payload, ResultPayload):
                 for path in payload.artifacts:
                     artifacts.append(

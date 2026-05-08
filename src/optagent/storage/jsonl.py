@@ -156,7 +156,16 @@ class JsonlRunStore:
             payload = payload_from_dict(row["record"])
             dag = dags[row["dag_id"]]
             dag.payloads[payload.payload_id] = payload
-            dag.payloads_by_target.setdefault(payload.target_id, []).append(payload.payload_id)
+            if payload.target_kind == "node":
+                dag.payloads_by_node.setdefault(payload.target_id, []).append(
+                    payload.payload_id
+                )
+            elif payload.target_kind == "transition":
+                dag.payloads_by_transition.setdefault(payload.target_id, []).append(
+                    payload.payload_id
+                )
+            else:
+                raise ValueError(f"unknown target_kind: {payload.target_kind!r}")
 
         # Selections.
         selections: dict[str, PredictionSelection] = {}

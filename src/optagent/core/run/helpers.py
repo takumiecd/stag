@@ -33,7 +33,7 @@ def get_node_snapshot_payload_impl(
 ) -> SnapshotPayload:
     """Return the most recently attached SnapshotPayload for a node."""
     payloads = [
-        p for p in dag.payloads_for(node_id, payload_type="snapshot")
+        p for p in dag.payloads_for_node(node_id, payload_type="snapshot")
     ]
     if not payloads:
         raise KeyError(f"no SnapshotPayload for node: {node_id}")

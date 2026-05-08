@@ -43,7 +43,7 @@ def test_observe_appends_transition_with_result_payload():
     result = ResultPayload(payload_id="x", target_id="x", status="completed", metrics={"a": 1.0})
     tr = run.observe(plan.plan_id, result)
     assert tr.parent_plan_id == plan.plan_id
-    payloads = run.observed_dag.payloads_for(tr.transition_id)
+    payloads = run.observed_dag.payloads_for_transition(tr.transition_id)
     assert any(isinstance(p, ResultPayload) for p in payloads)
 
 
@@ -78,7 +78,7 @@ def test_promote_transition_attaches_match_payload():
         result=result,
         plan_id=obs_plan.plan_id,
     )
-    payloads = run.observed_dag.payloads_for(tr.transition_id)
+    payloads = run.observed_dag.payloads_for_transition(tr.transition_id)
     assert any(isinstance(p, MatchPayload) for p in payloads)
 
 
@@ -122,9 +122,9 @@ def test_state_show_returns_snapshot_payload():
 
 def test_state_update_appends_new_snapshot_payload():
     run = init(_req(), run_id="t_upd")
-    before = len(run.observed_dag.payloads_for(run.root_observed_node_id))
+    before = len(run.observed_dag.payloads_for_node(run.root_observed_node_id))
     run.state_update(node_id=run.root_observed_node_id, add_open_question=["why?"])
-    after = len(run.observed_dag.payloads_for(run.root_observed_node_id))
+    after = len(run.observed_dag.payloads_for_node(run.root_observed_node_id))
     assert after == before + 1
 
 

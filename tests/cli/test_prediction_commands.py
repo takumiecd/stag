@@ -67,7 +67,9 @@ def test_predict_adds_multiple_transitions_and_result_payloads(tmp_path):
 
     handle = JsonlRunStore(store_dir).load_run(run_id)
     payloads = [
-        handle.predicted_dag.payloads_for(t["transition_id"], payload_type="result")[0]
+        handle.predicted_dag.payloads_for_transition(
+            t["transition_id"], payload_type="result"
+        )[0]
         for t in transitions
     ]
     assert [p.metadata["predictor"] for p in payloads] == [
@@ -140,10 +142,10 @@ def test_promote_transition_attaches_match_payload(tmp_path):
     )["transition"]
 
     handle = JsonlRunStore(store_dir).load_run(run_id)
-    result_payload = handle.observed_dag.payloads_for(
+    result_payload = handle.observed_dag.payloads_for_transition(
         transition["transition_id"], payload_type="result"
     )[0]
-    match_payload = handle.observed_dag.payloads_for(
+    match_payload = handle.observed_dag.payloads_for_transition(
         transition["transition_id"], payload_type="match"
     )[0]
 

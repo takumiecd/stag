@@ -69,6 +69,50 @@ def test_payloads_for_filters_by_type():
     assert results == []
 
 
+def test_payload_indexes_separate_node_and_transition_targets():
+    dag = Dag(dag_id="d", metadata={"role": "observed"})
+    dag.add_node(Node(node_id="same"))
+    dag.attach_payload(
+        SnapshotPayload(payload_id="pl_node", target_id="same", snapshot=_snap())
+    )
+    dag.add_plan(
+        Plan(
+            plan_id="plan_1",
+            grounded_node_id="same",
+            action_type="analysis",
+            intent="i",
+        )
+    )
+    dag.add_node(Node(node_id="n_b"))
+    dag.attach_payload(
+        SnapshotPayload(payload_id="pl_2", target_id="n_b", snapshot=_snap())
+    )
+    dag.add_transition(
+        Transition(
+            transition_id="same",
+            parent_plan_id="plan_1",
+            from_node_id="same",
+            to_node_id="n_b",
+        )
+    )
+    dag.attach_payload(
+        ResultPayload(payload_id="pl_transition", target_id="same", status="completed")
+    )
+
+    assert [p.payload_id for p in dag.payloads_for_node("same")] == ["pl_node"]
+    assert [p.payload_id for p in dag.payloads_for_transition("same")] == [
+        "pl_transition"
+    ]
+    assert [p.payload_id for p in dag.payloads_for("same", target_kind="node")] == [
+        "pl_node"
+    ]
+    assert [
+        p.payload_id for p in dag.payloads_for("same", target_kind="transition")
+    ] == ["pl_transition"]
+    with pytest.raises(ValueError, match="ambiguous"):
+        dag.payloads_for("same")
+
+
 def test_roots_and_leaves():
     dag = _build_dag()
     dag.add_transition(Transition(transition_id="t_1", parent_plan_id="plan_1", from_node_id="n_a", to_node_id="n_b"))

@@ -65,7 +65,7 @@ def test_state_update_appends_snapshot_payload_with_structured_refs(tmp_path):
     assert snap["active_branches"] == ["branch-a"]
 
     handle = JsonlRunStore(store_dir).load_run(run_id)
-    assert len(handle.observed_dag.payloads_for("n_0000", payload_type="snapshot")) == 2
+    assert len(handle.observed_dag.payloads_for_node("n_0000", payload_type="snapshot")) == 2
 
 
 def test_snapshot_rebuild_aggregates_artifacts_and_findings(tmp_path):
