@@ -2,31 +2,30 @@
 
 from __future__ import annotations
 
-from optagent.core.schema.derived import DerivedRecord
-from optagent.core.schema.results import ActionResult
-from optagent.core.schema.transitions import ObservedTransition
+from optagent.core.schema.graph import Transition
+from optagent.core.schema.payloads import ResultPayload
 
 
 def observe_impl(
     self,
-    execution_plan_id: str,
-    action_result: ActionResult,
+    plan_id: str,
+    result: ResultPayload,
     *,
-    derived_records: list[DerivedRecord] | None = None,
     user_id: str | None = None,
-) -> ObservedTransition:
-    """Record an execution result without matching it to a prediction."""
+) -> Transition:
+    """Record a transition for a plan grounded on the observed Dag.
 
-    plan = self.trace_dag.execution_plans.get(execution_plan_id)
+    *result* is a ResultPayload describing the actual execution outcome.
+    Its ``target_id`` will be overwritten to point at the new transition.
+    """
+    plan = self.observed_dag.plans.get(plan_id)
     if plan is None:
-        raise KeyError(f"unknown execution_plan_id: {execution_plan_id}")
-    if action_result.execution_plan_id != execution_plan_id:
-        raise ValueError("ActionResult.execution_plan_id must match execution_plan_id")
+        raise KeyError(f"unknown observed plan_id: {plan_id}")
     return self._append_observed_transition(
         plan=plan,
-        action_result=action_result,
+        result=result,
         matched_predicted_transition_id=None,
-        prediction_match=None,
-        derived_records=derived_records or [],
+        match_status=None,
+        prediction_error=None,
         user_id=user_id,
     )

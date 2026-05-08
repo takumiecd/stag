@@ -2,70 +2,53 @@
 
 optagent は、問題解決や最適化の過程を構造化して保存するためのライブラリです。
 
-コード最適化、カーネル最適化、実験、調査では、単に「最終的なコード」だけでなく、
-途中で何を試し、何が起き、何を学んだかが重要になります。
-optagent は、その過程をあとから読み返せる形で残すことを目的にしています。
+コード最適化、カーネル最適化、実験、調査では、単に「最終的なコード」だけでなく、途中で何を試し、何が起き、何を学んだかが重要になります。optagent は、その過程をあとから読み返せる形で残します。
 
-## 目的
+## 0.1 Alpha 方針
 
-optagent が扱う中心情報は次の 4 つです。
+この段階では後方互換を優先しません。モデルが弱いまま API を固定するより、破壊的変更を許容して core を単純に保ちます。
 
-- plan: 何をするつもりだったか
-- prediction: 何が起きると考えていたか
-- result: 実際に何が起きたか
-- derived record: その結果から何を解釈したか
+明示的な方針:
 
-この情報を残すことで、次の問いに答えられるようにします。
-
-- なぜその試行をしたのか
-- 実行前に何を期待していたのか
-- 実行して何が出たのか
-- どの artifact、log、metric が根拠なのか
-- 予測と実測はどれくらい合っていたのか
-- 採用、拒否、追加調査の判断は何に基づくのか
-- 次の試行で何を避けるべきか
+- package version は `0.1.0` のまま進める
+- 旧 API との shim は原則追加しない
+- 旧 storage schema の migration は原則追加しない
+- docs は現在の実装に合わせる
+- テストは現在の仕様を固定するために使う
 
 ## 中心モデル
 
-optagent は、予測と実測を分けて保存します。
+optagent は、pure な graph record と domain payload を分けます。
 
 ```text
-PredictionDAG:
-  まだ実行していない未来の候補。
+Node / Plan / Transition
+  = graph の骨格
 
-TraceDAG:
-  実際に起きたことの履歴。
+SnapshotPayload / ResultPayload / DerivedPayload / MatchPayload / CutPayload
+  = graph に attach される意味
 ```
 
-基本的な流れは次の通りです。
+observed / predicted は record の型ではなく、owning `Dag` の role で表します。
 
 ```text
-ObservedState
-  -> ExecutionPlan
-  -> PredictedTransition
-  -> ActionResult
-  -> ObservedTransition
-  -> ObservedState
-```
+observed_dag:
+  実際に起きた履歴
 
-`PredictionDAG` では、1 つの plan から複数の未来 outcome を考えられます。
-`TraceDAG` では、実際に起きた outcome を source of truth として保存します。
+predicted_dag:
+  まだ実行していない未来候補
+```
 
 ## optagent がやること
 
-optagent は次の機能を提供します。
-
 - run を作る
-- observed state と predicted state を管理する
-- plan を作る
-- 未来 outcome を予測として保存する
-- 実行結果を trace に保存する
-- 予測と実測の対応を保存する
-- derived record を実行履歴に紐づける
-- 過去の履歴を辿れるようにする
-
-現在の core 実装は in-memory run API と JSONL run directory storage を持っています。
-CLI、domain-specific workflow は今後追加します。
+- observed Dag と predicted Dag を管理する
+- node に grounded された plan を作る
+- predicted outcome を保存する
+- 実行結果を observed Dag に保存する
+- 予測と実測の対応を payload として保存する
+- derived payload を transition に紐づける
+- rewind を append-only cut として保存する
+- JSONL run directory に保存・読み込みする
 
 ## optagent がやらないこと
 
@@ -77,8 +60,7 @@ optagent は、現時点では次のものではありません。
 - executor を内蔵した自動最適化ツール
 - 生成コードを自動で元ファイルに書き戻すツール
 
-executor、planner、predictor、LLM、benchmark runner は外側から接続します。
-optagent の core は、それらが生み出す plan、prediction、result、derived record を保存する基盤です。
+executor、planner、predictor、LLM、benchmark runner は外側から接続します。core は、それらが生み出す plan、prediction、result、derived payload を保存する基盤です。
 
 ## 最初に強くする領域
 
@@ -94,18 +76,19 @@ optagent の core は、それらが生み出す plan、prediction、result、de
 - 適用できる dispatch scope
 - raw benchmark output
 
-これらは、optagent の `TraceDAG` と `DerivedRecord` が価値を出しやすい領域です。
+これらは `ResultPayload` と `DerivedPayload` が価値を出しやすい領域です。
 
 ## 近い実装予定
 
-1. in-memory API と JSONL storage を安定させる
-2. CLI から run を作成、更新、参照できるようにする
-3. executor / evaluator の protocol を整える
-4. code optimization の小さな workflow を作る
-5. kernel optimization の workflow を作る
+1. pure-DAG + payload model を 0.1 として固める
+2. CLI と JSONL storage の仕様をドキュメントと一致させる
+3. branch / attach workflow の使い方を具体化する
+4. prediction と observation の比較 helper を追加する
+5. executor / evaluator の protocol を整える
 
 ## ドキュメント
 
-- [API](API.md): Python API の使い方
-- [状態モデル](STATE_MODEL.md): PredictionDAG / TraceDAG の考え方
-- [問題解決ループ](AGENT_LOOP.md): optagent を使った作業サイクル
+- [状態モデル](STATE_MODEL.md)
+- [API](API.md)
+- [CLI](CLI.md)
+- [問題解決ループ](AGENT_LOOP.md)

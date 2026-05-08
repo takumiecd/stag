@@ -2,139 +2,97 @@
 
 この文書は、optagent が問題解決や最適化の過程をどう記録するかを説明します。
 
-optagent の状態モデルは、予測と実測を分けます。
-
-```text
-PredictionDAG:
-  まだ実行していない未来の候補。
-
-TraceDAG:
-  実際に起きたことの履歴。
-```
-
-この分離により、次の 2 つを同時に扱えます。
-
-- 実行前に「何が起きそうか」を複数考える
-- 実行後に「実際に何が起きたか」を事実として残す
+0.1 alpha では後方互換よりもモデル整理を優先します。旧 `StateNode` / `ExecutionPlan` / `PredictionPlan` / `ObservedTransition` / `PredictedTransition` / `ActionResult` 形式は廃止し、共通の `Dag` と `Payload` に寄せています。
 
 ## 全体像
 
 ```text
-Requirement
-  └── RunHandle
-      ├── PredictionDAG
-      │   ├── PredictedState
-      │   ├── PredictionPlan
-      │   └── PredictedTransition
-      │
-      └── TraceDAG
-          ├── ObservedState
-          ├── ExecutionPlan
-          └── ObservedTransition
-              ├── ActionResult
-              └── DerivedRecord
+RunHandle
+  ├── observed_dag
+  │   └── 実際に起きた履歴
+  └── predicted_dag
+      └── まだ実行していない未来候補
+
+Dag
+  ├── nodes: dict[str, Node]
+  ├── plans: dict[str, Plan]
+  ├── transitions: dict[str, Transition]
+  ├── payloads: dict[str, Payload]
+  ├── child_dags: dict[str, Dag]
+  ├── incoming_index
+  ├── outgoing_index
+  ├── plans_by_node
+  └── transitions_by_plan
 ```
 
-`PredictionDAG` は未来の候補を持ちます。
-`TraceDAG` は実際に起きたことを持ちます。
+observed / predicted の区別は `Node` や `Transition` 自体には持たせません。`Dag.metadata["role"]` が `observed` か `predicted` かで意味を決めます。
 
-## State
+## Pure Graph Records
 
-State は、ある時点の状態です。
+### Node
 
-optagent には 2 種類の state があります。
+`Node` は pure な graph node です。
 
-```text
-ObservedState:
-  実際に観測された状態。
-  TraceDAG に保存される。
-
-PredictedState:
-  予測上の状態。
-  PredictionDAG に保存される。
+```python
+Node(node_id="n_0000", metadata={})
 ```
 
-state は、それ単体で過去や未来の遷移を全部持ちません。
-過去を辿る index は `TraceDAG` が持ち、未来を辿る index は `PredictionDAG` が持ちます。
+node は状態の中身を直接持ちません。状態の working context は `SnapshotPayload` として node に attach します。
 
-state が持つ中心情報は `StateSnapshot` です。
+### Plan
 
-## StateSnapshot
+`Plan` は node に grounded された action plan です。
 
-`StateSnapshot` は、次の plan を考えるための作業文脈です。
+```python
+Plan(
+    plan_id="plan_0001",
+    grounded_node_id="n_0000",
+    action_type="analysis",
+    intent="run baseline benchmark",
+)
+```
+
+observed Dag にある `Plan` は実行可能な計画として扱います。predicted Dag にある `Plan` は未来展開用の仮説として扱います。型は同じで、意味は owning Dag が決めます。
+
+### Transition
+
+`Transition` は node から node への edge です。
+
+```python
+Transition(
+    transition_id="t_0001",
+    parent_plan_id="plan_0001",
+    from_node_id="n_0000",
+    to_node_id="n_0002",
+)
+```
+
+observed Dag では、1 つの plan から作れる transition は 1 つだけです。predicted Dag では、1 つの plan から複数の outcome transition を作れます。この cardinality は `Dag` ではなく `RunHandle` の writer が守ります。
+
+## Payload
+
+domain data は graph record に埋め込まず、payload として attach します。1 つの target に複数 payload を付けられます。
+
+### SnapshotPayload
+
+node に attach される working context です。
 
 含めるもの:
 
 - requirement
-- 現在参照している artifact
-- これまでに得た finding の参照
-- 未解決の問い
-- active branch
-- 予測の要約
+- artifacts
+- knowledge
+- open questions
+- active branches
+- predictions
 - budget
 - metadata
 
-`StateSnapshot` は source of truth ではありません。
-実行履歴から作った作業メモです。
+`StateSnapshot` は source of truth ではありません。次の plan を考えるための作業メモで、必要なら履歴から再構築します。
 
-重要な事実は `TraceDAG` の `ExecutionPlan`、`ActionResult`、`ObservedTransition` に残します。
+### ResultPayload
 
-## Plan
-
-Plan は、ある state から何をするかを表します。
-
-optagent には 2 種類の plan があります。
-
-```text
-PredictionPlan:
-  predicted state から作る未来予測用の plan。
-  そのまま実行しない。
-
-ExecutionPlan:
-  observed state に接地された実行用の plan。
-  executor に渡せる。
-```
-
-`PredictionPlan` を実行したい場合は、`promote(mode="plan")` で `ExecutionPlan` に変換します。
-
-## Transition
-
-Transition は、state から state への変化です。
-
-optagent には 2 種類の transition があります。
-
-```text
-PredictedTransition:
-  plan を実行した場合に起きそうな outcome。
-  PredictionDAG に保存される。
-
-ObservedTransition:
-  execution plan を実行して実際に得た outcome。
-  TraceDAG に保存される。
-```
-
-1 つの plan から複数の `PredictedTransition` を作れます。
-
-```text
-PredictionPlan P
-  ├── PredictedTransition: success
-  ├── PredictedTransition: regression
-  └── PredictedTransition: failure
-```
-
-一方、1 つの `ExecutionPlan` に対する実行結果は原則 1 つです。
-
-```text
-ExecutionPlan P
-  └── ObservedTransition
-      └── ActionResult
-```
-
-同じ操作をもう一度実行したい場合は、新しい `ExecutionPlan` を作ります。
-
-## ActionResult
-
-`ActionResult` は実行後に得られた事実です。
+transition に attach される結果です。
 
 含めるもの:
 
@@ -145,12 +103,11 @@ ExecutionPlan P
 - errors
 - actual cost
 
-`ActionResult` は `ObservedTransition` に保存されます。
-予測側の `PredictedTransition` には保存しません。
+observed Dag では実際の実行結果、predicted Dag では予測 outcome の付加情報として使います。
 
-## DerivedRecord
+### DerivedPayload
 
-`DerivedRecord` は、事実から作った構造化メモです。
+transition の事実から作った解釈です。
 
 例:
 
@@ -161,79 +118,45 @@ ExecutionPlan P
 - finding
 - summary
 
-derived record は重要ですが、source of truth ではありません。
-あとから別の evaluator、人間、LLM によって作り直せる解釈です。
+derived payload は source of truth ではありません。あとから別の evaluator、人間、LLM によって作り直せます。
 
-source of truth と derived record を分けることで、あとから同じ実行結果を別の観点で再評価できます。
+### MatchPayload
 
-```text
-source of truth:
-  ExecutionPlan
-  ActionResult
-  ObservedTransition
+observed transition が、どの predicted transition に対応したかを記録します。予測と実測の比較は、transition 本体ではなく payload として残します。
 
-derived records:
-  Evidence
-  Decision
-  Finding
-  Summary
-```
+### CutPayload
 
-## PredictionDAG
+rewind は削除ではなく `CutPayload` の append で表します。cut された transition から forward に到達できる node / transition は read-time に inactive として扱います。
 
-`PredictionDAG` は、現在の observed state から見た未来予測です。
+## Child Dag と Attach
 
-役割:
+`Dag` は `child_dags` を持てます。将来の branch workflow では、探索を子 Dag として切り出し、あとから親 Dag の node と子 Dag の node を `Transition` で接続します。
 
-- predicted state を保存する
-- prediction plan を保存する
-- predicted transition を保存する
-- depth ごとに未来を辿れるようにする
-- 1 plan に複数 outcome を持てるようにする
+`Dag.attach(...)` はこの接続を表す低レベル API です。子 Dag の中身はコピーせず、親 Dag 側に接続 transition を 1 本追加します。
 
-実行結果を記録して current observed state が進むと、古い `PredictionDAG` は現在とズレます。
-その場合は `run.refresh()` で作り直します。
+## Rewind
 
-## TraceDAG
+`rewind` は observed Dag の transition に `CutPayload` を attach します。
 
-`TraceDAG` は、実際に起きたことの履歴です。
+重要な点:
 
-役割:
+- node / transition / plan / payload は削除しない
+- active / inactive は `optagent.core.cuts` で read-time に計算する
+- cut 済み subtree の node から新しい plan は作れない
+- 別枝を伸ばす場合は active な node を明示して `plan(...)` する
 
-- observed state を保存する
-- execution plan を保存する
-- observed transition を保存する
-- action result を保存する
-- derived record を transition に紐づける
-- 過去の履歴を辿れるようにする
+## Storage
 
-`TraceDAG` は、optagent における source-of-truth の中心です。
-
-## 予測と実測の対応
-
-予測と実測を対応づけたい場合は、`promote(mode="transition")` を使います。
+JSONL storage は新しい pure-DAG 形式だけを扱います。
 
 ```text
-PredictedTransition
-  + ActionResult
-  -> ObservedTransition
-       matched_predicted_transition_id = ...
+run.json
+dags.jsonl
+nodes.jsonl
+plans.jsonl
+transitions.jsonl
+payloads.jsonl
+selections.jsonl
 ```
 
-予測が完全に当たるとは限りません。
-一致、部分一致、不一致などの評価は `PredictionMatch` や `DerivedRecord` として保存します。
-
-## 基本ループ
-
-```text
-1. current observed state を見る
-2. ExecutionPlan を作る
-3. 必要なら predict で未来 outcome を作る
-4. 外部 executor で ExecutionPlan を実行する
-5. ActionResult を作る
-6. observe または promote で TraceDAG に記録する
-7. trace で履歴を読み、次の判断に使う
-8. 必要なら refresh で PredictionDAG を作り直す
-```
-
-このループにより、問題解決の過程を「何を考え、何を実行し、何が起きたか」として保存できます。
+旧形式の migration は 0.1 alpha では持ちません。

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from optagent.core.schema.plans import ExecutionPlan, PredictionPlan
+from optagent.core.schema.plans import Plan
 from optagent.core.types import JSONValue
 
 
 def plan_impl(
     self,
-    from_state_id: str,
+    from_node_id: str,
     *,
     planner: str | None = None,
     max_plans: int | None = None,
@@ -16,32 +16,20 @@ def plan_impl(
     intent: str | None = None,
     inputs: dict[str, JSONValue] | None = None,
     user_id: str | None = None,
-) -> list[ExecutionPlan]:
-    """Create one or more ``ExecutionPlan``s from an observed state.
+) -> list[Plan]:
+    """Create one or more Plans grounded on an observed node."""
 
-    Parameters
-    ----------
-    from_state_id:
-        Source observed state.
-
-    Raises
-    ------
-    KeyError
-        If *from_state_id* is not an observed state in this run.
-    """
-
-    self._ensure_active_observed_state(from_state_id)
+    self._ensure_active_observed_node(from_node_id)
 
     count = max(1, max_plans or 1)
     resolved_intent = intent or "inspect selected state and propose next useful action"
     resolved_planner = planner or "default"
-    plans: list[ExecutionPlan] = []
+    plans: list[Plan] = []
     for index in range(count):
-        plan = ExecutionPlan(
-            plan_id=self._next_id("p_exec"),
-            plan_kind="execution",
-            from_observed_state_id=from_state_id,
-            action_type=action_type,
+        plan = Plan(
+            plan_id=self._next_id("plan"),
+            grounded_node_id=from_node_id,
+            action_type=action_type,  # type: ignore[arg-type]
             intent=resolved_intent,
             inputs=dict(inputs or {}),
             metadata={
@@ -50,48 +38,39 @@ def plan_impl(
                 **({"user_id": user_id} if user_id is not None else {}),
             },
         )
-        self.trace_dag.add_execution_plan(plan)
+        self.observed_dag.add_plan(plan)
         plans.append(plan)
     return plans
 
 
 def extend_impl(
     self,
-    state_id: str,
+    node_id: str,
     *,
     planner: str | None = None,
     max_plans: int | None = None,
     action_type: str = "analysis",
     intent: str | None = None,
     inputs: dict[str, JSONValue] | None = None,
-) -> list[PredictionPlan]:
-    """Create one or more ``PredictionPlan``s from a predicted state.
+) -> list[Plan]:
+    """Create Plans grounded on a node in the predicted Dag."""
 
-    Predicted states have no implicit "current", so *state_id* is required.
-
-    Raises
-    ------
-    KeyError
-        If *state_id* is not a predicted state in this run.
-    """
-
-    if state_id not in self.prediction_dag.nodes:
-        raise KeyError(f"not a predicted state: {state_id}")
+    if node_id not in self.predicted_dag.nodes:
+        raise KeyError(f"not a predicted node: {node_id}")
 
     count = max(1, max_plans or 1)
     resolved_intent = intent or "inspect predicted state and extend the future scenario"
     resolved_planner = planner or "default"
-    plans: list[PredictionPlan] = []
+    plans: list[Plan] = []
     for index in range(count):
-        plan = PredictionPlan(
-            plan_id=self._next_id("p_pred"),
-            plan_kind="prediction",
-            from_predicted_state_id=state_id,
-            action_type=action_type,
+        plan = Plan(
+            plan_id=self._next_id("plan"),
+            grounded_node_id=node_id,
+            action_type=action_type,  # type: ignore[arg-type]
             intent=resolved_intent,
             inputs=dict(inputs or {}),
             metadata={"planner": resolved_planner, "ordinal": index},
         )
-        self.prediction_dag.add_plan(plan)
+        self.predicted_dag.add_plan(plan)
         plans.append(plan)
     return plans

@@ -1,87 +1,59 @@
 # 問題解決ループ
 
-この文書は、optagent を使って問題解決や最適化のサイクルをどう回すかを説明します。
-
-optagent は、AI agent そのものではありません。
-人間、AI、script、executor が同じ文脈を共有するために、計画、予測、実行結果、メモを構造化して保存する基盤です。
+optagent は agent そのものではありません。人間、AI、script、executor が同じ文脈を共有するために、計画、予測、実行結果、解釈を構造化して保存する基盤です。
 
 ## 基本サイクル
 
-問題解決や最適化では、通常次の流れを繰り返します。
-
 ```text
-調べる
-  -> 仮説を立てる
-  -> 実行する
-  -> 結果を見る
-  -> 理解を更新する
-  -> 次の行動を決める
+observed node を見る
+  -> plan を作る
+  -> 必要なら predicted Dag を伸ばす
+  -> optagent の外で実行する
+  -> observe / promote で結果を保存する
+  -> derive で finding や decision を付ける
+  -> trace で履歴を読む
+  -> 必要なら refresh で predicted Dag を作り直す
 ```
 
-optagent では、この流れを次の API 操作に対応させます。
+## 1. observed node を読む
 
-```text
-current observed state
-  -> plan
-  -> predict
-  -> execute outside optagent
-  -> observe / promote
-  -> trace
-  -> refresh
-```
-
-## 1. current observed state を読む
-
-run は常に current observed state を持ちます。
+core は mutable な current pointer を持ちません。caller が起点 node を明示します。
 
 ```python
-state_id = run.current_observed_state_id
+node_id = run.root_observed_node_id
+snapshot = run.state_show(node_id)
 ```
-
-この state は、実際に観測された現在地です。
-次の plan は、通常ここから作ります。
 
 ## 2. plan を作る
 
 ```python
-plans = run.plan()  # 省略時は current observed state が起点
+plan = run.plan(node_id, intent="run benchmark")[0]
 ```
 
-observed state から作った plan は `ExecutionPlan` で、executor に渡せる実行用の計画です。
-
-predicted state から先のシナリオを延長したい場合は、`run.extend(state_id=...)` を使います。こちらは `PredictionPlan` を返します。
-これは未来予測を広げるための計画で、直接実行しません。
+observed Dag の plan は外部 executor に渡せる計画として扱います。
 
 ## 3. 予測する
 
+予測は predicted Dag 側で行います。
+
 ```python
-predicted = run.predict(plan_id=plans[0].plan_id, max_outcomes=3)
+pred_root = run.predicted_dag.metadata["root_node_id"]
+future_plan = run.extend(pred_root, intent="predict benchmark outcomes")[0]
+predicted = run.predict(future_plan.plan_id, max_outcomes=3)
 ```
 
-`predict` は、plan を実行した場合に起きそうな outcome を作ります。
-
-1 つの plan に対して、複数の outcome を持てます。
-
-```text
-Plan
-  ├── success
-  ├── partial improvement
-  └── regression
-```
-
-これにより、実行前に「うまくいく場合」「悪化する場合」「追加調査が必要な場合」を分けて考えられます。
+1 つの predicted plan から複数の outcome transition を作れます。
 
 ## 4. 実行する
 
-optagent は、現在の core では executor を内蔵していません。
-実行は外部の script、test runner、benchmark runner、AI coding tool などが行います。
+optagent は executor を内蔵しません。外部の script、test runner、benchmark runner、AI coding tool が実行します。
 
-実行後、得られた結果を `ActionResult` として渡します。
+実行後、結果を `ResultPayload` として渡します。
 
 ```python
-result = ActionResult(
-    result_id="r_0001",
-    execution_plan_id=plans[0].plan_id,
+result = ResultPayload(
+    payload_id="pending",
+    target_id="pending",
     status="completed",
     raw_outputs=("raw/bench.txt",),
     metrics={"latency_ms": 1.5},
@@ -90,132 +62,76 @@ result = ActionResult(
 
 ## 5. 結果を記録する
 
-予測と対応づけずに結果だけ記録する場合:
+予測と対応づけない場合:
 
 ```python
-observed = run.observe(
-    execution_plan_id=plans[0].plan_id,
-    action_result=result,
-)
+observed = run.observe(plan.plan_id, result)
 ```
 
-予測 outcome と実測結果を対応づける場合:
+予測 transition と対応づける場合:
 
 ```python
 observed = run.promote(
     mode="transition",
     predicted_transition_id=predicted[0].transition_id,
-    execution_plan_id=plans[0].plan_id,
-    action_result=result,
+    plan_id=plan.plan_id,
+    result=result,
 )
 ```
 
-`observe` と `promote(mode="transition")` は、どちらも `TraceDAG` に `ObservedTransition` を追加します。
-違いは、予測との対応を保存するかどうかです。
+どちらも observed Dag に新しい `Transition` を追加します。対応づける場合は `MatchPayload` も attach されます。
 
-## 6. derived record を残す
+## 6. derived payload を残す
 
-実行結果から作った解釈や判断は `DerivedRecord` として保存します。
+事実から作った解釈や判断は `DerivedPayload` として保存します。
 
 ```python
-derived = DerivedRecord(
-    derived_id="d_0001",
-    source_transition_id="t_obs_0001",
-    derived_type="evidence",
-    payload={
-        "correctness": "passed",
-        "speedup": 1.12,
-    },
+run.derive(
+    observed.transition_id,
+    "finding",
+    {"text": "baseline latency was 1.5 ms"},
     generator="benchmark_parser",
 )
 ```
 
-derived record は、事実に対する構造化メモです。
-後から作り直せるため、実行結果そのものとは分けて扱います。
+derived payload はあとから作り直せる解釈で、source of truth ではありません。
 
 ## 7. 履歴を読む
 
 ```python
-history = run.trace(depth=3)
+history = run.trace(observed.to_node_id, depth=3)
 ```
-
-`trace` は observed state から過去の実行履歴を辿ります。
 
 取得できるもの:
 
-- past state ids
-- observed transition ids
-- execution plan ids
-- action result ids
+- past node ids
+- transition ids
+- plan ids
+- result payload ids
 - matched predicted transition ids
-- derived record ids
-- raw output / artifact / log refs
+- derived payload ids
+- artifact / raw output / log refs
 
-この履歴を使って、次の plan を作ります。
+## 8. predicted Dag を更新する
 
-## 8. PredictionDAG を更新する
-
-実行結果を記録すると、current observed state が進みます。
-その時点で、古い未来予測は現在地とズレている可能性があります。
+実測結果を保存したあと、未来予測を別の observed node に anchor し直したい場合:
 
 ```python
-run.refresh()
+run.refresh(from_node_id=observed.to_node_id)
 ```
 
-`refresh` は、current observed state に anchor された新しい `PredictionDAG` を作ります。
+refresh は自動では走りません。caller が必要なタイミングで明示します。
 
-## ループの使い分け
+## Rewind
 
-### 調査フェーズ
+間違った枝を無効化したい場合は `rewind` を使います。
 
-原因がまだ分からない段階では、調査 plan を作ります。
-
-```text
-profile
-inspect logs
-run small benchmark matrix
-compare baseline
+```python
+cut = run.rewind(
+    observed.transition_id,
+    from_node_id=observed.to_node_id,
+    reason="wrong benchmark command",
+)
 ```
 
-この段階では、derived record として observation や summary が増えます。
-
-### 実装フェーズ
-
-方向性が見えたら、実装 plan を作ります。
-
-```text
-try scoped optimization
-generate candidate patch
-change dispatch rule
-```
-
-実装後は correctness、latency、regression などを derived record として残します。
-
-### 検証フェーズ
-
-採用前には、検証 plan を作ります。
-
-```text
-run full tests
-run benchmark matrix
-check numerical error
-check regression by shape
-```
-
-この段階では、decision や finding が重要になります。
-
-## optagent が保存したいもの
-
-optagent が重視するのは、コードそのものよりも、問題解決の過程です。
-
-保存したい問い:
-
-- なぜその plan を選んだのか
-- 何が起きると予測したのか
-- 実際に何が起きたのか
-- 予測と実測はどれくらい合っていたのか
-- どの artifact や raw output が根拠なのか
-- その結果から何を学んだのか
-- 次に避けるべきことは何か
-
-この情報が残っていると、人間も AI も後から同じ文脈を読み直せます。
+rewind は削除ではありません。`CutPayload` を append し、active / inactive は read-time に計算します。

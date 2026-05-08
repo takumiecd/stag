@@ -7,26 +7,13 @@ from dataclasses import fields
 from pathlib import Path
 from typing import Any
 
-from optagent.core.schema.derived import DerivedRecord
-from optagent.core.schema.plans import ExecutionPlan, PredictionPlan
-from optagent.core.schema.requirements import Requirement
-from optagent.core.schema.results import ActionResult
+from optagent.core.dag import Dag
 from optagent.core.run import RunHandle
-from optagent.core.schema.state import (
-    ArtifactRef,
-    Budget,
-    FindingRef,
-    PredictionRef,
-    StateNode,
-    StateSnapshot,
-)
-from optagent.core.dag import PredictionDAG, TraceDAG
-from optagent.core.schema.transitions import (
-    ObservedTransition,
-    PredictedTransition,
-    PredictionMatch,
-    TraceCut,
-)
+from optagent.core.schema.graph import Node, Transition
+from optagent.core.schema.payloads import payload_from_dict
+from optagent.core.schema.plans import Plan
+from optagent.core.schema.requirements import Requirement
+from optagent.core.schema.selections import PredictionSelection
 
 
 class JsonlRunStore:
@@ -39,14 +26,8 @@ class JsonlRunStore:
         return self.root / run_id
 
     def list_runs(self) -> list[dict]:
-        """Return a list of run summaries from the store root.
-
-        Each summary contains run_id and requirement fields. Invalid run
-        directories are skipped.
-        """
         if not self.root.exists():
             return []
-
         runs: list[dict] = []
         for entry in sorted(self.root.iterdir()):
             if not entry.is_dir():
@@ -69,8 +50,6 @@ class JsonlRunStore:
         return runs
 
     def save_run(self, run: RunHandle) -> Path:
-        """Write the whole run snapshot to a run directory."""
-
         run_path = self.run_path(run.run_id)
         run_path.mkdir(parents=True, exist_ok=True)
 
@@ -80,110 +59,121 @@ class JsonlRunStore:
                 "run_id": run.run_id,
                 "requirement": run.requirement.to_dict(),
                 "counters": dict(run._counters),
-                "trace_dag": {
-                    "dag_id": run.trace_dag.dag_id,
-                },
-                "prediction_dag": {
-                    "dag_id": run.prediction_dag.dag_id,
-                    "anchor_observed_state_id": run.prediction_dag.anchor_observed_state_id,
-                    "root_predicted_state_id": run.prediction_dag.root_predicted_state_id,
-                    "stale": run.prediction_dag.stale,
-                },
+                "observed_dag_id": run.observed_dag.dag_id,
+                "predicted_dag_id": run.predicted_dag.dag_id,
             },
         )
-        self._write_jsonl(run_path / "states.jsonl", self._state_rows(run))
+        all_dags = list(_walk_dags(run.observed_dag))
         self._write_jsonl(
-            run_path / "execution_plans.jsonl",
-            (plan.to_dict() for plan in run.trace_dag.execution_plans.values()),
+            run_path / "dags.jsonl",
+            (
+                {
+                    "dag_id": dag.dag_id,
+                    "parent_dag_id": parent_id,
+                    "metadata": dict(dag.metadata),
+                }
+                for dag, parent_id in all_dags
+            ),
         )
         self._write_jsonl(
-            run_path / "prediction_plans.jsonl",
-            (plan.to_dict() for plan in run.prediction_dag.plans.values()),
+            run_path / "nodes.jsonl",
+            (
+                {"dag_id": dag.dag_id, "record": node.to_dict()}
+                for dag, _ in all_dags
+                for node in dag.nodes.values()
+            ),
         )
         self._write_jsonl(
-            run_path / "predicted_transitions.jsonl",
-            (transition.to_dict() for transition in run.prediction_dag.transitions.values()),
+            run_path / "plans.jsonl",
+            (
+                {"dag_id": dag.dag_id, "record": plan.to_dict()}
+                for dag, _ in all_dags
+                for plan in dag.plans.values()
+            ),
         )
         self._write_jsonl(
-            run_path / "observed_transitions.jsonl",
-            (transition.to_dict() for transition in run.trace_dag.transitions.values()),
+            run_path / "transitions.jsonl",
+            (
+                {"dag_id": dag.dag_id, "record": tr.to_dict()}
+                for dag, _ in all_dags
+                for tr in dag.transitions.values()
+            ),
         )
-        self._write_jsonl(run_path / "derived_records.jsonl", self._derived_rows(run))
         self._write_jsonl(
-            run_path / "trace_cuts.jsonl",
-            (run.trace_dag.cuts[cid].to_dict() for cid in run.trace_dag.cut_order),
+            run_path / "payloads.jsonl",
+            (
+                {"dag_id": dag.dag_id, "record": payload.to_dict()}
+                for dag, _ in all_dags
+                for payload in dag.payloads.values()
+            ),
+        )
+        self._write_jsonl(
+            run_path / "selections.jsonl",
+            (sel.to_dict() for sel in run.selections.values()),
         )
         return run_path
 
     def load_run(self, run_id: str) -> RunHandle:
-        """Load a run snapshot from a run directory."""
-
         run_path = self.run_path(run_id)
         manifest = self._read_json(run_path / "run.json")
         requirement = _requirement_from_dict(manifest["requirement"])
 
-        trace_dag = TraceDAG(dag_id=manifest["trace_dag"]["dag_id"])
-        prediction_dag = PredictionDAG(
-            dag_id=manifest["prediction_dag"]["dag_id"],
-            anchor_observed_state_id=manifest["prediction_dag"]["anchor_observed_state_id"],
-            root_predicted_state_id=manifest["prediction_dag"]["root_predicted_state_id"],
-            stale=bool(manifest["prediction_dag"].get("stale", False)),
-        )
+        # Build all Dags first.
+        dags: dict[str, Dag] = {}
+        parent_of: dict[str, str | None] = {}
+        for row in self._read_jsonl(run_path / "dags.jsonl"):
+            dag = Dag(dag_id=row["dag_id"], metadata=dict(row.get("metadata") or {}))
+            dags[dag.dag_id] = dag
+            parent_of[dag.dag_id] = row.get("parent_dag_id")
 
-        for row in self._read_jsonl(run_path / "states.jsonl"):
-            node = _state_node_from_dict(row["record"])
-            if row["dag"] == "trace":
-                trace_dag.add_node(node)
-            elif row["dag"] == "prediction":
-                prediction_dag.add_node(node)
-            else:
-                raise ValueError(f"unknown state dag: {row['dag']}")
+        # Wire child relationships.
+        for dag_id, parent_id in parent_of.items():
+            if parent_id is not None and parent_id in dags:
+                dags[parent_id].child_dags[dag_id] = dags[dag_id]
 
-        for row in self._read_jsonl(run_path / "execution_plans.jsonl"):
-            plan = _execution_plan_from_dict(row)
-            trace_dag.add_execution_plan(plan)
+        # Nodes.
+        for row in self._read_jsonl(run_path / "nodes.jsonl"):
+            node = _node_from_dict(row["record"])
+            dags[row["dag_id"]].add_node(node)
 
-        for row in self._read_jsonl(run_path / "prediction_plans.jsonl"):
-            prediction_dag.add_plan(_prediction_plan_from_dict(row))
+        # Plans (need nodes).
+        for row in self._read_jsonl(run_path / "plans.jsonl"):
+            plan = _plan_from_dict(row["record"])
+            dags[row["dag_id"]].add_plan(plan)
 
-        for row in self._read_jsonl(run_path / "predicted_transitions.jsonl"):
-            prediction_dag.add_transition(_predicted_transition_from_dict(row))
+        # Transitions (need nodes + plans). Use raw add (skip cardinality
+        # checks that the writer would otherwise enforce — load is replay).
+        for row in self._read_jsonl(run_path / "transitions.jsonl"):
+            tr = _transition_from_dict(row["record"])
+            dag = dags[row["dag_id"]]
+            dag.transitions[tr.transition_id] = tr
+            dag.transitions_by_plan.setdefault(tr.parent_plan_id, []).append(tr.transition_id)
+            dag.outgoing_index.setdefault(tr.from_node_id, []).append(tr.transition_id)
+            dag.incoming_index.setdefault(tr.to_node_id, []).append(tr.transition_id)
 
-        for row in self._read_jsonl(run_path / "observed_transitions.jsonl"):
-            trace_dag.append_transition(_observed_transition_from_dict(row))
+        # Payloads.
+        for row in self._read_jsonl(run_path / "payloads.jsonl"):
+            payload = payload_from_dict(row["record"])
+            dag = dags[row["dag_id"]]
+            dag.payloads[payload.payload_id] = payload
+            dag.payloads_by_target.setdefault(payload.target_id, []).append(payload.payload_id)
 
-        for row in self._read_jsonl(run_path / "trace_cuts.jsonl"):
-            trace_dag.add_cut(_trace_cut_from_dict(row))
+        # Selections.
+        selections: dict[str, PredictionSelection] = {}
+        for row in self._read_jsonl(run_path / "selections.jsonl"):
+            sel = _selection_from_dict(row)
+            selections[sel.selection_id] = sel
 
+        observed_dag = dags[manifest["observed_dag_id"]]
+        predicted_dag = dags[manifest["predicted_dag_id"]]
         return RunHandle(
             run_id=manifest["run_id"],
             requirement=requirement,
-            trace_dag=trace_dag,
-            prediction_dag=prediction_dag,
+            observed_dag=observed_dag,
+            predicted_dag=predicted_dag,
+            selections=selections,
             _counters={str(k): int(v) for k, v in manifest.get("counters", {}).items()},
         )
-
-    def _state_rows(self, run: RunHandle):
-        for state_id, node in run.trace_dag.nodes.items():
-            yield {
-                "dag": "trace",
-                "state_id": state_id,
-                "record": node.to_dict(),
-            }
-        for state_id, node in run.prediction_dag.nodes.items():
-            yield {
-                "dag": "prediction",
-                "state_id": state_id,
-                "record": node.to_dict(),
-            }
-
-    def _derived_rows(self, run: RunHandle):
-        seen: set[str] = set()
-        for transition in run.trace_dag.transitions.values():
-            for record in transition.derived_records:
-                if record.derived_id not in seen:
-                    seen.add(record.derived_id)
-                    yield record.to_dict()
 
     @staticmethod
     def _write_json(path: Path, data: dict[str, Any]) -> None:
@@ -206,11 +196,17 @@ class JsonlRunStore:
     def _read_jsonl(path: Path) -> list[dict[str, Any]]:
         if not path.exists():
             return []
-        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _walk_dags(dag: Dag, parent_id: str | None = None):
+    yield dag, parent_id
+    for child in dag.child_dags.values():
+        yield from _walk_dags(child, dag.dag_id)
 
 
 def _pick_fields(cls, data: dict[str, Any]) -> dict[str, Any]:
-    names = {field.name for field in fields(cls)}
+    names = {field.name for field in fields(cls) if field.init}
     return {name: data[name] for name in names if name in data}
 
 
@@ -225,133 +221,53 @@ def _tuple(value: Any) -> tuple:
 
 
 def _requirement_from_dict(data: dict[str, Any]) -> Requirement:
-    return Requirement(**_pick_fields(Requirement, data))
-
-
-def _artifact_ref_from_dict(data: dict[str, Any]) -> ArtifactRef:
-    return ArtifactRef(**_pick_fields(ArtifactRef, data))
-
-
-def _finding_ref_from_dict(data: dict[str, Any]) -> FindingRef:
-    return FindingRef(**_pick_fields(FindingRef, data))
-
-
-def _prediction_ref_from_dict(data: dict[str, Any]) -> PredictionRef:
-    return PredictionRef(**_pick_fields(PredictionRef, data))
-
-
-def _budget_from_dict(data: dict[str, Any] | None) -> Budget | None:
-    if data is None:
-        return None
-    return Budget(**_pick_fields(Budget, data))
-
-
-def _snapshot_from_dict(data: dict[str, Any]) -> StateSnapshot:
-    return StateSnapshot(
-        requirement=_requirement_from_dict(data["requirement"]),
-        artifacts=tuple(_artifact_ref_from_dict(item) for item in data.get("artifacts", ())),
-        knowledge=tuple(_finding_ref_from_dict(item) for item in data.get("knowledge", ())),
-        open_questions=_tuple(data.get("open_questions")),
-        active_branches=_tuple(data.get("active_branches")),
-        predictions=tuple(_prediction_ref_from_dict(item) for item in data.get("predictions", ())),
-        budget=_budget_from_dict(data.get("budget")),
-        metadata=dict(data.get("metadata", {})),
+    return Requirement(
+        requirement_id=data["requirement_id"],
+        target_type=data["target_type"],
+        target_id=data["target_id"],
+        objective=dict(data.get("objective") or {}),
+        constraints=dict(data.get("constraints") or {}),
+        metadata=dict(data.get("metadata") or {}),
     )
 
 
-def _state_node_from_dict(data: dict[str, Any]) -> StateNode:
-    return StateNode(
-        state_id=data["state_id"],
-        state_kind=data["state_kind"],
-        snapshot=_snapshot_from_dict(data["snapshot"]),
-        snapshot_hash=data.get("snapshot_hash"),
-        anchor_observed_state_id=data.get("anchor_observed_state_id"),
+def _node_from_dict(data: dict[str, Any]) -> Node:
+    return Node(
+        node_id=data["node_id"],
+        metadata=dict(data.get("metadata") or {}),
+    )
+
+
+def _transition_from_dict(data: dict[str, Any]) -> Transition:
+    return Transition(
+        transition_id=data["transition_id"],
+        parent_plan_id=data["parent_plan_id"],
+        from_node_id=data["from_node_id"],
+        to_node_id=data["to_node_id"],
+        metadata=dict(data.get("metadata") or {}),
+    )
+
+
+def _plan_from_dict(data: dict[str, Any]) -> Plan:
+    return Plan(
+        plan_id=data["plan_id"],
+        grounded_node_id=data["grounded_node_id"],
+        action_type=data["action_type"],
+        intent=data["intent"],
+        inputs=dict(data.get("inputs") or {}),
+        safety_policy=dict(data.get("safety_policy") or {}),
         assumptions=_tuple(data.get("assumptions")),
         confidence=data.get("confidence"),
         status=data.get("status", "active"),
-        metadata=dict(data.get("metadata", {})),
+        metadata=dict(data.get("metadata") or {}),
     )
 
 
-def _execution_plan_from_dict(data: dict[str, Any]) -> ExecutionPlan:
-    return ExecutionPlan(
-        **{
-            **_pick_fields(ExecutionPlan, data),
-            "assumptions": _tuple(data.get("assumptions")),
-            "metadata": dict(data.get("metadata", {})),
-        }
-    )
-
-
-def _prediction_plan_from_dict(data: dict[str, Any]) -> PredictionPlan:
-    return PredictionPlan(
-        **{
-            **_pick_fields(PredictionPlan, data),
-            "assumptions": _tuple(data.get("assumptions")),
-            "metadata": dict(data.get("metadata", {})),
-        }
-    )
-
-
-def _predicted_transition_from_dict(data: dict[str, Any]) -> PredictedTransition:
-    return PredictedTransition(
-        **{
-            **_pick_fields(PredictedTransition, data),
-            "assumptions": _tuple(data.get("assumptions")),
-            "metadata": dict(data.get("metadata", {})),
-        }
-    )
-
-
-def _action_result_from_dict(data: dict[str, Any]) -> ActionResult:
-    return ActionResult(
-        **{
-            **_pick_fields(ActionResult, data),
-            "artifacts": _tuple(data.get("artifacts")),
-            "raw_outputs": _tuple(data.get("raw_outputs")),
-            "logs": _tuple(data.get("logs")),
-            "errors": _tuple(data.get("errors")),
-            "metadata": dict(data.get("metadata", {})),
-        }
-    )
-
-
-def _derived_record_from_dict(data: dict[str, Any]) -> DerivedRecord:
-    return DerivedRecord(
-        **{
-            **_pick_fields(DerivedRecord, data),
-            "metadata": dict(data.get("metadata", {})),
-        }
-    )
-
-
-def _trace_cut_from_dict(data: dict[str, Any]) -> TraceCut:
-    return TraceCut(
-        **{
-            **_pick_fields(TraceCut, data),
-            "metadata": dict(data.get("metadata", {})),
-        }
-    )
-
-
-def _prediction_match_from_dict(data: dict[str, Any] | None) -> PredictionMatch | None:
-    if data is None:
-        return None
-    return PredictionMatch(**_pick_fields(PredictionMatch, data))
-
-
-def _observed_transition_from_dict(data: dict[str, Any]) -> ObservedTransition:
-    return ObservedTransition(
-        transition_id=data["transition_id"],
-        transition_kind=data["transition_kind"],
-        execution_plan_id=data["execution_plan_id"],
-        from_observed_state_id=data["from_observed_state_id"],
-        to_observed_state_id=data["to_observed_state_id"],
-        action_result=_action_result_from_dict(data["action_result"]),
-        matched_predicted_transition_id=data.get("matched_predicted_transition_id"),
-        prediction_match=_prediction_match_from_dict(data.get("prediction_match")),
-        derived_records=tuple(
-            _derived_record_from_dict(item) for item in data.get("derived_records", ())
-        ),
-        metadata=dict(data.get("metadata", {})),
+def _selection_from_dict(data: dict[str, Any]) -> PredictionSelection:
+    return PredictionSelection(
+        selection_id=data["selection_id"],
+        selected_transition_ids=_tuple(data.get("selected_transition_ids")),
+        selected_path_id=data.get("selected_path_id"),
+        reason=data.get("reason", ""),
+        metadata=dict(data.get("metadata") or {}),
     )

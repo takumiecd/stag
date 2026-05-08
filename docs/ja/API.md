@@ -1,20 +1,12 @@
 # API
 
-この文書は、optagent の現在の Python API を説明します。
-
-optagent は、問題解決や最適化の過程を記録するためのライブラリです。
-中心になる操作は、次の 2 つです。
-
-- 未来を予測する: `PredictionDAG`
-- 実際に起きたことを記録する: `TraceDAG`
-
-ユーザーは `RunHandle` を通して、計画を作り、予測し、実行結果を記録し、履歴を辿ります。
+この文書は、現在の Python API を説明します。0.1 alpha では破壊的変更を許容し、旧 API との互換は維持しません。
 
 ## 最小例
 
 ```python
 import optagent
-from optagent import ActionResult, Requirement
+from optagent import Requirement, ResultPayload
 
 requirement = Requirement(
     requirement_id="req_kernel",
@@ -24,80 +16,39 @@ requirement = Requirement(
 
 run = optagent.init(requirement, run_id="demo")
 
-plans = run.plan(from_state_id="s_obs_0000")
-predicted = run.predict(plan_id=plans[0].plan_id, max_outcomes=2)
-
-result = ActionResult(
-    result_id="r_0001",
-    execution_plan_id=plans[0].plan_id,
+plan = run.plan(run.root_observed_node_id, intent="run benchmark")[0]
+result = ResultPayload(
+    payload_id="pending",
+    target_id="pending",
     status="completed",
-    raw_outputs=("raw/profile.txt",),
+    raw_outputs=("raw/bench.txt",),
     metrics={"latency_ms": 1.5},
 )
 
-observed = run.promote(
-    mode="transition",
-    predicted_transition_id=predicted[0].transition_id,
-    execution_plan_id=plans[0].plan_id,
-    action_result=result,
-)
-
-history = run.trace()
+transition = run.observe(plan.plan_id, result)
+history = run.trace(transition.to_node_id)
 ```
 
-この例では、実行前に予測を作り、実行後にその予測と実測結果を対応づけています。
-予測と対応づけずに結果だけ記録したい場合は `run.observe(...)` を使います。
+## Public Dataclasses
 
-## 用語
+主な public model:
 
-### Requirement
+- `Requirement`
+- `Dag`
+- `Node`
+- `Plan`
+- `Transition`
+- `SnapshotPayload`
+- `ResultPayload`
+- `DerivedPayload`
+- `MatchPayload`
+- `CutPayload`
+- `PredictionSelection`
+- `PredictionPath`
+- `StateSnapshot`
+- `TraceContext`
 
-run の目的です。
-何を解きたいのか、何を最適化したいのかを表します。
-
-### ObservedState
-
-実際に観測された状態です。
-`TraceDAG` に保存されます。
-
-### PredictedState
-
-まだ実行していない未来の状態です。
-`PredictionDAG` に保存されます。
-
-### ExecutionPlan
-
-実行可能な計画です。
-observed state から作られ、executor に渡せます。
-
-### PredictionPlan
-
-予測上の計画です。
-predicted state から作られ、未来展開を考えるために使います。
-そのまま executor には渡しません。
-実行したい場合は `promote(mode="plan")` で `ExecutionPlan` に変換します。
-
-### PredictedTransition
-
-plan を実行した場合に起きそうな outcome です。
-1 つの plan から複数作れます。
-
-### ObservedTransition
-
-実際に実行して得た結果です。
-`ExecutionPlan` と `ActionResult` を結びます。
-1 つの `ExecutionPlan` につき、原則 1 つだけ作ります。
-
-### ActionResult
-
-実行後に得られた事実です。
-artifact、raw output、log、metric、error などを持ちます。
-
-### DerivedRecord
-
-事実から作った構造化メモです。
-evidence、decision、finding、summary などを保存できます。
-あとから作り直せる解釈なので、source of truth ではありません。
+`ExecutionPlan` / `PredictionPlan` / `ObservedTransition` / `PredictedTransition` / `ActionResult` / `DerivedRecord` は現行 API では使いません。
 
 ## `optagent.init`
 
@@ -109,51 +60,45 @@ optagent.init(requirement: Requirement, *, run_id: str | None = None) -> RunHand
 
 作られるもの:
 
-- `TraceDAG` の root observed state: `s_obs_0000`
-- `PredictionDAG` の root predicted state: `s_pred_0000`
+- `run.observed_dag`: `metadata["role"] == "observed"`
+- `run.predicted_dag`: `metadata["role"] == "predicted"`
+- observed root node: `run.root_observed_node_id`
+- predicted root node: `run.predicted_dag.metadata["root_node_id"]`
 
-`PredictionDAG` の root は root observed state に anchor されます。core は current observed state を持ちません。
+root node には `SnapshotPayload` が attach されます。
 
-```python
-run = optagent.init(requirement, run_id="demo")
-
-assert run.root_observed_state_id == "s_obs_0000"
-```
-
-## `run.plan` / `run.extend`
-
-plan は observed state、extend は predicted state を起点にした計画を作る、対になったメソッドです。動詞で対象の state kind を区別する設計で、戻り値の型もそれぞれ単一です。
+## `run.plan`
 
 ```python
 run.plan(
-    from_state_id: str,
+    from_node_id: str,
     *,
     planner: str | None = None,
     max_plans: int | None = None,
-) -> list[ExecutionPlan]
-
-run.extend(
-    state_id: str,
-    *,
-    planner: str | None = None,
-    max_plans: int | None = None,
-) -> list[PredictionPlan]
+    action_type: str = "analysis",
+    intent: str | None = None,
+    inputs: dict[str, JSONValue] | None = None,
+    user_id: str | None = None,
+) -> list[Plan]
 ```
 
-- `run.plan` は observed state から `ExecutionPlan` を作ります。`from_state_id` は必須です。observed でない state を渡すと `KeyError` になります。
-- `run.extend` は predicted state から `PredictionPlan` を作ります。predicted には current の概念がないため `state_id` は必須で、predicted でない state を渡すと `KeyError` になります。
+observed Dag の node に grounded された plan を作ります。cut 済み subtree の node を渡すと `ValueError` です。
+
+## `run.extend`
 
 ```python
-plans = run.plan(from_state_id="s_obs_0000")
-assert plans[0].plan_kind == "execution"
-
-root_id = run.prediction_dag.root_predicted_state_id
-future_plans = run.extend(state_id=root_id)
-assert future_plans[0].plan_kind == "prediction"
+run.extend(
+    node_id: str,
+    *,
+    planner: str | None = None,
+    max_plans: int | None = None,
+    action_type: str = "analysis",
+    intent: str | None = None,
+    inputs: dict[str, JSONValue] | None = None,
+) -> list[Plan]
 ```
 
-現在の実装では、planner はまだ最小の placeholder です。
-本格的な planner は domain や workflow 側で差し替える予定です。
+predicted Dag の node に grounded された plan を作ります。
 
 ## `run.predict`
 
@@ -163,44 +108,27 @@ run.predict(
     *,
     predictor: str | None = None,
     max_outcomes: int | None = None,
-) -> list[PredictedTransition]
+) -> list[Transition]
 ```
 
-plan を実行した場合に起きそうな outcome を作り、`PredictionDAG` を展開します。
+predicted Dag の plan から predicted transition を作ります。各 transition には `ResultPayload` が attach されます。
 
-`ExecutionPlan` に対して呼ぶと、現在の observed state から見た次の未来を予測します。
-`PredictionPlan` に対して呼ぶと、さらに先の未来を予測します。
-
-1 つの plan から複数の outcome を作れます。
+## `run.observe`
 
 ```python
-predicted = run.predict(plans[0].plan_id, max_outcomes=3)
-assert len(predicted) == 3
-```
-
-## `run.select_prediction`
-
-```python
-run.select_prediction(
+run.observe(
+    plan_id: str,
+    result: ResultPayload,
     *,
-    predicted_transition_id: str | None = None,
-    predicted_transition_ids: list[str] | None = None,
-    to_predicted_state_id: str | None = None,
-    reason: str = "",
-) -> PredictionSelection
+    user_id: str | None = None,
+) -> Transition
 ```
 
-複数の予測 outcome の中から、注目するものを選びます。
+observed Dag の plan に対して実行結果を記録します。新しい observed node と transition を追加し、渡した `ResultPayload` の内容を新 transition に attach します。
 
-この関数は実行履歴を変更しません。
-あとで `promote` するときに、どの予測を現実に対応させたのかを明示するために使います。
+1 つの observed plan から transition は 1 つだけ作れます。同じ操作を再実行する場合は新しい plan を作ります。
 
-```python
-selection = run.select_prediction(
-    predicted_transition_id=predicted[0].transition_id,
-    reason="small shape speedup is the most relevant outcome",
-)
-```
+`run.result(...)` は `run.observe(...)` の alias です。
 
 ## `run.promote(mode="plan")`
 
@@ -210,26 +138,12 @@ run.promote(
     mode="plan",
     prediction_plan_id: str | None = None,
     prediction_path: PredictionPath | None = None,
-    to_observed_state_id: str,
-) -> list[ExecutionPlan]
+    to_observed_node_id: str,
+    user_id: str | None = None,
+) -> list[Plan]
 ```
 
-`PredictionDAG` 内の plan を、実行可能な `ExecutionPlan` に変換します。
-
-`PredictionPlan` は予測上の計画なので、そのまま executor に渡しません。
-実行したい場合は、明示した observed state に接地して `ExecutionPlan` を作ります。
-
-```python
-promoted = run.promote(
-    mode="plan",
-    prediction_plan_id=future_plans[0].plan_id,
-    to_observed_state_id="s_obs_0000",
-)
-
-assert promoted[0].plan_kind == "execution"
-```
-
-複数 step の予測 path をまとめて実行計画にしたい場合は `PredictionPath` を渡します。
+predicted Dag の plan を observed Dag の node に grounded し直します。
 
 ## `run.promote(mode="transition")`
 
@@ -238,57 +152,30 @@ run.promote(
     *,
     mode="transition",
     predicted_transition_id: str,
-    action_result: ActionResult,
-    execution_plan_id: str,
-    derived_records: list[DerivedRecord] | None = None,
-) -> ObservedTransition
+    result: ResultPayload,
+    plan_id: str,
+    user_id: str | None = None,
+) -> Transition
 ```
 
-予測 outcome と実測結果を対応づけて、`TraceDAG` に `ObservedTransition` を追加します。
+predicted transition と observed transition を対応づけて記録します。observed transition には `ResultPayload` と `MatchPayload` が attach されます。
 
-使う場面:
-
-- 実行前に `run.predict(...)` していた
-- 実行後に「どの予測 outcome に近かったか」を保存したい
+## `run.derive`
 
 ```python
-observed = run.promote(
-    mode="transition",
-    predicted_transition_id=predicted[0].transition_id,
-    execution_plan_id=plans[0].plan_id,
-    action_result=result,
-)
-```
-
-`execution_plan_id` は必須です。どの実行計画と対応づけるかを current から推論しません。
-
-## `run.observe`
-
-```python
-run.observe(
-    execution_plan_id: str,
-    action_result: ActionResult,
+run.derive(
+    transition_id: str,
+    derived_type: DerivedType,
+    payload: dict[str, JSONValue],
     *,
-    derived_records: list[DerivedRecord] | None = None,
-) -> ObservedTransition
+    payload_id: str | None = None,
+    generator: str = "default",
+    confidence: float | None = None,
+    user_id: str | None = None,
+) -> DerivedPayload
 ```
 
-予測と対応づけずに、実行結果だけを `TraceDAG` に記録します。
-
-使う場面:
-
-- まず事実だけを保存したい
-- 実行前に予測を作っていない
-- 予測との対応は後で別の derived record として扱いたい
-
-```python
-observed = run.observe(
-    execution_plan_id=plans[0].plan_id,
-    action_result=result,
-)
-```
-
-`run.result(...)` は `run.observe(...)` の alias です。
+observed transition に derived payload を attach します。
 
 ## `run.rewind`
 
@@ -296,62 +183,27 @@ observed = run.observe(
 run.rewind(
     transition_id: str,
     *,
-    from_state_id: str,
+    from_node_id: str,
     reason: str | None = None,
-) -> TraceCut
+    user_id: str | None = None,
+) -> CutPayload
 ```
 
-指定した observed transition を cut します。戻り値は append された `TraceCut` レコードで、cut の起点は `cut.rewound_to_state_id` で取れます。core に current observed state はないため、rewind は pointer を移動しません。
-
-`rewind` は **既存レコードを変更しません**。state / transition / plan / result はすべて TraceDAG に残り、TraceDAG に **1本の `TraceCut` レコードが append** されるだけです。`TraceCut` は「どの transition を cut したか」を名指す最小レコードで、下流の cut 集合は read-time に `trace_dag.cut_state_ids()` / `cut_transition_ids()` で導出します。この append-only な記録によって、cut されたことを知らない読み手にも「この枝は cut 済み」が見えるようになります。
-
-cut 後に別枝を伸ばす場合は、caller が active な observed state を明示して `plan(from_state_id=...)` や `promote(..., to_observed_state_id=...)` を呼びます。新しい transition は別 ID なので自動で active です。
-
-`transition_id` は `from_state_id` から `incoming_index` を後ろ向きに辿って到達できる必要があります（active path 上のみ）。それ以外は `ValueError`、既に cut 済みの transition も `ValueError` です。
-
-cut 後、PredictionDAG は自動 refresh されません。必要なら caller が `run.refresh(from_state_id=cut.rewound_to_state_id)` を明示的に呼びます。
-
-```python
-s0 = run.root_observed_state_id
-plan = run.plan(from_state_id=s0)[0]
-observed = run.observe(plan.plan_id, ActionResult(...))
-
-cut = run.rewind(
-    observed.transition_id,
-    from_state_id=observed.to_observed_state_id,
-    reason="wrong observe",
-)
-assert cut.cut_transition_id == observed.transition_id
-assert cut.rewound_to_state_id == s0
-# trace_dag は何も消えていない
-assert observed.transition_id in run.trace_dag.transitions
-assert observed.transition_id in run.trace_dag.cut_transition_ids()
-```
+observed transition に `CutPayload` を attach します。既存レコードは削除しません。`transition_id` は `from_node_id` から active path を後ろ向きに辿って到達できる必要があります。
 
 ## `run.refresh`
 
 ```python
-run.refresh(
-    *,
-    from_state_id: str,
-) -> PredictionDAG
+run.refresh(*, from_node_id: str) -> Dag
 ```
 
-`PredictionDAG` を observed state から作り直します。
-
-実行結果を記録したあと、別の observed state を anchor にしたい場合は、必要に応じて `refresh` を明示的に呼びます。
-
-```python
-run.refresh(from_state_id=observed.to_observed_state_id)
-
-assert run.prediction_dag.anchor_observed_state_id == observed.to_observed_state_id
-```
+predicted Dag を、指定した observed node の snapshot を anchor にして作り直します。古い predicted Dag は `observed_dag.child_dags` から外されます。
 
 ## `run.trace`
 
 ```python
 run.trace(
-    state_id: str,
+    node_id: str,
     *,
     depth: int | None = None,
     include_derived: bool = True,
@@ -359,63 +211,19 @@ run.trace(
 ) -> TraceContext
 ```
 
-observed state から過去の実行履歴を辿ります。
+observed node から過去の transition を辿ります。`run.history(...)` は alias です。
 
-返るもの:
-
-- 過去の state id
-- observed transition id
-- execution plan id
-- action result id
-- 対応した predicted transition id
-- derived record id
-- artifact / raw output / log の参照
+## State Snapshot Helpers
 
 ```python
-history = run.trace(state_id=observed.to_observed_state_id, depth=3)
-
-print(history.observed_transition_ids)
-print(history.artifact_refs)
+run.state_show(node_id) -> SnapshotPayload
+run.state_update(..., node_id=...) -> SnapshotPayload
+run.snapshot_rebuild(node_id) -> SnapshotPayload
 ```
 
-`run.history(...)` は `run.trace(...)` の alias です。
+`state_update` は node に新しい `SnapshotPayload` を追加します。既存 payload は上書きしません。
 
-## 不変条件
-
-optagent の API は、次のルールを守ります。
-
-- `PredictionPlan` は直接実行しない
-- 実行する前に `ExecutionPlan` にする
-- `ExecutionPlan` は `ActionResult` を持たない
-- 実行結果は `ObservedTransition` に保存する
-- `PredictedTransition` は実測結果を持たない
-- 1 つの plan から複数の `PredictedTransition` を作れる
-- 1 つの `ExecutionPlan` につき `ObservedTransition` は原則 1 つ
-- `TraceDAG` は実際に起きたことの履歴として扱う
-
-## 現在の実装範囲
-
-現在の API は in-memory 実装です。
-
-実装済み:
-
-- run の作成
-- plan の作成
-- prediction の作成
-- prediction の選択
-- prediction plan の execution plan への変換
-- action result の記録
-- trace の取得
-- prediction DAG の refresh
-
-未実装または今後追加するもの:
-
-- 実用的な planner / predictor
-- executor との統合
-- domain-specific workflow
-- CLI command
-
-## `JsonlRunStore`
+## Storage
 
 ```python
 from optagent.storage import JsonlRunStore
@@ -425,16 +233,14 @@ run.save(store)
 loaded = store.load_run("demo")
 ```
 
-`JsonlRunStore` は、run をディレクトリとして保存します。
-
-保存される主なファイル:
+保存されるファイル:
 
 - `run.json`
-- `states.jsonl`
-- `execution_plans.jsonl`
-- `prediction_plans.jsonl`
-- `predicted_transitions.jsonl`
-- `observed_transitions.jsonl`
-- `derived_records.jsonl`
+- `dags.jsonl`
+- `nodes.jsonl`
+- `plans.jsonl`
+- `transitions.jsonl`
+- `payloads.jsonl`
+- `selections.jsonl`
 
-保存形式は、人間と AI が読みやすいことを優先しています。
+0.1 alpha では旧 storage schema の読み込み互換はありません。

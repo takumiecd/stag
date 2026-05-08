@@ -1,18 +1,13 @@
-"""RunHandle.promote implementation."""
+"""RunHandle.promote and shared observed-transition append helper."""
 
 from __future__ import annotations
 
 from typing import Literal
 
-from optagent.core.schema.derived import DerivedRecord
-from optagent.core.schema.plans import ExecutionPlan, PredictionPlan
-from optagent.core.schema.results import ActionResult
-from optagent.core.schema.state import StateNode
-from optagent.core.schema.transitions import (
-    ObservedTransition,
-    PredictionMatch,
-    PredictionPath,
-)
+from optagent.core.schema.graph import Transition
+from optagent.core.schema.payloads import MatchPayload, ResultPayload
+from optagent.core.schema.plans import Plan
+from optagent.core.schema.selections import PredictionPath
 
 
 def promote_impl(
@@ -21,36 +16,34 @@ def promote_impl(
     mode: Literal["plan", "transition"],
     prediction_plan_id: str | None = None,
     prediction_path: PredictionPath | None = None,
-    to_observed_state_id: str | None = None,
+    to_observed_node_id: str | None = None,
     predicted_transition_id: str | None = None,
-    action_result: ActionResult | None = None,
-    execution_plan_id: str | None = None,
-    derived_records: list[DerivedRecord] | None = None,
+    result: ResultPayload | None = None,
+    plan_id: str | None = None,
     user_id: str | None = None,
-) -> list[ExecutionPlan] | ObservedTransition:
-    """Promote prediction-side records into trace-side grounded records."""
+) -> list[Plan] | Transition:
+    """Promote prediction-side records into observed-side grounded records."""
 
     if mode == "plan":
-        if to_observed_state_id is None:
-            raise ValueError("promote(mode='plan') requires to_observed_state_id")
+        if to_observed_node_id is None:
+            raise ValueError("promote(mode='plan') requires to_observed_node_id")
         return _promote_plan(
             self,
             prediction_plan_id,
             prediction_path,
-            to_observed_state_id,
+            to_observed_node_id,
             user_id=user_id,
         )
     if mode == "transition":
-        if predicted_transition_id is None or action_result is None:
+        if predicted_transition_id is None or result is None:
             raise ValueError(
-                "promote(mode='transition') requires predicted_transition_id and action_result"
+                "promote(mode='transition') requires predicted_transition_id and result"
             )
         return _promote_transition(
             self,
             predicted_transition_id=predicted_transition_id,
-            action_result=action_result,
-            execution_plan_id=execution_plan_id,
-            derived_records=derived_records or [],
+            result=result,
+            plan_id=plan_id,
             user_id=user_id,
         )
     raise ValueError(f"unsupported promote mode: {mode}")
@@ -60,11 +53,11 @@ def _promote_plan(
     self,
     prediction_plan_id: str | None,
     prediction_path: PredictionPath | None,
-    to_observed_state_id: str,
+    to_observed_node_id: str,
     *,
     user_id: str | None = None,
-) -> list[ExecutionPlan]:
-    self._ensure_active_observed_state(to_observed_state_id)
+) -> list[Plan]:
+    self._ensure_active_observed_node(to_observed_node_id)
 
     plan_ids: list[str] = []
     selected_by_plan: dict[str, str] = {}
@@ -72,38 +65,37 @@ def _promote_plan(
     if prediction_path is not None:
         source_path_id = prediction_path.path_id
         for step in prediction_path.steps:
-            plan_ids.append(step.prediction_plan_id)
-            selected_by_plan[step.prediction_plan_id] = step.selected_predicted_transition_id
+            plan_ids.append(step.plan_id)
+            selected_by_plan[step.plan_id] = step.selected_transition_id
     if prediction_plan_id is not None:
         plan_ids.append(prediction_plan_id)
     if not plan_ids:
         raise ValueError("promote(mode='plan') requires prediction_plan_id or prediction_path")
 
-    promoted: list[ExecutionPlan] = []
-    for plan_id in plan_ids:
-        source_plan = self.prediction_dag.plans.get(plan_id)
-        if not isinstance(source_plan, PredictionPlan):
-            raise KeyError(f"unknown prediction_plan_id: {plan_id}")
-        execution_plan = ExecutionPlan(
-            plan_id=self._next_id("p_exec"),
-            plan_kind="execution",
-            from_observed_state_id=to_observed_state_id,
-            action_type=source_plan.action_type,
-            intent=source_plan.intent,
-            inputs=dict(source_plan.inputs),
-            safety_policy=dict(source_plan.safety_policy),
-            assumptions=tuple(source_plan.assumptions),
+    promoted: list[Plan] = []
+    for pid in plan_ids:
+        source = self.predicted_dag.plans.get(pid)
+        if source is None:
+            raise KeyError(f"unknown predicted plan_id: {pid}")
+        new_plan = Plan(
+            plan_id=self._next_id("plan"),
+            grounded_node_id=to_observed_node_id,
+            action_type=source.action_type,
+            intent=source.intent,
+            inputs=dict(source.inputs),
+            safety_policy=dict(source.safety_policy),
+            assumptions=tuple(source.assumptions),
             metadata={
-                **source_plan.metadata,
-                "source_prediction_plan_id": source_plan.plan_id,
+                **source.metadata,
+                "source_predicted_plan_id": source.plan_id,
                 "source_prediction_path_id": source_path_id,
-                "selected_predicted_transition_id": selected_by_plan.get(plan_id),
+                "selected_predicted_transition_id": selected_by_plan.get(pid),
                 "promotion_id": self._next_id("promotion"),
                 **({"user_id": user_id} if user_id is not None else {}),
             },
         )
-        self.trace_dag.add_execution_plan(execution_plan)
-        promoted.append(execution_plan)
+        self.observed_dag.add_plan(new_plan)
+        promoted.append(new_plan)
     return promoted
 
 
@@ -111,32 +103,25 @@ def _promote_transition(
     self,
     *,
     predicted_transition_id: str,
-    action_result: ActionResult,
-    execution_plan_id: str | None,
-    derived_records: list[DerivedRecord],
+    result: ResultPayload,
+    plan_id: str | None,
     user_id: str | None,
-) -> ObservedTransition:
-    predicted_transition = self.prediction_dag.transitions.get(predicted_transition_id)
+) -> Transition:
+    predicted_transition = self.predicted_dag.transitions.get(predicted_transition_id)
     if predicted_transition is None:
         raise KeyError(f"unknown predicted_transition_id: {predicted_transition_id}")
-    if execution_plan_id is None:
-        raise ValueError("promote(mode='transition') requires execution_plan_id")
-    execution_plan = self.trace_dag.execution_plans.get(execution_plan_id)
-    if execution_plan is None:
-        raise KeyError(f"unknown execution_plan_id: {execution_plan_id}")
-    if action_result.execution_plan_id != execution_plan.plan_id:
-        raise ValueError("ActionResult.execution_plan_id must match the ExecutionPlan")
+    if plan_id is None:
+        raise ValueError("promote(mode='transition') requires plan_id")
+    plan = self.observed_dag.plans.get(plan_id)
+    if plan is None:
+        raise KeyError(f"unknown observed plan_id: {plan_id}")
     return _append_observed_transition(
         self,
-        plan=execution_plan,
-        action_result=action_result,
+        plan=plan,
+        result=result,
         matched_predicted_transition_id=predicted_transition.transition_id,
-        prediction_match=PredictionMatch(
-            matched_predicted_transition_id=predicted_transition.transition_id,
-            match_status="compatible",
-            prediction_error={},
-        ),
-        derived_records=derived_records,
+        match_status="compatible",
+        prediction_error={},
         user_id=user_id,
     )
 
@@ -144,35 +129,56 @@ def _promote_transition(
 def _append_observed_transition(
     self,
     *,
-    plan: ExecutionPlan,
-    action_result: ActionResult,
+    plan: Plan,
+    result: ResultPayload,
     matched_predicted_transition_id: str | None,
-    prediction_match: PredictionMatch | None,
-    derived_records: list[DerivedRecord],
+    match_status: str | None,
+    prediction_error: dict | None,
     user_id: str | None = None,
-) -> ObservedTransition:
-    # Reject any plan whose source state has been cut. Plans created
-    # before a rewind can still be looked up by id, but the branch
-    # they belong to is no longer active.
-    self._ensure_active_observed_state(plan.from_observed_state_id)
-    next_state = StateNode(
-        state_id=self._next_id("s_obs"),
-        state_kind="observed",
-        snapshot=self.trace_dag.nodes[plan.from_observed_state_id].snapshot,
-        snapshot_hash=self.trace_dag.nodes[plan.from_observed_state_id].snapshot_hash,
+) -> Transition:
+    """Append a transition to the observed Dag, enforcing 1-plan-1-transition."""
+    self._ensure_active_observed_node(plan.grounded_node_id)
+    if self.observed_dag.transition_ids_for_plan(plan.plan_id):
+        raise ValueError(
+            "an observed plan can have only one transition; "
+            "create a new plan to rerun the same operation"
+        )
+    snap_payload = self._get_node_snapshot_payload(self.observed_dag, plan.grounded_node_id)
+    next_node = self._new_node_with_snapshot(
+        self.observed_dag,
+        snapshot=snap_payload.snapshot,
+        snapshot_hash=snap_payload.snapshot_hash,
     )
-    self.trace_dag.add_node(next_state)
-    transition = ObservedTransition(
-        transition_id=self._next_id("t_obs"),
-        transition_kind="observed",
-        execution_plan_id=plan.plan_id,
-        from_observed_state_id=plan.from_observed_state_id,
-        to_observed_state_id=next_state.state_id,
-        action_result=action_result,
-        matched_predicted_transition_id=matched_predicted_transition_id,
-        prediction_match=prediction_match,
-        derived_records=tuple(derived_records),
+    transition = Transition(
+        transition_id=self._next_id("t"),
+        parent_plan_id=plan.plan_id,
+        from_node_id=plan.grounded_node_id,
+        to_node_id=next_node.node_id,
         metadata={"user_id": user_id} if user_id is not None else {},
     )
-    self.trace_dag.append_transition(transition)
+    self.observed_dag.add_transition(transition)
+    # Re-attach the result payload pointing at the new transition.
+    result_payload = ResultPayload(
+        payload_id=self._next_id("pl"),
+        target_id=transition.transition_id,
+        status=result.status,
+        artifacts=result.artifacts,
+        raw_outputs=result.raw_outputs,
+        logs=result.logs,
+        metrics=dict(result.metrics),
+        errors=result.errors,
+        actual_cost=dict(result.actual_cost),
+        metadata=dict(result.metadata),
+    )
+    self.observed_dag.attach_payload(result_payload)
+    if matched_predicted_transition_id is not None:
+        self.observed_dag.attach_payload(
+            MatchPayload(
+                payload_id=self._next_id("pl"),
+                target_id=transition.transition_id,
+                matched_transition_id=matched_predicted_transition_id,
+                match_status=match_status or "compatible",  # type: ignore[arg-type]
+                prediction_error=dict(prediction_error or {}),
+            )
+        )
     return transition

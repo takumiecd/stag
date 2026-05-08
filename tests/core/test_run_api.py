@@ -1,152 +1,138 @@
-import optagent
+"""Tests for the RunHandle public verbs."""
+
+from __future__ import annotations
+
 import pytest
-from optagent.core import (
-    ActionResult,
-    DerivedRecord,
-    ExecutionPlan,
-    PredictionPath,
-    PredictionStepRef,
-    Requirement,
+
+from optagent import init
+from optagent.core.cuts import is_cut_transition
+from optagent.core.schema.payloads import (
+    CutPayload,
+    DerivedPayload,
+    MatchPayload,
+    ResultPayload,
+    SnapshotPayload,
 )
+from optagent.core.schema.requirements import Requirement
 
 
-def _requirement() -> Requirement:
-    return Requirement(
-        requirement_id="req_kernel",
-        target_type="kernel",
-        target_id="csc_linear",
-    )
+def _req() -> Requirement:
+    return Requirement(requirement_id="r", target_type="task", target_id="t")
 
 
-def test_init_creates_trace_and_prediction_roots():
-    run = optagent.init(_requirement(), run_id="run_test")
-
-    assert run.run_id == "run_test"
-    assert run.root_observed_state_id == "s_obs_0000"
-    assert run.trace_dag.observed_root_ids() == ("s_obs_0000",)
-    assert run.prediction_dag.root_predicted_state_id == "s_pred_0000"
-
-    prediction_root = run.prediction_dag.nodes[run.prediction_dag.root_predicted_state_id]
-    assert prediction_root.state_kind == "predicted"
-    assert prediction_root.anchor_observed_state_id == "s_obs_0000"
-    assert prediction_root.snapshot_hash == run.trace_dag.nodes["s_obs_0000"].snapshot_hash
+def test_init_seeds_two_dags_with_root_snapshots():
+    run = init(_req(), run_id="t_init")
+    assert run.observed_dag.metadata["role"] == "observed"
+    assert run.predicted_dag.metadata["role"] == "predicted"
+    assert run.predicted_dag.dag_id in run.observed_dag.child_dags
+    obs_root = run.root_observed_node_id
+    snap = run._get_node_snapshot_payload(run.observed_dag, obs_root)
+    assert snap.snapshot.requirement.requirement_id == "r"
 
 
-def test_plan_predict_promote_transition_refresh_loop():
-    run = optagent.init(_requirement(), run_id="run_test")
-
-    plans = run.plan(from_state_id="s_obs_0000")
+def test_plan_creates_observed_plan():
+    run = init(_req(), run_id="t_plan")
+    plans = run.plan(run.root_observed_node_id, intent="x")
     assert len(plans) == 1
-    assert isinstance(plans[0], ExecutionPlan)
-    assert plans[0].plan_kind == "execution"
+    assert plans[0].plan_id in run.observed_dag.plans
 
-    predicted = run.predict(plans[0].plan_id, max_outcomes=2)
-    assert [transition.parent_plan_id for transition in predicted] == [
-        plans[0].plan_id,
-        plans[0].plan_id,
-    ]
-    selection = run.select_prediction(predicted_transition_id=predicted[1].transition_id)
-    assert selection.selected_transition_ids == (predicted[1].transition_id,)
 
-    result = ActionResult(
-        result_id="r_0001",
-        execution_plan_id=plans[0].plan_id,
-        status="completed",
-        raw_outputs=("raw/profile.txt",),
-        metrics={"latency_ms": 1.5},
-    )
-    derived = DerivedRecord(
-        derived_id="d_0001",
-        source_transition_id="t_obs_0001",
-        derived_type="observation",
-        payload={"summary": "profile completed"},
-        generator="test",
-    )
-    observed = run.promote(
+def test_observe_appends_transition_with_result_payload():
+    run = init(_req(), run_id="t_obs")
+    plan = run.plan(run.root_observed_node_id)[0]
+    result = ResultPayload(payload_id="x", target_id="x", status="completed", metrics={"a": 1.0})
+    tr = run.observe(plan.plan_id, result)
+    assert tr.parent_plan_id == plan.plan_id
+    payloads = run.observed_dag.payloads_for(tr.transition_id)
+    assert any(isinstance(p, ResultPayload) for p in payloads)
+
+
+def test_observe_enforces_one_transition_per_plan():
+    run = init(_req(), run_id="t_card")
+    plan = run.plan(run.root_observed_node_id)[0]
+    result = ResultPayload(payload_id="x", target_id="x", status="completed")
+    run.observe(plan.plan_id, result)
+    with pytest.raises(ValueError):
+        run.observe(plan.plan_id, result)
+
+
+def test_predict_creates_multiple_predicted_transitions_for_one_plan():
+    run = init(_req(), run_id="t_pred")
+    pred_root = run.predicted_dag.metadata["root_node_id"]
+    plans = run.extend(pred_root, intent="x")
+    transitions = run.predict(plans[0].plan_id, max_outcomes=3)
+    assert len(transitions) == 3
+    assert all(t.parent_plan_id == plans[0].plan_id for t in transitions)
+
+
+def test_promote_transition_attaches_match_payload():
+    run = init(_req(), run_id="t_prom")
+    pred_root = run.predicted_dag.metadata["root_node_id"]
+    pplans = run.extend(pred_root)
+    pred_trs = run.predict(pplans[0].plan_id, max_outcomes=1)
+    obs_plan = run.plan(run.root_observed_node_id)[0]
+    result = ResultPayload(payload_id="x", target_id="x", status="completed")
+    tr = run.promote(
         mode="transition",
-        predicted_transition_id=predicted[1].transition_id,
-        action_result=result,
-        execution_plan_id=plans[0].plan_id,
-        derived_records=[derived],
+        predicted_transition_id=pred_trs[0].transition_id,
+        result=result,
+        plan_id=obs_plan.plan_id,
     )
-
-    assert observed.matched_predicted_transition_id == predicted[1].transition_id
-    context = run.trace(
-        state_id=observed.to_observed_state_id,
-        include_derived=True,
-        include_raw_refs=True,
-    )
-    assert context.observed_transition_ids == (observed.transition_id,)
-    assert context.action_result_ids == ("r_0001",)
-    assert context.derived_record_ids == ("d_0001",)
-    assert context.artifact_refs == ("raw/profile.txt",)
-
-    refreshed = run.refresh(from_state_id=observed.to_observed_state_id)
-    root = refreshed.nodes[refreshed.root_predicted_state_id]
-    assert refreshed.anchor_observed_state_id == observed.to_observed_state_id
-    assert root.snapshot_hash == run.trace_dag.nodes[observed.to_observed_state_id].snapshot_hash
+    payloads = run.observed_dag.payloads_for(tr.transition_id)
+    assert any(isinstance(p, MatchPayload) for p in payloads)
 
 
-def test_prediction_plan_path_promotes_to_execution_plan():
-    run = optagent.init(_requirement(), run_id="run_test")
-    root_id = run.prediction_dag.root_predicted_state_id
-
-    prediction_plan = run.extend(state_id=root_id)[0]
-    predicted = run.predict(prediction_plan.plan_id)[0]
-    path = PredictionPath(
-        path_id="path_pred_0001",
-        anchor_observed_state_id="s_obs_0000",
-        steps=(
-            PredictionStepRef(
-                prediction_plan_id=prediction_plan.plan_id,
-                selected_predicted_transition_id=predicted.transition_id,
-                from_predicted_state_id=predicted.from_state_id,
-                to_predicted_state_id=predicted.to_predicted_state_id,
-            ),
-        ),
-    )
-
-    promoted = run.promote(
-        mode="plan",
-        prediction_path=path,
-        to_observed_state_id="s_obs_0000",
-    )
-
-    assert len(promoted) == 1
-    assert promoted[0].plan_kind == "execution"
-    assert promoted[0].from_observed_state_id == "s_obs_0000"
-    assert promoted[0].metadata["source_prediction_plan_id"] == prediction_plan.plan_id
-    assert promoted[0].metadata["selected_predicted_transition_id"] == predicted.transition_id
+def test_derive_attaches_derived_payload():
+    run = init(_req(), run_id="t_der")
+    plan = run.plan(run.root_observed_node_id)[0]
+    result = ResultPayload(payload_id="x", target_id="x", status="completed")
+    tr = run.observe(plan.plan_id, result)
+    record = run.derive(tr.transition_id, "finding", {"text": "hi"})
+    assert isinstance(record, DerivedPayload)
+    assert record.target_id == tr.transition_id
 
 
-def test_observe_records_result_without_prediction_match():
-    run = optagent.init(_requirement(), run_id="run_test")
-    plan = run.plan(from_state_id="s_obs_0000")[0]
-    assert isinstance(plan, ExecutionPlan)
-    result = ActionResult(
-        result_id="r_0001",
-        execution_plan_id=plan.plan_id,
-        status="completed",
-    )
-
-    observed = run.observe(plan.plan_id, result)
-
-    assert observed.matched_predicted_transition_id is None
-    assert observed.prediction_match is None
-    assert run.history(state_id=observed.to_observed_state_id).execution_plan_ids == (
-        plan.plan_id,
-    )
+def test_rewind_attaches_cut_payload_and_blocks_active_path_writes():
+    run = init(_req(), run_id="t_rew")
+    plan = run.plan(run.root_observed_node_id)[0]
+    result = ResultPayload(payload_id="x", target_id="x", status="completed")
+    tr = run.observe(plan.plan_id, result)
+    cut = run.rewind(tr.transition_id, from_node_id=tr.to_node_id, reason="x")
+    assert isinstance(cut, CutPayload)
+    assert is_cut_transition(run.observed_dag, tr.transition_id)
+    # the rewound-away node is cut, can't grow from it
+    with pytest.raises(ValueError):
+        run.plan(tr.to_node_id)
 
 
-def test_promote_transition_requires_execution_plan():
-    run = optagent.init(_requirement(), run_id="run_test")
-    prediction_plan = run.extend(state_id=run.prediction_dag.root_predicted_state_id)[0]
-    predicted = run.predict(prediction_plan.plan_id)[0]
-    result = ActionResult(result_id="r_0001", execution_plan_id="", status="completed")
+def test_refresh_replaces_predicted_dag():
+    run = init(_req(), run_id="t_ref")
+    old_id = run.predicted_dag.dag_id
+    new_dag = run.refresh(from_node_id=run.root_observed_node_id)
+    assert new_dag.dag_id != old_id
+    assert run.predicted_dag is new_dag
+    assert old_id not in run.observed_dag.child_dags
 
-    with pytest.raises(ValueError, match="execution_plan_id"):
-        run.promote(
-            mode="transition",
-            predicted_transition_id=predicted.transition_id,
-            action_result=result,
-        )
+
+def test_state_show_returns_snapshot_payload():
+    run = init(_req(), run_id="t_show")
+    snap = run.state_show(run.root_observed_node_id)
+    assert isinstance(snap, SnapshotPayload)
+
+
+def test_state_update_appends_new_snapshot_payload():
+    run = init(_req(), run_id="t_upd")
+    before = len(run.observed_dag.payloads_for(run.root_observed_node_id))
+    run.state_update(node_id=run.root_observed_node_id, add_open_question=["why?"])
+    after = len(run.observed_dag.payloads_for(run.root_observed_node_id))
+    assert after == before + 1
+
+
+def test_select_prediction_records_selection():
+    run = init(_req(), run_id="t_sel")
+    pred_root = run.predicted_dag.metadata["root_node_id"]
+    pplans = run.extend(pred_root)
+    pred_trs = run.predict(pplans[0].plan_id, max_outcomes=2)
+    sel = run.select_prediction(predicted_transition_ids=[t.transition_id for t in pred_trs])
+    assert sel.selection_id in run.selections
+    assert len(sel.selected_transition_ids) == 2

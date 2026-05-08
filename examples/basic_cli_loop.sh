@@ -1,81 +1,94 @@
 #!/usr/bin/env bash
-# Basic CLI loop example for optagent.
+# Basic CLI loop example for optagent 0.1 alpha.
 #
-# This script demonstrates a full cycle of the optagent CLI:
-#   init → plan → predict → observe → show → trace → refresh → list
-#
-# Usage:
-#   chmod +x examples/basic_cli_loop.sh
-#   ./examples/basic_cli_loop.sh
+# Demonstrates:
+#   init -> plan -> observe -> derive -> trace -> extend -> predict -> refresh -> show -> list
 
 set -euo pipefail
 
-# Use the source tree directly
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH=src
 
 RUN_ID="demo_loop"
-STORE_DIR=".optagent/runs"
+STORE_DIR="${STORE_DIR:-/tmp/optagent_demo_runs}"
+
+rm -rf "$STORE_DIR/$RUN_ID"
 
 echo "=== 1. init ==="
-# init seeds the current run, so subsequent commands can omit --run.
 python3 -m optagent.cli.main init \
   "req_optimize_kernel" \
-  --target-type "code" \
+  --target-type "kernel" \
   --target-id "matmul_v1" \
   --run-id "$RUN_ID" \
   --store-dir "$STORE_DIR"
 
 echo ""
-echo "=== 2. plan ==="
+echo "=== 2. plan on observed root ==="
 PLAN_RESULT=$(python3 -m optagent.cli.main plan \
-  --from-state s_obs_0000 \
+  --from-node n_0000 \
   --planner default \
   --max-plans 1 \
+  --intent "run baseline benchmark" \
   --store-dir "$STORE_DIR")
 echo "$PLAN_RESULT"
 PLAN_ID=$(echo "$PLAN_RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin)[0]['plan_id'])")
 
 echo ""
-echo "=== 3. predict ==="
-PRED_RESULT=$(python3 -m optagent.cli.main predict \
-  "$PLAN_ID" \
-  --max-outcomes 1 \
-  --store-dir "$STORE_DIR")
-echo "$PRED_RESULT"
-PRED_ID=$(echo "$PRED_RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin)[0]['transition_id'])")
-
-echo ""
-echo "=== 4. observe ==="
-python3 -m optagent.cli.main observe \
+echo "=== 3. observe result ==="
+OBS_RESULT=$(python3 -m optagent.cli.main observe \
   --plan "$PLAN_ID" \
-  --result-id "r_0001" \
   --status completed \
   --artifact "build.log" \
   --raw-output "benchmark.txt" \
   --log "stderr.log" \
   --metric "speedup=1.15" \
+  --store-dir "$STORE_DIR")
+echo "$OBS_RESULT"
+OBS_NODE_ID=$(echo "$OBS_RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin)['to_node_id'])")
+OBS_TRANSITION_ID=$(echo "$OBS_RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin)['transition_id'])")
+
+echo ""
+echo "=== 4. derive finding ==="
+python3 -m optagent.cli.main derive "$OBS_TRANSITION_ID" \
+  --type finding \
+  --text "baseline run completed with speedup metric" \
   --store-dir "$STORE_DIR"
 
 echo ""
-echo "=== 5. show (run summary) ==="
+echo "=== 5. trace ==="
+python3 -m optagent.cli.main trace \
+  --from-node "$OBS_NODE_ID" \
+  --store-dir "$STORE_DIR"
+
+echo ""
+echo "=== 6. extend predicted root ==="
+PPLAN_RESULT=$(python3 -m optagent.cli.main extend \
+  --node-id n_0001 \
+  --intent "predict likely benchmark outcomes" \
+  --store-dir "$STORE_DIR")
+echo "$PPLAN_RESULT"
+PPLAN_ID=$(echo "$PPLAN_RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin)[0]['plan_id'])")
+
+echo ""
+echo "=== 7. predict ==="
+python3 -m optagent.cli.main predict \
+  "$PPLAN_ID" \
+  --max-outcomes 2 \
+  --store-dir "$STORE_DIR"
+
+echo ""
+echo "=== 8. refresh predicted dag ==="
+python3 -m optagent.cli.main refresh \
+  --from-node "$OBS_NODE_ID" \
+  --store-dir "$STORE_DIR"
+
+echo ""
+echo "=== 9. show run ==="
 python3 -m optagent.cli.main show \
   --store-dir "$STORE_DIR"
 
 echo ""
-echo "=== 6. trace ==="
-python3 -m optagent.cli.main trace \
-  --from-state s_obs_0001 \
-  --store-dir "$STORE_DIR"
-
-echo ""
-echo "=== 7. refresh ==="
-python3 -m optagent.cli.main refresh \
-  --from-state s_obs_0001 \
-  --store-dir "$STORE_DIR"
-
-echo ""
-echo "=== 8. list ==="
+echo "=== 10. list ==="
 python3 -m optagent.cli.main list \
   --store-dir "$STORE_DIR"
 

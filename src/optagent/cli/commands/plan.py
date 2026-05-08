@@ -10,57 +10,22 @@ from optagent.storage.jsonl import JsonlRunStore
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
-    """Register the ``plan`` subcommand parser."""
-    parser = subparsers.add_parser(
-        "plan", help="Create an ExecutionPlan from an observed state"
-    )
+    parser = subparsers.add_parser("plan", help="Create a Plan grounded on an observed node")
     parser.add_argument("--run", default=None, help="Run identifier (optional if current run is set)")
-    parser.add_argument(
-        "--from-state",
-        required=True,
-        help="Source observed state",
-    )
-    parser.add_argument(
-        "--planner",
-        default="default",
-        help="Planner name (default: default)",
-    )
-    parser.add_argument(
-        "--max-plans",
-        type=int,
-        default=1,
-        help="Maximum number of plans to create (default: 1)",
-    )
-    parser.add_argument(
-        "--action-type",
-        default="analysis",
-        help="Action category for the plan (default: analysis)",
-    )
-    parser.add_argument(
-        "--intent",
-        default=None,
-        help="Description of what the plan does",
-    )
-    parser.add_argument(
-        "--input",
-        action="append",
-        help="Plan input as key=value (can be given multiple times)",
-    )
-    parser.add_argument(
-        "--store-dir",
-        default=".optagent/runs",
-        help="Directory where runs are stored (default: .optagent/runs)",
-    )
-    parser.add_argument("--user", default=None, help="User attribution id")
+    parser.add_argument("--from-node", required=True, help="Source observed node")
+    parser.add_argument("--planner", default="default")
+    parser.add_argument("--max-plans", type=int, default=1)
+    parser.add_argument("--action-type", default="analysis")
+    parser.add_argument("--intent", default=None)
+    parser.add_argument("--input", action="append")
+    parser.add_argument("--store-dir", default=".optagent/runs")
+    parser.add_argument("--user", default=None)
     return parser
 
 
 def _parse_inputs(input_list: list[str] | None) -> dict[str, str]:
-    """Parse --input key=value strings into a dict."""
     inputs: dict[str, str] = {}
-    if input_list is None:
-        return inputs
-    for item in input_list:
+    for item in input_list or []:
         if "=" not in item:
             raise ValueError(f"--input must be key=value format: {item}")
         key, value = item.split("=", 1)
@@ -74,51 +39,18 @@ def run_plan_command(
     planner: str,
     max_plans: int,
     store_dir: str,
-    from_state_id: str,
+    from_node_id: str,
     action_type: str = "analysis",
     intent: str | None = None,
     inputs: dict[str, str] | None = None,
     user_id: str | None = None,
 ) -> dict:
-    """Create one or more ``ExecutionPlan``s from an observed state.
-
-    Parameters
-    ----------
-    run_id:
-        Identifier of the run to plan against.
-    planner:
-        Name of the planner to use.
-    max_plans:
-        Maximum number of plans to create.
-    store_dir:
-        Directory where runs are stored.
-    from_state_id:
-        Observed state to plan from.
-    action_type:
-        Category of action for the plan.
-    intent:
-        Human-readable description of what the plan does.
-    inputs:
-        Key-value parameters for the plan.
-
-    Returns
-    -------
-    dict with ``plans`` key containing a list of plan dicts.
-
-    Raises
-    ------
-    KeyError
-        If the run_id does not exist or *state_id* is not an
-        observed state in the run.
-    """
     store = JsonlRunStore(store_dir)
-    run_path = store.run_path(run_id)
-    if not run_path.exists():
+    if not store.run_path(run_id).exists():
         raise KeyError(f"unknown run_id: {run_id}")
     handle = store.load_run(run_id)
-
     plans = handle.plan(
-        from_state_id=from_state_id,
+        from_node_id,
         planner=planner,
         max_plans=max_plans,
         action_type=action_type,
@@ -126,23 +58,18 @@ def run_plan_command(
         inputs=inputs,
         user_id=user_id,
     )
-
     store.save_run(handle)
-    return {"plans": [plan.to_dict() for plan in plans]}
+    return {"plans": [p.to_dict() for p in plans]}
 
 
 def cli_plan(args) -> int:
-    """Entry point for ``optagent plan`` subcommand.
-
-    Prints the created plans as JSON to stdout.
-    """
     inputs = _parse_inputs(getattr(args, "input", None))
     result = run_plan_command(
         run_id=resolve_run_id_from_args(args),
         planner=args.planner,
         max_plans=args.max_plans,
         store_dir=args.store_dir,
-        from_state_id=args.from_state,
+        from_node_id=args.from_node,
         action_type=args.action_type,
         intent=args.intent,
         inputs=inputs,

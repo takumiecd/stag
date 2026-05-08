@@ -17,9 +17,6 @@ ActionType = Literal[
     "scope_refinement",
 ]
 
-StateKind = Literal["observed", "predicted"]
-PlanKind = Literal["execution", "prediction"]
-TransitionKind = Literal["observed", "predicted"]
 MatchStatus = Literal["exact", "compatible", "partial", "mismatch"]
 DecisionStatus = Literal[
     "accepted",
@@ -38,9 +35,20 @@ DerivedType = Literal[
     "prediction_error",
     "decision",
     "finding",
-    "state_delta",
     "summary",
 ]
+
+TargetKind = Literal["node", "transition"]
+PayloadType = Literal["snapshot", "result", "derived", "match", "cut"]
+DagRole = Literal["observed", "predicted", "branch"]
+
+NODE_PREFIX = "n"
+TRANSITION_PREFIX = "t"
+PLAN_PREFIX = "plan"
+DAG_PREFIX = "dag"
+PAYLOAD_PREFIX = "pl"
+SELECTION_PREFIX = "sel"
+PROMOTION_PREFIX = "promotion"
 
 
 def to_jsonable(value: Any) -> JSONValue:

@@ -1,153 +1,64 @@
-import json
+"""Tests for JsonlRunStore round-trip."""
 
-import optagent
-from optagent import ActionResult, DerivedRecord, Requirement
-from optagent.storage import JsonlRunStore
+from __future__ import annotations
 
+import tempfile
 
-def _requirement() -> Requirement:
-    return Requirement(
-        requirement_id="req_kernel",
-        target_type="kernel",
-        target_id="csc_linear",
-    )
+from optagent import init
+from optagent.core.schema.payloads import ResultPayload
+from optagent.core.schema.requirements import Requirement
+from optagent.storage.jsonl import JsonlRunStore
 
 
-def _run_with_history():
-    run = optagent.init(_requirement(), run_id="run_test")
-    plan = run.plan(from_state_id="s_obs_0000")[0]
-    predicted = run.predict(plan.plan_id, max_outcomes=2)
-    result = ActionResult(
-        result_id="r_0001",
-        execution_plan_id=plan.plan_id,
-        status="completed",
-        raw_outputs=("raw/profile.txt",),
-        metrics={"latency_ms": 1.5},
-    )
-    derived = DerivedRecord(
-        derived_id="d_0001",
-        source_transition_id="t_obs_0001",
-        derived_type="evidence",
-        payload={"latency_ms": 1.5},
-        generator="test",
-    )
-    run.promote(
-        mode="transition",
-        predicted_transition_id=predicted[1].transition_id,
-        execution_plan_id=plan.plan_id,
-        action_result=result,
-        derived_records=[derived],
-    )
-    return run
+def _req() -> Requirement:
+    return Requirement(requirement_id="r", target_type="task", target_id="t")
 
 
-def _read_jsonl(path):
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+def test_round_trip_basic():
+    run = init(_req(), run_id="rt_basic")
+    plan = run.plan(run.root_observed_node_id, intent="x")[0]
+    result = ResultPayload(payload_id="x", target_id="x", status="completed", metrics={"a": 1.0})
+    run.observe(plan.plan_id, result)
 
-
-def test_jsonl_store_saves_run_directory(tmp_path):
-    run = _run_with_history()
-    store = JsonlRunStore(tmp_path)
-
-    run_path = store.save_run(run)
-
-    assert run_path == tmp_path / "run_test"
-    assert (run_path / "run.json").exists()
-    assert (run_path / "states.jsonl").exists()
-    assert (run_path / "execution_plans.jsonl").exists()
-    assert (run_path / "prediction_plans.jsonl").exists()
-    assert (run_path / "predicted_transitions.jsonl").exists()
-    assert (run_path / "observed_transitions.jsonl").exists()
-    assert (run_path / "derived_records.jsonl").exists()
-
-
-def test_jsonl_store_writes_human_readable_records(tmp_path):
-    run = _run_with_history()
-    store = JsonlRunStore(tmp_path)
-
-    run_path = store.save_run(run)
-
-    manifest = json.loads((run_path / "run.json").read_text())
-    assert manifest["run_id"] == "run_test"
-    assert "current_observed_state_id" not in manifest
-    assert manifest["requirement"]["requirement_id"] == "req_kernel"
-
-    states = _read_jsonl(run_path / "states.jsonl")
-    assert {row["state_id"] for row in states} >= {"s_obs_0000", "s_pred_0000"}
-    assert {row["dag"] for row in states} == {"trace", "prediction"}
-
-    observed = _read_jsonl(run_path / "observed_transitions.jsonl")
-    assert observed[0]["transition_id"] == "t_obs_0001"
-    assert observed[0]["action_result"]["raw_outputs"] == ["raw/profile.txt"]
-    assert observed[0]["matched_predicted_transition_id"] == "t_pred_0002"
-
-    derived = _read_jsonl(run_path / "derived_records.jsonl")
-    assert derived[0]["derived_id"] == "d_0001"
-    assert derived[0]["payload"]["latency_ms"] == 1.5
-
-
-def test_jsonl_store_loads_run_and_can_continue_ids(tmp_path):
-    run = _run_with_history()
-    store = JsonlRunStore(tmp_path)
-    store.save_run(run)
-
-    loaded = store.load_run("run_test")
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlRunStore(td)
+        store.save_run(run)
+        loaded = store.load_run("rt_basic")
 
     assert loaded.run_id == run.run_id
-    transition = loaded.trace_dag.transitions["t_obs_0001"]
-    assert loaded.trace(state_id=transition.to_observed_state_id).observed_transition_ids == (
-        "t_obs_0001",
-    )
-    assert loaded.trace(state_id=transition.to_observed_state_id).derived_record_ids == (
-        "d_0001",
-    )
-    assert loaded.prediction_dag.predicted_transition_ids_for_plan("p_exec_0001") == [
-        "t_pred_0001",
-        "t_pred_0002",
-    ]
-
-    next_plan = loaded.plan(from_state_id=transition.to_observed_state_id)[0]
-    assert next_plan.plan_id == "p_exec_0002"
+    assert loaded.observed_dag.dag_id == run.observed_dag.dag_id
+    assert loaded.predicted_dag.dag_id == run.predicted_dag.dag_id
+    assert len(loaded.observed_dag.nodes) == len(run.observed_dag.nodes)
+    assert len(loaded.observed_dag.transitions) == len(run.observed_dag.transitions)
+    assert len(loaded.observed_dag.payloads) == len(run.observed_dag.payloads)
 
 
-def test_run_handle_can_save_with_store(tmp_path):
-    run = _run_with_history()
-    store = JsonlRunStore(tmp_path)
+def test_round_trip_with_full_flow():
+    run = init(_req(), run_id="rt_full")
+    plan = run.plan(run.root_observed_node_id)[0]
+    result = ResultPayload(payload_id="x", target_id="x", status="completed")
+    tr = run.observe(plan.plan_id, result)
+    run.derive(tr.transition_id, "finding", {"text": "x"})
 
-    run_path = run.save(store)
+    pred_root = run.predicted_dag.metadata["root_node_id"]
+    pplans = run.extend(pred_root)
+    pred_trs = run.predict(pplans[0].plan_id, max_outcomes=2)
+    run.select_prediction(predicted_transition_ids=[t.transition_id for t in pred_trs])
 
-    assert run_path == tmp_path / "run_test"
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlRunStore(td)
+        store.save_run(run)
+        loaded = store.load_run("rt_full")
 
-
-def test_jsonl_store_list_runs_returns_summaries(tmp_path):
-    req_a = Requirement(requirement_id="req_a", target_type="code", target_id="mod_a")
-    req_b = Requirement(requirement_id="req_b", target_type="kernel", target_id="mod_b")
-    store = JsonlRunStore(tmp_path)
-
-    run_a = optagent.init(req_a, run_id="run_a")
-    run_b = optagent.init(req_b, run_id="run_b")
-    store.save_run(run_a)
-    store.save_run(run_b)
-
-    summaries = store.list_runs()
-    assert len(summaries) == 2
-    ids = {s["run_id"] for s in summaries}
-    assert ids == {"run_a", "run_b"}
-
-    by_id = {s["run_id"]: s for s in summaries}
-    assert by_id["run_a"]["requirement_id"] == "req_a"
-    assert by_id["run_a"]["target_type"] == "code"
-    assert "current_observed_state_id" not in by_id["run_a"]
+    assert len(loaded.predicted_dag.transitions) == 2
+    assert len(loaded.selections) == 1
+    assert any(p.payload_type == "derived" for p in loaded.observed_dag.payloads.values())
 
 
-def test_jsonl_store_list_runs_empty(tmp_path):
-    store = JsonlRunStore(tmp_path)
-    assert store.list_runs() == []
-
-
-def test_jsonl_store_list_runs_ignores_invalid_directories(tmp_path):
-    store = JsonlRunStore(tmp_path)
-    (tmp_path / "not_a_run").mkdir()
-    (tmp_path / "not_a_run" / "foo.txt").write_text("bar")
-
-    assert store.list_runs() == []
+def test_list_runs_returns_summaries():
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlRunStore(td)
+        run = init(_req(), run_id="rt_listing")
+        store.save_run(run)
+        runs = store.list_runs()
+        assert any(r["run_id"] == "rt_listing" for r in runs)

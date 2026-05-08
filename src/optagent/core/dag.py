@@ -1,221 +1,184 @@
-"""PredictionDAG and TraceDAG indexes.
+"""Unified Dag container.
 
-Pure directed-graph data structures: nodes are stored in ``nodes`` and the
-edge topology lives in ``incoming_index`` / ``outgoing_index``. Roots, depth,
-and rewind/ancestor relationships are derived from edges — no cached layer
-index. View helpers that need a depth-grouped layout should compute it on
-demand from the edges.
+A Dag is a pure directed graph of nodes (`Node`) and edges (`Transition`).
+It also stores Plans grounded on its nodes, Payloads attached to either
+nodes or transitions, and optionally child Dags (any depth).
+
+The observed/predicted distinction is *not* encoded on Node, Transition,
+or Plan. It lives only as a tag in `Dag.metadata["role"]`. Cardinality
+constraints (e.g. "1 plan -> 1 transition" on observed Dags) are enforced
+by callers (RunHandle), not by Dag itself.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from optagent.core.schema.plans import ExecutionPlan, PredictionPlan
-from optagent.core.schema.state import StateNode
-from optagent.core.schema.transitions import (
-    ObservedTransition,
-    PredictedTransition,
-    TraceCut,
-)
-from optagent.core.types import to_jsonable
+from optagent.core.schema.graph import Node, Transition
+from optagent.core.schema.payloads import Payload
+from optagent.core.schema.plans import Plan
+from optagent.core.types import JSONValue, to_jsonable
 
 
 @dataclass
-class PredictionDAG:
-    """Unexecuted future expansion as a pure directed graph.
-
-    A plan may have multiple predicted transitions because one intended
-    action can have several plausible outcomes.
-    """
-
+class Dag:
     dag_id: str
-    anchor_observed_state_id: str
-    root_predicted_state_id: str
-    nodes: dict[str, StateNode] = field(default_factory=dict)
-    plans: dict[str, PredictionPlan] = field(default_factory=dict)
-    transitions: dict[str, PredictedTransition] = field(default_factory=dict)
-    plans_by_state: dict[str, list[str]] = field(default_factory=dict)
-    transitions_by_plan: dict[str, list[str]] = field(default_factory=dict)
-    outgoing_index: dict[str, list[str]] = field(default_factory=dict)
+    nodes: dict[str, Node] = field(default_factory=dict)
+    transitions: dict[str, Transition] = field(default_factory=dict)
+    plans: dict[str, Plan] = field(default_factory=dict)
+    payloads: dict[str, Payload] = field(default_factory=dict)
+    payloads_by_target: dict[str, list[str]] = field(default_factory=dict)
+    child_dags: dict[str, "Dag"] = field(default_factory=dict)
     incoming_index: dict[str, list[str]] = field(default_factory=dict)
-    stale: bool = False
+    outgoing_index: dict[str, list[str]] = field(default_factory=dict)
+    plans_by_node: dict[str, list[str]] = field(default_factory=dict)
+    transitions_by_plan: dict[str, list[str]] = field(default_factory=dict)
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
 
-    def add_node(self, node: StateNode) -> None:
-        self.nodes[node.state_id] = node
+    # ----- nodes / transitions / plans --------------------------------
 
-    def add_plan(self, plan: PredictionPlan) -> None:
-        self.plans[plan.plan_id] = plan
-        self.plans_by_state.setdefault(plan.from_predicted_state_id, []).append(plan.plan_id)
+    def add_node(self, node: Node) -> None:
+        if node.node_id in self.nodes:
+            raise ValueError(f"duplicate node_id: {node.node_id}")
+        self.nodes[node.node_id] = node
 
-    def add_transition(self, transition: PredictedTransition) -> None:
+    def add_transition(self, transition: Transition) -> None:
+        if transition.transition_id in self.transitions:
+            raise ValueError(f"duplicate transition_id: {transition.transition_id}")
+        if transition.from_node_id not in self.nodes:
+            raise KeyError(f"unknown from_node_id: {transition.from_node_id}")
+        if transition.to_node_id not in self.nodes:
+            raise KeyError(f"unknown to_node_id: {transition.to_node_id}")
+        if transition.parent_plan_id not in self.plans:
+            raise KeyError(f"unknown parent_plan_id: {transition.parent_plan_id}")
         self.transitions[transition.transition_id] = transition
         self.transitions_by_plan.setdefault(transition.parent_plan_id, []).append(
             transition.transition_id
         )
-        self.outgoing_index.setdefault(transition.from_state_id, []).append(
+        self.outgoing_index.setdefault(transition.from_node_id, []).append(
             transition.transition_id
         )
-        self.incoming_index.setdefault(transition.to_predicted_state_id, []).append(
+        self.incoming_index.setdefault(transition.to_node_id, []).append(
             transition.transition_id
         )
 
-    def future_transition_ids(self, state_id: str) -> list[str]:
-        return list(self.outgoing_index.get(state_id, ()))
+    def add_plan(self, plan: Plan) -> None:
+        if plan.plan_id in self.plans:
+            raise ValueError(f"duplicate plan_id: {plan.plan_id}")
+        if plan.grounded_node_id not in self.nodes:
+            raise KeyError(f"unknown grounded_node_id: {plan.grounded_node_id}")
+        self.plans[plan.plan_id] = plan
+        self.plans_by_node.setdefault(plan.grounded_node_id, []).append(plan.plan_id)
 
-    def plan_ids_from_state(self, state_id: str) -> list[str]:
-        return list(self.plans_by_state.get(state_id, ()))
+    # ----- payloads ---------------------------------------------------
 
-    def predicted_transition_ids_for_plan(self, plan_id: str) -> list[str]:
+    def attach_payload(self, payload: Payload) -> None:
+        if payload.payload_id in self.payloads:
+            raise ValueError(f"duplicate payload_id: {payload.payload_id}")
+        if payload.target_kind == "node":
+            if payload.target_id not in self.nodes:
+                raise KeyError(f"unknown target node: {payload.target_id}")
+        elif payload.target_kind == "transition":
+            if payload.target_id not in self.transitions:
+                raise KeyError(f"unknown target transition: {payload.target_id}")
+        else:
+            raise ValueError(f"unknown target_kind: {payload.target_kind!r}")
+        self.payloads[payload.payload_id] = payload
+        self.payloads_by_target.setdefault(payload.target_id, []).append(payload.payload_id)
+
+    def payloads_for(
+        self,
+        target_id: str,
+        *,
+        payload_type: str | None = None,
+    ) -> list[Payload]:
+        ids = self.payloads_by_target.get(target_id, [])
+        items = [self.payloads[pid] for pid in ids]
+        if payload_type is None:
+            return items
+        return [p for p in items if p.payload_type == payload_type]
+
+    # ----- child dags -------------------------------------------------
+
+    def add_child_dag(self, child: "Dag") -> None:
+        if child.dag_id in self.child_dags:
+            raise ValueError(f"duplicate child dag_id: {child.dag_id}")
+        if child.dag_id == self.dag_id:
+            raise ValueError("a Dag cannot contain itself")
+        self.child_dags[child.dag_id] = child
+
+    def attach(
+        self,
+        parent_node_id: str,
+        child_dag_id: str,
+        child_node_id: str,
+        *,
+        transition: Transition,
+    ) -> None:
+        """Connect a node in this Dag to a node in an already-registered child Dag.
+
+        Adds a single transition from ``parent_node_id`` (in ``self``) to
+        ``child_node_id`` (in ``self.child_dags[child_dag_id]``). The child
+        Dag's internal records are not modified. The transition itself is
+        stored in ``self.transitions``; its ``parent_plan_id`` must already
+        exist in ``self.plans``.
+        """
+        if parent_node_id not in self.nodes:
+            raise KeyError(f"unknown parent node: {parent_node_id}")
+        if child_dag_id not in self.child_dags:
+            raise KeyError(f"unknown child dag: {child_dag_id}")
+        child = self.child_dags[child_dag_id]
+        if child_node_id not in child.nodes:
+            raise KeyError(f"unknown child node: {child_node_id}")
+        if transition.from_node_id != parent_node_id:
+            raise ValueError("transition.from_node_id must equal parent_node_id")
+        if transition.to_node_id != child_node_id:
+            raise ValueError("transition.to_node_id must equal child_node_id")
+        if transition.transition_id in self.transitions:
+            raise ValueError(f"duplicate transition_id: {transition.transition_id}")
+        if transition.parent_plan_id not in self.plans:
+            raise KeyError(f"unknown parent_plan_id: {transition.parent_plan_id}")
+        # Bypass node existence check on `to_node_id` since it lives in the child.
+        self.transitions[transition.transition_id] = transition
+        self.transitions_by_plan.setdefault(transition.parent_plan_id, []).append(
+            transition.transition_id
+        )
+        self.outgoing_index.setdefault(transition.from_node_id, []).append(
+            transition.transition_id
+        )
+        self.incoming_index.setdefault(transition.to_node_id, []).append(
+            transition.transition_id
+        )
+
+    # ----- topology ---------------------------------------------------
+
+    def roots(self) -> list[str]:
+        return [nid for nid in self.nodes if not self.incoming_index.get(nid)]
+
+    def leaves(self) -> list[str]:
+        return [nid for nid in self.nodes if not self.outgoing_index.get(nid)]
+
+    def outgoing_transition_ids(self, node_id: str) -> list[str]:
+        return list(self.outgoing_index.get(node_id, ()))
+
+    def incoming_transition_ids(self, node_id: str) -> list[str]:
+        return list(self.incoming_index.get(node_id, ()))
+
+    def plan_ids_from_node(self, node_id: str) -> list[str]:
+        return list(self.plans_by_node.get(node_id, ()))
+
+    def transition_ids_for_plan(self, plan_id: str) -> list[str]:
         return list(self.transitions_by_plan.get(plan_id, ()))
 
-    def to_dict(self) -> dict:
-        return to_jsonable(self)  # type: ignore[return-value]
-
-
-@dataclass
-class TraceDAG:
-    """Observed execution history as a pure directed graph.
-
-    Observed transitions are append-only records that connect an execution
-    plan, an action result, and optional derived records.
-    """
-
-    dag_id: str
-    nodes: dict[str, StateNode] = field(default_factory=dict)
-    execution_plans: dict[str, ExecutionPlan] = field(default_factory=dict)
-    transitions: dict[str, ObservedTransition] = field(default_factory=dict)
-    plans_by_state: dict[str, list[str]] = field(default_factory=dict)
-    transition_by_execution_plan: dict[str, str] = field(default_factory=dict)
-    outgoing_index: dict[str, list[str]] = field(default_factory=dict)
-    incoming_index: dict[str, list[str]] = field(default_factory=dict)
-    cuts: dict[str, TraceCut] = field(default_factory=dict)
-    cut_order: list[str] = field(default_factory=list)
-
-    def add_node(self, node: StateNode) -> None:
-        self.nodes[node.state_id] = node
-
-    def add_cut(self, cut: TraceCut) -> None:
-        """Append a ``TraceCut`` record. Append-only — never replaces an existing cut."""
-        if cut.cut_id in self.cuts:
-            raise ValueError(f"duplicate cut_id: {cut.cut_id}")
-        if cut.cut_transition_id not in self.transitions:
-            raise KeyError(f"unknown cut_transition_id: {cut.cut_transition_id}")
-        self.cuts[cut.cut_id] = cut
-        self.cut_order.append(cut.cut_id)
-
-    def cut_transition_ids(self) -> set[str]:
-        """Set of observed transitions that have been cut (latest event wins).
-
-        With only ``TraceCut`` events today, the result is the union of
-        ``cut.cut_transition_id`` across all recorded cuts. A future
-        ``TraceRestore`` event would remove its target from the set
-        when it is the latest event for that transition.
-        """
-        return {self.cuts[cid].cut_transition_id for cid in self.cut_order}
-
-    def is_cut_transition(self, transition_id: str) -> bool:
-        """True iff *transition_id* is a directly-cut edge (not just downstream)."""
-        return transition_id in self.cut_transition_ids()
-
-    def cut_state_ids(self) -> set[str]:
-        """All observed state_ids reachable forward from any cut transition.
-
-        These are the states whose only path from the trace root passes
-        through a cut edge — i.e. they are no longer on any active branch.
-        """
-        cut_tids = self.cut_transition_ids()
-        if not cut_tids:
-            return set()
-        cut_states: set[str] = set()
-        frontier = [self.transitions[tid].to_observed_state_id for tid in cut_tids]
-        while frontier:
-            sid = frontier.pop()
-            if sid in cut_states:
-                continue
-            cut_states.add(sid)
-            for tid in self.outgoing_index.get(sid, ()):
-                frontier.append(self.transitions[tid].to_observed_state_id)
-        return cut_states
-
-    def is_cut_state(self, state_id: str) -> bool:
-        return state_id in self.cut_state_ids()
-
-    def inactive_transition_ids(self) -> set[str]:
-        """Every observed transition that is no longer on an active branch.
-
-        This is the union of:
-          - transitions directly named by a ``TraceCut`` (``cut_transition_ids``)
-          - transitions that originate from a state inside a cut subtree
-            (their ``from_observed_state_id`` is in ``cut_state_ids``)
-
-        Use this when filtering for live records (UI, replay, planning).
-        ``cut_transition_ids()`` alone names only the cut boundary, not
-        the downstream edges that became inactive as a result.
-        """
-        inactive = set(self.cut_transition_ids())
-        cut_states = self.cut_state_ids()
-        for sid in cut_states:
-            inactive.update(self.outgoing_index.get(sid, ()))
-        return inactive
-
-    def is_inactive_transition(self, transition_id: str) -> bool:
-        return transition_id in self.inactive_transition_ids()
-
-    def add_execution_plan(self, plan: ExecutionPlan) -> None:
-        self.execution_plans[plan.plan_id] = plan
-        self.plans_by_state.setdefault(plan.from_observed_state_id, []).append(
-            plan.plan_id
-        )
-
-    def append_transition(self, transition: ObservedTransition) -> None:
-        if transition.execution_plan_id in self.transition_by_execution_plan:
-            raise ValueError(
-                "an ExecutionPlan can have only one ObservedTransition; "
-                "create a new ExecutionPlan to rerun the same operation"
-            )
-        self.transitions[transition.transition_id] = transition
-        self.transition_by_execution_plan[transition.execution_plan_id] = (
-            transition.transition_id
-        )
-        self.outgoing_index.setdefault(transition.from_observed_state_id, []).append(
-            transition.transition_id
-        )
-        self.incoming_index.setdefault(transition.to_observed_state_id, []).append(
-            transition.transition_id
-        )
-
-    def observed_root_ids(self) -> tuple[str, ...]:
-        """Observed states with no incoming observed transition.
-
-        These are the roots of the trace DAG — the starting states from
-        which every observed history begins.
-        """
-        return tuple(
-            sid
-            for sid, node in self.nodes.items()
-            if node.state_kind == "observed" and not self.incoming_index.get(sid)
-        )
-
-    def past_transition_ids(self, state_id: str) -> list[str]:
-        return list(self.incoming_index.get(state_id, ()))
-
-    def next_transition_ids(self, state_id: str) -> list[str]:
-        return list(self.outgoing_index.get(state_id, ()))
-
-    def ancestors_of(self, state_id: str) -> tuple[str, ...]:
-        """Return observed state_ids reachable backwards via incoming edges.
-
-        Order is BFS from *state_id* (closest ancestor first). The starting
-        state itself is not included.
-        """
+    def ancestors_of(self, node_id: str) -> tuple[str, ...]:
+        """BFS over incoming edges. Closest ancestor first. Excludes ``node_id`` itself."""
         seen: set[str] = set()
         order: list[str] = []
-        frontier: list[str] = [state_id]
+        frontier: list[str] = [node_id]
         while frontier:
             current = frontier.pop(0)
             for tid in self.incoming_index.get(current, ()):
-                parent = self.transitions[tid].from_observed_state_id
+                parent = self.transitions[tid].from_node_id
                 if parent in seen:
                     continue
                 seen.add(parent)
@@ -223,17 +186,26 @@ class TraceDAG:
                 frontier.append(parent)
         return tuple(order)
 
-    def is_ancestor(self, ancestor_id: str, descendant_id: str) -> bool:
-        """Return True iff *ancestor_id* lies on a backwards path from *descendant_id*.
+    def descendants_of(self, node_id: str) -> tuple[str, ...]:
+        """BFS over outgoing edges. Closest descendant first. Excludes ``node_id`` itself."""
+        seen: set[str] = set()
+        order: list[str] = []
+        frontier: list[str] = [node_id]
+        while frontier:
+            current = frontier.pop(0)
+            for tid in self.outgoing_index.get(current, ()):
+                child = self.transitions[tid].to_node_id
+                if child in seen:
+                    continue
+                seen.add(child)
+                order.append(child)
+                frontier.append(child)
+        return tuple(order)
 
-        A state is treated as an ancestor of itself.
-        """
+    def is_ancestor(self, ancestor_id: str, descendant_id: str) -> bool:
         if ancestor_id == descendant_id:
             return True
         return ancestor_id in self.ancestors_of(descendant_id)
-
-    def plan_ids_from_state(self, state_id: str) -> list[str]:
-        return list(self.plans_by_state.get(state_id, ()))
 
     def to_dict(self) -> dict:
         return to_jsonable(self)  # type: ignore[return-value]

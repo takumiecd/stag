@@ -1,62 +1,66 @@
-"""Schema package — all state-transition data models."""
+"""Schema package — pure DAG primitives and attached payloads."""
 
 from optagent.core.schema.derived import (
     Decision,
-    DerivedRecord,
     Evidence,
     Finding,
     Observation,
     PredictionError,
 )
-from optagent.core.schema.plans import ExecutionPlan, PredictionPlan
+from optagent.core.schema.graph import Node, Transition
+from optagent.core.schema.payloads import (
+    CutPayload,
+    DerivedPayload,
+    MatchPayload,
+    Payload,
+    ResultPayload,
+    SnapshotPayload,
+    payload_from_dict,
+)
+from optagent.core.schema.plans import Plan
 from optagent.core.schema.requirements import Requirement
-from optagent.core.schema.results import ActionResult
-from optagent.core.schema.state import (
+from optagent.core.schema.selections import (
+    PredictionPath,
+    PredictionSelection,
+    PredictionStepRef,
+)
+from optagent.core.schema.snapshots import (
     ArtifactRef,
     Budget,
     FindingRef,
     PredictionRef,
     StateContext,
     StateDelta,
-    StateNode,
     StateSnapshot,
     TraceContext,
 )
-from optagent.core.schema.transitions import (
-    ObservedTransition,
-    PredictedTransition,
-    PredictionMatch,
-    PredictionPath,
-    PredictionSelection,
-    PredictionStepRef,
-    TraceCut,
-)
 
 __all__ = [
-    "ActionResult",
     "ArtifactRef",
     "Budget",
+    "CutPayload",
     "Decision",
-    "DerivedRecord",
+    "DerivedPayload",
     "Evidence",
-    "ExecutionPlan",
     "Finding",
     "FindingRef",
+    "MatchPayload",
+    "Node",
     "Observation",
-    "ObservedTransition",
+    "Payload",
+    "Plan",
     "PredictionError",
-    "PredictionMatch",
     "PredictionPath",
-    "PredictionPlan",
     "PredictionRef",
     "PredictionSelection",
     "PredictionStepRef",
-    "PredictedTransition",
     "Requirement",
+    "ResultPayload",
+    "SnapshotPayload",
     "StateContext",
     "StateDelta",
-    "StateNode",
     "StateSnapshot",
     "TraceContext",
-    "TraceCut",
+    "Transition",
+    "payload_from_dict",
 ]

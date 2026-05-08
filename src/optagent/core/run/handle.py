@@ -4,25 +4,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from optagent.core.cuts import is_cut_node
+from optagent.core.dag import Dag
 from optagent.core.ids import sequential_id, slugify, timestamp_id
+from optagent.core.schema.graph import Node
+from optagent.core.schema.payloads import SnapshotPayload
 from optagent.core.schema.requirements import Requirement
-from optagent.core.schema.state import StateNode, StateSnapshot
-from optagent.core.dag import PredictionDAG, TraceDAG
+from optagent.core.schema.selections import PredictionSelection
+from optagent.core.schema.snapshots import StateSnapshot
 
 
 @dataclass
 class RunHandle:
-    """In-memory handle for one optimization/problem-solving run.
-
-    This class implements the canonical API shape without choosing a real
-    planner, predictor, executor, or storage backend. Those can be layered on
-    top while preserving the source-of-truth records.
-    """
+    """In-memory handle for one optimization/problem-solving run."""
 
     run_id: str
     requirement: Requirement
-    trace_dag: TraceDAG
-    prediction_dag: PredictionDAG
+    observed_dag: Dag
+    predicted_dag: Dag
+    selections: dict[str, PredictionSelection] = field(default_factory=dict)
     _counters: dict[str, int] = field(default_factory=dict)
 
     def _next_id(self, prefix: str) -> str:
@@ -30,85 +30,88 @@ class RunHandle:
         return sequential_id(prefix, self._counters[prefix])
 
     @property
-    def root_observed_state_id(self) -> str:
-        roots = self.trace_dag.observed_root_ids()
+    def root_observed_node_id(self) -> str:
+        roots = self.observed_dag.roots()
         if len(roots) != 1:
-            raise KeyError(
-                f"expected exactly one observed root, got {list(roots)}"
-            )
+            raise KeyError(f"expected exactly one observed root, got {roots}")
         return roots[0]
 
-    def _ensure_active_observed_state(self, state_id: str) -> None:
-        """Reject state IDs that are unknown or sit inside a cut subtree.
-
-        Writers (plan, promote, observe) must call this on whichever
-        observed state they are about to grow from. Reading APIs that
-        only inspect history do not need to call it.
-        """
-        if state_id not in self.trace_dag.nodes:
-            raise KeyError(f"unknown observed state_id: {state_id}")
-        if self.trace_dag.is_cut_state(state_id):
+    def _ensure_active_observed_node(self, node_id: str) -> None:
+        """Reject node IDs that are unknown or sit inside a cut subtree."""
+        if node_id not in self.observed_dag.nodes:
+            raise KeyError(f"unknown observed node_id: {node_id}")
+        if is_cut_node(self.observed_dag, node_id):
             raise ValueError(
-                f"state is in a cut branch: {state_id}; "
+                f"node is in a cut branch: {node_id}; "
                 "rewind cut this subtree, so no new plans/observations can extend it"
             )
 
     def save(self, store) -> object:
-        """Save this run through a storage adapter."""
         return store.save_run(self)
 
 
 def init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle:
-    """Create a new in-memory run with TraceDAG and PredictionDAG roots."""
+    """Create a new in-memory run with seeded observed/predicted Dags."""
 
     rid = run_id or timestamp_id(f"run_{slugify(requirement.requirement_id)}")
     initial_snapshot = StateSnapshot(requirement=requirement)
-    observed = StateNode(
-        state_id="s_obs_0000",
-        state_kind="observed",
-        snapshot=initial_snapshot,
-        snapshot_hash=initial_snapshot.compute_hash(),
+
+    observed_dag = Dag(dag_id=f"{rid}_observed", metadata={"role": "observed"})
+    predicted_dag = Dag(
+        dag_id=f"{rid}_predicted",
+        metadata={"role": "predicted"},
     )
-    trace_dag = TraceDAG(dag_id=f"{rid}_trace")
-    trace_dag.add_node(observed)
-    predicted_root = StateNode(
-        state_id="s_pred_0000",
-        state_kind="predicted",
-        snapshot=observed.snapshot,
-        snapshot_hash=observed.snapshot_hash,
-        anchor_observed_state_id=observed.state_id,
+
+    obs_root = Node(node_id="n_0000")
+    observed_dag.add_node(obs_root)
+    observed_dag.attach_payload(
+        SnapshotPayload(
+            payload_id="pl_0000",
+            target_id=obs_root.node_id,
+            snapshot=initial_snapshot,
+            snapshot_hash=initial_snapshot.compute_hash(),
+        )
     )
-    prediction_dag = PredictionDAG(
-        dag_id=f"{rid}_prediction",
-        anchor_observed_state_id=observed.state_id,
-        root_predicted_state_id=predicted_root.state_id,
+
+    pred_root = Node(node_id="n_0001")
+    predicted_dag.add_node(pred_root)
+    predicted_dag.attach_payload(
+        SnapshotPayload(
+            payload_id="pl_0001",
+            target_id=pred_root.node_id,
+            snapshot=initial_snapshot,
+            snapshot_hash=initial_snapshot.compute_hash(),
+            metadata={"anchor_node_id": obs_root.node_id},
+        )
     )
-    prediction_dag.add_node(predicted_root)
+    predicted_dag.metadata["anchor_node_id"] = obs_root.node_id
+    predicted_dag.metadata["root_node_id"] = pred_root.node_id
+
+    observed_dag.add_child_dag(predicted_dag)
+
     return RunHandle(
         run_id=rid,
         requirement=requirement,
-        trace_dag=trace_dag,
-        prediction_dag=prediction_dag,
+        observed_dag=observed_dag,
+        predicted_dag=predicted_dag,
         _counters={
-            "s_obs": 0,
-            "s_pred": 0,
-            "p_exec": 0,
-            "p_pred": 0,
-            "t_obs": 0,
-            "t_pred": 0,
-            "sel_pred": 0,
+            "n": 1,
+            "t": 0,
+            "plan": 0,
+            "dag": 0,
+            "pl": 1,
+            "sel": 0,
             "promotion": 0,
-            "prediction_dag": 0,
-            "cut": 0,
         },
     )
 
 
-# Attach methods from submodules so RunHandle stays thin.
+# Bind verb implementations.
 from optagent.core.run.helpers import (  # noqa: E402
     find_plan_impl as _find_plan,
-    make_predicted_state_impl as _make_predicted_state,
-    plan_from_state_id_impl as _plan_from_state_id,
+    get_node_snapshot_payload_impl as _get_node_snapshot_payload,
+    new_node_with_snapshot_impl as _new_node_with_snapshot,
+    plan_grounding_dag_impl as _plan_grounding_dag,
 )
 from optagent.core.run.observe import observe_impl as _observe_impl  # noqa: E402
 from optagent.core.run.plan import (  # noqa: E402
@@ -133,8 +136,9 @@ from optagent.core.run.state_impl import (  # noqa: E402
 )
 
 RunHandle._find_plan = _find_plan
-RunHandle._make_predicted_state = _make_predicted_state
-RunHandle._plan_from_state_id = _plan_from_state_id
+RunHandle._plan_grounding_dag = _plan_grounding_dag
+RunHandle._get_node_snapshot_payload = _get_node_snapshot_payload
+RunHandle._new_node_with_snapshot = _new_node_with_snapshot
 RunHandle._append_observed_transition = _append_observed_transition_impl
 RunHandle.plan = _plan_impl
 RunHandle.extend = _extend_impl

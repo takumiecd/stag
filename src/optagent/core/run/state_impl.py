@@ -2,67 +2,41 @@
 
 from __future__ import annotations
 
-from optagent.core.schema.state import (
+from optagent.core.schema.payloads import SnapshotPayload
+from optagent.core.schema.snapshots import (
     ArtifactRef,
     FindingRef,
     PredictionRef,
-    StateNode,
     StateSnapshot,
 )
 
 
-def state_show_impl(self, state_id: str) -> StateNode:
-    """Return an observed state node."""
-    state = self.trace_dag.nodes.get(state_id)
-    if state is None or state.state_kind != "observed":
-        raise KeyError(f"unknown observed state_id: {state_id}")
-    return state
+def state_show_impl(self, node_id: str) -> SnapshotPayload:
+    """Return the most recent SnapshotPayload for an observed node."""
+    if node_id not in self.observed_dag.nodes:
+        raise KeyError(f"unknown observed node_id: {node_id}")
+    return self._get_node_snapshot_payload(self.observed_dag, node_id)
 
 
 def state_update_impl(
     self,
     *,
-    state_id: str,
+    node_id: str,
     add_knowledge: list[str] | None = None,
     add_open_question: list[str] | None = None,
     add_artifact: list[tuple[str, str, str | None]] | None = None,
     add_prediction: list[tuple[str, str]] | None = None,
     add_branch: list[str] | None = None,
-) -> StateNode:
-    """Update an observed state's snapshot in place.
-
-    Because :class:`StateNode` is immutable, this creates a replacement
-    node with the same ``state_id`` but an updated :class:`StateSnapshot`
-    and installs it back into ``trace_dag.nodes``.
-
-    Parameters
-    ----------
-    add_knowledge:
-        List of knowledge summary strings to append as :class:`FindingRef`.
-    add_open_question:
-        List of open-question strings to append.
-    add_artifact:
-        List of ``(artifact_id, artifact_type, path)`` tuples to append.
-    add_prediction:
-        List of ``(prediction_id, summary)`` tuples to append.
-    add_branch:
-        List of branch identifiers to append.
-
-    Returns
-    -------
-    The updated :class:`StateNode`.
-    """
-    self._ensure_active_observed_state(state_id)
-    old = self.trace_dag.nodes[state_id]
-    old_snap = old.snapshot
+) -> SnapshotPayload:
+    """Append a new SnapshotPayload that extends the latest one for *node_id*."""
+    self._ensure_active_observed_node(node_id)
+    old_payload = self._get_node_snapshot_payload(self.observed_dag, node_id)
+    old_snap = old_payload.snapshot
 
     new_knowledge = list(old_snap.knowledge)
     for summary in add_knowledge or []:
         new_knowledge.append(
-            FindingRef(
-                finding_id=self._next_id("find"),
-                summary=summary,
-            )
+            FindingRef(finding_id=self._next_id("pl"), summary=summary)
         )
 
     new_open_questions = list(old_snap.open_questions)
@@ -71,20 +45,13 @@ def state_update_impl(
     new_artifacts = list(old_snap.artifacts)
     for artifact_id, artifact_type, path in add_artifact or []:
         new_artifacts.append(
-            ArtifactRef(
-                artifact_id=artifact_id,
-                artifact_type=artifact_type,
-                path=path,
-            )
+            ArtifactRef(artifact_id=artifact_id, artifact_type=artifact_type, path=path)
         )
 
     new_predictions = list(old_snap.predictions)
     for prediction_id, summary in add_prediction or []:
         new_predictions.append(
-            PredictionRef(
-                prediction_id=prediction_id,
-                summary=summary,
-            )
+            PredictionRef(prediction_id=prediction_id, summary=summary)
         )
 
     new_branches = list(old_snap.active_branches)
@@ -100,17 +67,15 @@ def state_update_impl(
         budget=old_snap.budget,
         metadata=old_snap.metadata,
     )
-
-    new_node = StateNode(
-        state_id=old.state_id,
-        state_kind=old.state_kind,
+    new_payload = SnapshotPayload(
+        payload_id=self._next_id("pl"),
+        target_id=node_id,
         snapshot=new_snap,
-        snapshot_hash=old.snapshot_hash,
-        anchor_observed_state_id=old.anchor_observed_state_id,
-        assumptions=old.assumptions,
-        confidence=old.confidence,
-        status=old.status,
-        metadata=old.metadata,
+        snapshot_hash=new_snap.compute_hash(),
+        assumptions=old_payload.assumptions,
+        confidence=old_payload.confidence,
+        status=old_payload.status,
+        metadata={"source": "state_update"},
     )
-    self.trace_dag.nodes[old.state_id] = new_node
-    return new_node
+    self.observed_dag.attach_payload(new_payload)
+    return new_payload

@@ -1,72 +1,133 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working in this repository.
 
 ## Commands
 
-The package is not installed; tests and CLI invocations rely on `PYTHONPATH=src`.
+The package is usually not installed during local development. Use `PYTHONPATH=src`.
 
 - Run all tests: `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest tests -q`
-- Run a single test file: `PYTHONPATH=src python3 -m pytest tests/core/test_run_api.py -q`
-- Run a single test: `PYTHONPATH=src python3 -m pytest tests/cli/test_observe.py::test_observe_records_metric -q`
-- CLI: `PYTHONPATH=src python3 -m optagent.cli.main <subcommand> ...` (or `optagent <subcommand>` once installed via `pip install -e .`)
-- Lint/format/type-check (configured in `pyproject.toml`, not wired to CI): `ruff check .`, `black .`, `mypy src`
+- Run one test file: `PYTHONPATH=src python3 -m pytest tests/core/test_run_api.py -q`
+- CLI: `PYTHONPATH=src python3 -m optagent.cli.main <subcommand> ...`
+- Optional checks configured in `pyproject.toml`: `ruff check .`, `black .`, `mypy src`
 
-Docs are Japanese-first and authoritative; see `docs/ja/STATE_MODEL.md`, `docs/ja/AGENT_LOOP.md`, `docs/ja/CLI.md`, `docs/ja/API.md`, `docs/ja/DIRECTION.md`.
+Docs are Japanese-first and should match the current implementation:
+
+- `docs/ja/DIRECTION.md`
+- `docs/ja/STATE_MODEL.md`
+- `docs/ja/API.md`
+- `docs/ja/CLI.md`
+- `docs/ja/AGENT_LOOP.md`
+
+## Version And Compatibility
+
+This project is `0.1.0` alpha. Breaking changes are acceptable and expected. Do not add compatibility shims for removed APIs unless explicitly requested. Old run storage schemas do not need migration support by default.
 
 ## Architecture
 
-optagent is a state-transition framework for recording the *process* of optimization/problem-solving — not a planner or executor. The defining design choice is that **predicted futures and observed history are stored in two separate DAGs**:
+optagent records the process of optimization/problem-solving. It is not a planner, executor, benchmark runner, or general agent framework.
 
-- `PredictionDAG` — unexecuted future candidates (`PredictedState`, `PredictionPlan`, `PredictedTransition`). Anchored to one observed state; rebuild via `refresh()` when the anchor moves.
-- `TraceDAG` — actually-happened history (`ObservedState`, `ExecutionPlan`, `ObservedTransition`, `ActionResult`, `DerivedRecord`). The source of truth.
+The current core model is **pure DAG records plus attached payloads**.
 
-Both DAGs are pure directed graphs (`src/optagent/core/dag.py`): nodes plus `incoming_index`/`outgoing_index`. Roots and ancestor relationships are derived from edges — no cached depth/layer index. View helpers should compute layouts on demand.
+- `Dag`: common graph container in `src/optagent/core/dag.py`
+- `Node`: pure graph node
+- `Plan`: action plan grounded on a node
+- `Transition`: edge from one node to another, grounded on a plan
+- `Payload`: domain data attached to a node or transition
 
-### Public API surface
+Observed vs predicted is a property of the owning Dag, not separate dataclass families:
 
-`optagent.__init__` re-exports the schema dataclasses and `RunHandle` / `init`. The intentional shape:
+- `run.observed_dag`: actual history, `metadata["role"] == "observed"`
+- `run.predicted_dag`: unexecuted future candidates, `metadata["role"] == "predicted"`
 
-- `init(requirement, run_id=...)` returns a `RunHandle` seeded with `s_obs_0000` (observed root) and `s_pred_0000` (predicted root anchored to it).
-- `RunHandle` is defined in `src/optagent/core/run/handle.py` as a thin dataclass; its methods (`plan`, `extend`, `predict`, `select_prediction`, `promote`, `observe`, `trace`, `refresh`, `derive`, `rewind`, `state_show`, `state_update`, `snapshot_rebuild`) are attached at module load from sibling files in `src/optagent/core/run/`. When adding a new RunHandle method, add the impl in its own `run/<verb>.py` and bind it at the bottom of `handle.py` — don't grow `handle.py` itself.
-- ID counters live on the handle (`_counters`) and are minted via `_next_id(prefix)`. Stable prefixes: `s_obs`, `s_pred`, `p_exec`, `p_pred`, `t_obs`, `t_pred`, `sel_pred`, `promotion`, `prediction_dag`, `cut`.
+Avoid reintroducing `StateNode`, `ExecutionPlan`, `PredictionPlan`, `ObservedTransition`, `PredictedTransition`, `ActionResult`, or `DerivedRecord` as public compatibility aliases unless the task explicitly asks for that.
 
-### Observed vs predicted, plan vs transition
+## Payloads
 
-These distinctions are load-bearing — mixing them is a bug, not a refactor opportunity:
+Payload types live under `src/optagent/core/schema/payloads.py`.
 
-- `ExecutionPlan` is grounded on an observed state and is what an external executor consumes. `PredictionPlan` lives in the PredictionDAG and is *not* directly executable. Convert via `promote(mode="plan")`.
-- One `ExecutionPlan` → at most one `ObservedTransition`. One `PredictionPlan` → many `PredictedTransition`s (success/regression/failure outcomes).
-- `observe(...)` records an execution result without matching a prediction. `promote(mode="transition", predicted_transition_id=..., ...)` records the same result *and* links it to a predicted outcome via `matched_predicted_transition_id`.
-- `ActionResult` (artifacts, raw outputs, logs, metrics, errors) belongs only on `ObservedTransition`, never on `PredictedTransition`.
-- `DerivedRecord` (evidence, decision, finding, summary, observation, prediction_error) is interpretation layered on top of an observed transition — explicitly not source of truth, expected to be re-derivable.
+- `SnapshotPayload`: working context attached to a node
+- `ResultPayload`: actual or predicted result attached to a transition
+- `DerivedPayload`: interpretation such as evidence, finding, decision, summary
+- `MatchPayload`: links an observed transition to a predicted transition
+- `CutPayload`: append-only rewind marker attached to a transition
 
-### State semantics
+Snapshots are working memory, not source of truth. Facts should come from transitions and payloads.
 
-`StateNode` carries a `StateSnapshot` (working context for planning: requirement, current artifacts, finding refs, open questions, active branches, prediction summary, budget, metadata) plus `snapshot_hash`. The snapshot is *working memory*, not source of truth — `optagent snapshot --rebuild` reconstructs it from `TraceDAG` history. Don't add fields that try to make the snapshot authoritative; route facts through `ActionResult` / `ObservedTransition` / `DerivedRecord` instead.
+## RunHandle
 
-### Append-only rewind
+`RunHandle` is defined in `src/optagent/core/run/handle.py` and binds verb implementations from sibling modules.
 
-`rewind` does not delete. It appends one `TraceCut` record (`cut_id`, `cut_at`, `rewound_to_state_id`, `cut_transition_id`, `reason`, `user_id`) to the TraceDAG. The cut subtree's records remain; "is this state/transition active?" is a **read-time replay** via `trace_dag.cut_state_ids()` / `cut_transition_ids()` / `inactive_transition_ids()` / `is_cut_state(...)`.
+Main verbs:
 
-Writers (`plan`, `promote(mode="plan")`, `observe`, `promote(mode="transition")`) must call `_ensure_active_observed_state(state_id)` before extending an observed state. Read-only APIs do not. Rewind itself only accepts transitions on the active path from `--from-state`; ancestor checks walk incoming edges, never depth.
+- `plan(from_node_id, ...)`
+- `extend(node_id, ...)`
+- `predict(plan_id, ...)`
+- `observe(plan_id, result, ...)`
+- `promote(mode="plan" | "transition", ...)`
+- `derive(transition_id, ...)`
+- `rewind(transition_id, from_node_id=..., ...)`
+- `refresh(from_node_id=...)`
+- `trace(node_id, ...)`
+- `state_show(node_id)`
+- `state_update(node_id=..., ...)`
+- `snapshot_rebuild(node_id)`
 
-This is the invariant: **records are immutable, the active set is computed**. Don't introduce mutation paths or cached "is_active" fields.
+When adding a new RunHandle method, implement it in a focused `src/optagent/core/run/<verb>.py` module and bind it in `handle.py`.
 
-### Storage
+## IDs
 
-`src/optagent/storage/jsonl.py` (`JsonlRunStore`) writes a run as a directory under `<store-dir>/<run_id>/`: `run.json` (metadata + requirement), and JSONL files per entity (`states.jsonl`, `execution_plans.jsonl`, `prediction_plans.jsonl`, `predicted_transitions.jsonl`, `observed_transitions.jsonl`, `derived_records.jsonl`). `run.save(store)` and `store.load_run(run_id)` round-trip the in-memory `RunHandle`.
+IDs are minted through `RunHandle._next_id(prefix)`.
 
-### CLI layer
+Current prefixes include:
 
-`src/optagent/cli/main.py` is a dispatcher; each subcommand has a `commands/<name>.py` module exposing `add_parser` and `cli_<name>`. Commands resolve the target run in this order: `--run` flag → `OPTAGENT_RUN_ID` env → current-run marker at `<store-dir>/../current.json` (set by `init`/`use`). User attribution: `--user` → `OPTAGENT_USER_ID` → `<store-dir>/../config.json` `user.id` → `"user"`.
+- `n`
+- `t`
+- `plan`
+- `dag`
+- `pl`
+- `sel`
+- `promotion`
 
-Cursors (`src/optagent/cli/workspace.py`) are CLI-only view state under `<store-dir>/../workspace/cursors.json` — **core `RunHandle` writers must not read this module**. Keep that boundary.
+Do not hand-format new IDs except for seed roots created during `init`.
 
-The `workflows/`, `domains/`, `execution/`, `search/` packages are scaffolding for future planner/executor/policy integration; treat them as not-yet-wired unless the task explicitly says so.
+## Rewind
 
-## Conventions worth preserving
+Rewind is append-only. It attaches a `CutPayload`; it does not delete nodes, transitions, plans, or payloads.
 
-- New IDs go through `_next_id`; don't hand-format ID strings except for the seed roots (`s_obs_0000`, `s_pred_0000`).
-- New entity types should follow the schema/dataclass pattern in `src/optagent/core/schema/` and round-trip through `to_jsonable` for storage.
-- When a request would conflate prediction and trace data (e.g. attaching `ActionResult` to a `PredictedTransition`, caching depth on a node, mutating a cut record), push back — these are intentional invariants.
+Activity is computed at read time in `src/optagent/core/cuts.py`.
+
+Writers that extend observed history must reject cut nodes via `_ensure_active_observed_node(node_id)`.
+
+## Storage
+
+`JsonlRunStore` writes the current schema only:
+
+- `run.json`
+- `dags.jsonl`
+- `nodes.jsonl`
+- `plans.jsonl`
+- `transitions.jsonl`
+- `payloads.jsonl`
+- `selections.jsonl`
+
+Do not preserve old `states.jsonl` / `execution_plans.jsonl` compatibility unless requested.
+
+## CLI
+
+`src/optagent/cli/main.py` dispatches to `src/optagent/cli/commands/<name>.py`.
+
+Commands resolve the target run in this order:
+
+1. `--run`
+2. `OPTAGENT_RUN_ID`
+3. `<store-dir>/../current.json`
+
+Mutating commands resolve user attribution in this order:
+
+1. `--user`
+2. `OPTAGENT_USER_ID`
+3. `<store-dir>/../config.json` `user.id`
+4. `"user"`
+
+The `workflows/`, `domains/`, `execution/`, and `search/` packages are scaffolding unless the task explicitly wires them.

@@ -10,82 +10,31 @@ from optagent.storage.jsonl import JsonlRunStore
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
-    """Register the ``snapshot`` subcommand parser."""
-    parser = subparsers.add_parser(
-        "snapshot", help="Show or rebuild an observed state snapshot"
-    )
-    parser.add_argument("--run", default=None, help="Run identifier (optional if current run is set)")
-    parser.add_argument(
-        "--state-id",
-        required=True,
-        help="Target observed state",
-    )
-    parser.add_argument(
-        "--rebuild",
-        action="store_true",
-        help="Rebuild snapshot from trace history (action results and derived records)",
-    )
-    parser.add_argument(
-        "--store-dir",
-        default=".optagent/runs",
-        help="Directory where runs are stored (default: .optagent/runs)",
-    )
+    parser = subparsers.add_parser("snapshot", help="Show or rebuild a node's snapshot payload")
+    parser.add_argument("--run", default=None)
+    parser.add_argument("--node-id", required=True)
+    parser.add_argument("--rebuild", action="store_true")
+    parser.add_argument("--store-dir", default=".optagent/runs")
     return parser
 
 
-def run_snapshot_command(
-    *,
-    run_id: str,
-    state_id: str,
-    rebuild: bool,
-    store_dir: str,
-) -> dict:
-    """Show or rebuild the StateSnapshot for a run.
-
-    Parameters
-    ----------
-    run_id:
-        Identifier of the run.
-    state_id:
-        Optional target observed state.  Defaults to current.
-    rebuild:
-        If ``True``, regenerate the snapshot from the state's trace
-        history (artifacts, raw outputs, logs, derived records).
-    store_dir:
-        Directory where runs are stored.
-
-    Returns
-    -------
-    dict with the state node dict.
-
-    Raises
-    ------
-    KeyError
-        If the run_id or state_id does not exist.
-    """
+def run_snapshot_command(*, run_id: str, node_id: str, rebuild: bool, store_dir: str) -> dict:
     store = JsonlRunStore(store_dir)
-    run_path = store.run_path(run_id)
-    if not run_path.exists():
+    if not store.run_path(run_id).exists():
         raise KeyError(f"unknown run_id: {run_id}")
     handle = store.load_run(run_id)
-
     if rebuild:
-        state = handle.snapshot_rebuild(state_id=state_id)
+        snap = handle.snapshot_rebuild(node_id)
         store.save_run(handle)
     else:
-        state = handle.trace_dag.nodes[state_id]
-
-    return state.to_dict()
+        snap = handle.state_show(node_id)
+    return snap.to_dict()
 
 
 def cli_snapshot(args) -> int:
-    """Entry point for ``optagent snapshot`` subcommand.
-
-    Prints the state snapshot as JSON to stdout.
-    """
     result = run_snapshot_command(
         run_id=resolve_run_id_from_args(args),
-        state_id=args.state_id,
+        node_id=args.node_id,
         rebuild=args.rebuild,
         store_dir=args.store_dir,
     )
