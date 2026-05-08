@@ -30,6 +30,8 @@ GraphView
 
 `InputTransition` は複数 input node を受け取る入力側 transition です。`PlanPayload` はここに attach します。`OutputTransition` は 1 つの output node に到達する出力側 transition です。`PredictionPayload` / `ResultPayload` はここに attach します。
 
+node には軽いメモとして `NotePayload` を attach できます。
+
 `RunGraph` は append-only です。一度追加した node / input transition / output transition / payload は削除せず、取り消しや無効化は `CutPayload` と read-time の計算で表します。
 
 ## Quick Start
@@ -119,6 +121,7 @@ python3 -m optagent.cli.main show --run demo
 - `Node`: pure graph node。
 - `InputTransition`: 複数 input node を受け取る入力側 transition。
 - `OutputTransition`: 1 つの output node に到達する出力側 transition。
+- `NotePayload`: node に attach される軽いメモ。
 - `PlanPayload`: `InputTransition` に attach される plan 情報。
 - `PredictionPayload`: prediction output に attach される予測情報。
 - `ResultPayload`: observed output に attach される実行結果。

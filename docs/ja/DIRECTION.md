@@ -24,7 +24,7 @@ optagent は、pure な graph record と domain payload を分けます。
 Node / InputTransition / OutputTransition
   = graph の骨格
 
-PlanPayload / PredictionPayload / ResultPayload / CutPayload
+NotePayload / PlanPayload / PredictionPayload / ResultPayload / CutPayload
   = graph に attach される意味
 ```
 
@@ -34,12 +34,15 @@ run 全体の DAG は `RunGraph` です。隔離した仮説展開は別の reco
 
 `OutputTransition` は input transition から 1 つの output node に到達します。prediction は `PredictionPayload`、実測は `ResultPayload` として output transition に attach します。
 
+node には軽いメモとして `NotePayload` を attach できます。
+
 `RunGraph` は append-only です。一度追加した node / input transition / output transition / payload は削除せず、取り消しや無効化は `CutPayload` と read-time 計算で表します。
 
 ## optagent がやること
 
 - run を作る
 - `RunGraph` と `GraphView` を管理する
+- node に軽いメモを `NotePayload` として保存する
 - 複数 input node から `InputTransition` を作る
 - plan 情報を `PlanPayload` として保存する
 - prediction output と `PredictionPayload` を保存する
@@ -80,7 +83,7 @@ executor、planner、predictor、LLM、benchmark runner は外側から接続し
 
 1. `RunGraph` + `GraphView` + input/output transition model を 0.1 として固める
 2. CLI と JSONL storage の仕様をドキュメントと一致させる
-3. `PlanPayload` / `PredictionPayload` / `ResultPayload` / `CutPayload` に payload を整理する
+3. `NotePayload` / `PlanPayload` / `PredictionPayload` / `ResultPayload` / `CutPayload` に payload を整理する
 4. `GraphView` workflow の作成、表示、merge を具体化する
 5. executor / evaluator の protocol を整える
 

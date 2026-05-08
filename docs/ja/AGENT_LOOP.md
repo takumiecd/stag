@@ -6,6 +6,7 @@ optagent は agent そのものではありません。人間、AI、script、ex
 
 ```text
 input node を選ぶ
+  -> 必要なら NotePayload を node に残す
   -> InputTransition + PlanPayload を作る
   -> 必要なら OutputTransition + PredictionPayload を作る
   -> optagent の外で実行する
@@ -35,6 +36,12 @@ input_transition = run.plan(
         intent="run benchmark",
     ),
 )
+```
+
+必要なら node に軽いメモを残せます。
+
+```python
+run.note(run.root_node_id, "baseline context looks clean", tags=["context"])
 ```
 
 ## 3. 予測する
@@ -81,6 +88,7 @@ history = run.trace(observed.to_node_id, depth=3)
 取得できるもの:
 
 - past node ids
+- note payload ids
 - input transition ids
 - output transition ids
 - plan payload ids

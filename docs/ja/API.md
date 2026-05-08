@@ -54,6 +54,7 @@ history = run.trace(observed.to_node_id)
 - `InputTransition`
 - `OutputTransition`
 - `PayloadBase`
+- `NotePayload`
 - `PlanPayload`
 - `PredictionPayload`
 - `ResultPayload`
@@ -95,6 +96,21 @@ run.plan(
 複数 input node を受け取り、`InputTransition` を作ります。plan の intent、入力、制約、仮定などは `PlanPayload` としてその input transition に attach します。
 
 cut 済み input transition の下流 node や inactive な node を渡すと `ValueError` です。
+
+## `run.note`
+
+```python
+run.note(
+    node_id: str,
+    text: str,
+    *,
+    tags: list[str] | tuple[str, ...] = (),
+    view: str = "main",
+    user_id: str | None = None,
+) -> NotePayload
+```
+
+node に軽いメモとして `NotePayload` を attach します。既存 node や transition は変更しません。
 
 ## `run.predict`
 

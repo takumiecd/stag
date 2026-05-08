@@ -65,6 +65,14 @@ optagent observe <input_transition_id> [--view main] [--matched-prediction <outp
 
 `--matched-prediction` を指定すると、`ResultPayload.matched_prediction_output_id` に prediction output id を保存します。
 
+### `note`
+
+```bash
+optagent note --node <node_id> --text TEXT [--tag TAG] [--view main]
+```
+
+node に軽いメモとして `NotePayload` を attach します。既存 record は変更しません。
+
 ### `rewind`
 
 ```bash

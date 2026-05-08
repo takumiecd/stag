@@ -19,6 +19,7 @@ RunGraph
   ├── input_transitions_by_node
   ├── output_transitions_by_input
   ├── output_transitions_by_node
+  ├── payloads_by_node
   ├── payloads_by_input_transition
   └── payloads_by_output_transition
 
@@ -43,6 +44,7 @@ GraphView
 状態の変化、取り消し、無効化、比較、解釈の更新は、新しい record や payload を追加して表します。
 
 - plan は `InputTransition` と `PlanPayload` を追加する
+- node のメモは `NotePayload` を追加する
 - 予測は `OutputTransition(kind="prediction")` と `PredictionPayload` を追加する
 - 実行結果は `OutputTransition(kind="observed")` と `ResultPayload` を追加する
 - plan の無効化は `InputTransition` に `CutPayload` を追加する
@@ -91,7 +93,9 @@ parent Dag / child Dag がそれぞれ `nodes` や `transitions` を持つと、
 Node(node_id="n_0000", metadata={})
 ```
 
-node は状態の中身を直接持ちません。必要な情報は payload として input / output transition に attach します。
+node は状態の中身を直接持ちません。必要な情報は payload として node / input transition / output transition に attach します。
+
+node には軽いメモとして `NotePayload` を attach できます。これは source of truth ではなく、人間や evaluator が残す文脈、観察、TODO、補足です。
 
 ### InputTransition
 
@@ -141,12 +145,32 @@ PlanPayload(
 )
 ```
 
+`target_kind` は次のいずれかです。
+
+- `node`
+- `input_transition`
+- `output_transition`
+
 0.1 の最小 payload は次の通りです。
 
+- `NotePayload`
 - `PlanPayload`
 - `PredictionPayload`
 - `ResultPayload`
 - `CutPayload`
+
+### NotePayload
+
+`Node` に attach される軽いメモです。
+
+含めるもの:
+
+- text
+- author
+- tags
+- metadata
+
+`NotePayload` は source of truth ではありません。状態を巨大な snapshot として保存するためではなく、node に紐づく補足や人間向けの短いメモを残すために使います。
 
 ### PlanPayload
 
@@ -200,7 +224,7 @@ PlanPayload(
 
 `OutputTransition` に attach した場合、その output だけを inactive として扱います。同じ input transition から出た他の output は残ります。
 
-node 自体には `CutPayload` を attach しません。node は複数の input / output から参照されうるため、cut 対象は transition に限定します。
+node 自体には `CutPayload` を attach しません。node は複数の input / output から参照されうるため、cut 対象は transition に限定します。node に付けられる payload は `NotePayload` のような非破壊の補足情報に限定します。
 
 ## GraphView
 
