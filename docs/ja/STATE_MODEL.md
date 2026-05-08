@@ -249,6 +249,15 @@ exp-a
 - cut 済み input transition から新しい output は作れない
 - cut 済み output transition は trace や view で inactive として扱う
 
+### is_inactive_input_transition の判定ルール
+
+`is_inactive_input_transition(graph, it_id)` は以下の条件のいずれかに該当する IT を inactive と判定します。
+
+1. **直接 cut**: `CutPayload(target_kind="input_transition")` がその IT に attach されている。
+2. **input_node が inactive**: IT の `input_node_ids` のいずれかが `inactive_node_ids` に含まれる（つまり、上流の OT が cut されたことで input node が inactive になった場合）。
+
+`predict` と `observe` は inactive な IT に対して `ValueError` を送出し、新しい output transition の追加を拒否します。
+
 ## Storage
 
 JSONL storage は run graph 形式だけを扱います。

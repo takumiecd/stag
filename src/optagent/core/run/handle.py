@@ -79,9 +79,10 @@ def init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle:
 
 
 # Bind verb implementations.
-from optagent.core.run.plan import plan_impl as _plan_impl  # noqa: E402
 from optagent.core.run.note import note_impl as _note_impl  # noqa: E402
 from optagent.core.run.observe import observe_impl as _observe_impl  # noqa: E402
+from optagent.core.run.outcomes import outcomes_impl as _outcomes_impl  # noqa: E402
+from optagent.core.run.plan import plan_impl as _plan_impl  # noqa: E402
 from optagent.core.run.predict import predict_impl as _predict_impl  # noqa: E402
 from optagent.core.run.rewind import rewind_impl as _rewind_impl  # noqa: E402
 from optagent.core.run.trace import trace_impl as _trace_impl  # noqa: E402
@@ -99,6 +100,7 @@ RunHandle.predict = _predict_impl
 RunHandle.rewind = _rewind_impl
 RunHandle.trace = _trace_impl
 RunHandle.history = _trace_impl
+RunHandle.outcomes = _outcomes_impl
 RunHandle.view_create = _view_create_impl
 RunHandle.view_list = _view_list_impl
 RunHandle.view_show = _view_show_impl

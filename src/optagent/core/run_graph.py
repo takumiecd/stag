@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
+from typing import Literal
 
 from optagent.core.graph_view import GraphView
 from optagent.core.schema.graph import InputTransition, Node, OutputTransition
-from optagent.core.schema.payloads import Payload
+from optagent.core.schema.payloads import Payload, PredictionPayload, ResultPayload
 from optagent.core.types import JSONValue, to_jsonable
 
 
@@ -56,7 +57,11 @@ class RunGraph:
         Returns dict with keys node_ids, input_transition_ids,
         output_transition_ids, payload_ids — each a sorted list.
         """
-        from optagent.core.cuts import is_active_node, is_inactive_output_transition
+        from optagent.core.cuts import (
+            is_active_node,
+            is_inactive_input_transition,
+            is_inactive_output_transition,
+        )
 
         visited_nodes: set[str] = set()
         visited_its: set[str] = set()
@@ -72,6 +77,8 @@ class RunGraph:
                 continue
             visited_nodes.add(nid)
             for it_id in self.input_transitions_from_node.get(nid, ()):
+                if is_inactive_input_transition(self, it_id):
+                    continue
                 visited_its.add(it_id)
                 for ot_id in self.output_transitions_from_it.get(it_id, ()):
                     if is_inactive_output_transition(self, ot_id):
@@ -176,6 +183,49 @@ class RunGraph:
         ids = self.payloads_by_output_transition.get(ot_id, ())
         items = [self.payloads[pid] for pid in ids]
         return items if payload_type is None else [p for p in items if p.payload_type == payload_type]
+
+    # ----- output classification -------------------------------------------
+
+    def output_kind(self, ot_id: str) -> Literal["prediction", "result", "mixed", "unknown"]:
+        """Classify an OT by what payloads are attached.
+
+        - "result": at least one ResultPayload, no PredictionPayload
+        - "prediction": at least one PredictionPayload, no ResultPayload
+        - "mixed": both kinds present
+        - "unknown": neither kind present
+        """
+        payloads = self.payloads_for_output_transition(ot_id)
+        has_result = any(isinstance(p, ResultPayload) for p in payloads)
+        has_prediction = any(isinstance(p, PredictionPayload) for p in payloads)
+        if has_result and has_prediction:
+            return "mixed"
+        if has_result:
+            return "result"
+        if has_prediction:
+            return "prediction"
+        return "unknown"
+
+    def output_ids_for_input(
+        self,
+        it_id: str,
+        *,
+        kind: Literal["prediction", "result"] | None = None,
+        active_only: bool = True,
+    ) -> list[str]:
+        """Return OT IDs for a given IT, optionally filtered by kind and activity."""
+        from optagent.core.cuts import is_inactive_output_transition
+
+        ot_ids = self.output_transitions_from_it.get(it_id, [])
+        result: list[str] = []
+        for ot_id in ot_ids:
+            if active_only and is_inactive_output_transition(self, ot_id):
+                continue
+            if kind is not None:
+                ot_kind = self.output_kind(ot_id)
+                if ot_kind != kind and ot_kind != "mixed":
+                    continue
+            result.append(ot_id)
+        return result
 
     # ----- topology --------------------------------------------------------
 

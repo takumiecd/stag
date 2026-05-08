@@ -5,9 +5,11 @@ from __future__ import annotations
 from optagent.core.cuts import (
     cut_input_transition_ids,
     cut_output_transition_ids,
+    inactive_input_transition_ids,
     inactive_node_ids,
     inactive_output_transition_ids,
     is_active_node,
+    is_inactive_input_transition,
     is_inactive_output_transition,
 )
 from optagent.core.run_graph import RunGraph
@@ -85,3 +87,34 @@ def test_cut_on_output_transition_only_that_ot_inactive():
     assert is_active_node(g, "n_a")
     # it_1 itself is not cut (only its output was)
     assert "it_1" not in cut_input_transition_ids(g)
+
+
+def test_is_inactive_input_transition_directly_cut():
+    g = _linear_graph()
+    g.attach_payload(
+        CutPayload(
+            payload_id="cp_it",
+            target_id="it_1",
+            target_kind="input_transition",
+            cut_at="2026-01-01T00:00:00Z",
+        )
+    )
+    assert is_inactive_input_transition(g, "it_1")
+    assert "it_1" in inactive_input_transition_ids(g)
+    # it_2 is not directly cut, but its input node n_b is inactive
+    assert is_inactive_input_transition(g, "it_2")
+
+
+def test_is_inactive_input_transition_via_inactive_input_node():
+    g = _linear_graph()
+    # cut ot_1 so n_b becomes inactive, making it_2 inactive
+    g.attach_payload(
+        CutPayload(
+            payload_id="cp_ot",
+            target_id="ot_1",
+            target_kind="output_transition",
+            cut_at="2026-01-01T00:00:00Z",
+        )
+    )
+    assert not is_inactive_input_transition(g, "it_1")
+    assert is_inactive_input_transition(g, "it_2")

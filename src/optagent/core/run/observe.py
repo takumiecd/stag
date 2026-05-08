@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from optagent.core.cuts import is_inactive_input_transition
 from optagent.core.schema.graph import Node, OutputTransition
 from optagent.core.schema.payloads import ResultPayload
 
@@ -20,6 +21,10 @@ def observe_impl(
     """
     if input_transition_id not in self.run_graph.input_transitions:
         raise KeyError(f"unknown input_transition_id: {input_transition_id}")
+    if is_inactive_input_transition(self.run_graph, input_transition_id):
+        raise ValueError(
+            f"input_transition is inactive (cut or in cut subtree): {input_transition_id}"
+        )
 
     new_node = Node(node_id=self._next_id("n"))
     self.run_graph.add_node(new_node)

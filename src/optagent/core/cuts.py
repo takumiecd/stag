@@ -77,3 +77,18 @@ def is_active_node(graph: RunGraph, node_id: str) -> bool:
 
 def is_inactive_output_transition(graph: RunGraph, ot_id: str) -> bool:
     return ot_id in inactive_output_transition_ids(graph)
+
+
+def inactive_input_transition_ids(graph: RunGraph) -> set[str]:
+    """All IT IDs that are inactive: directly cut, or any input_node is inactive."""
+    directly_cut = cut_input_transition_ids(graph)
+    inactive_nodes = inactive_node_ids(graph)
+    result: set[str] = set(directly_cut)
+    for it_id, it in graph.input_transitions.items():
+        if any(nid in inactive_nodes for nid in it.input_node_ids):
+            result.add(it_id)
+    return result
+
+
+def is_inactive_input_transition(graph: RunGraph, it_id: str) -> bool:
+    return it_id in inactive_input_transition_ids(graph)

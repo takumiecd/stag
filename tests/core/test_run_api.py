@@ -184,3 +184,80 @@ def test_view_reachable_from():
     assert it2.input_transition_id in reachable["input_transition_ids"]
     assert ot.output_transition_id in reachable["output_transition_ids"]
     assert ot2.output_transition_id in reachable["output_transition_ids"]
+
+
+def test_multiple_observed_outputs_per_input_transition():
+    run = init(_req(), run_id="t_multi_obs")
+    it = run.plan([run.root_node_id], _plan_payload())
+    ot1 = run.observe(it.input_transition_id, ResultPayload(payload_id="x", target_id="x", status="completed"))
+    ot2 = run.observe(it.input_transition_id, ResultPayload(payload_id="y", target_id="y", status="failed"))
+    assert ot1.output_transition_id != ot2.output_transition_id
+    assert ot1.to_node_id != ot2.to_node_id
+    ots = run.run_graph.output_transitions_from_it[it.input_transition_id]
+    assert ot1.output_transition_id in ots
+    assert ot2.output_transition_id in ots
+
+
+def test_predict_on_cut_input_transition_raises():
+    run = init(_req(), run_id="t_pred_cut")
+    it = run.plan([run.root_node_id], _plan_payload())
+    run.rewind(it.input_transition_id, target_kind="input_transition")
+    with pytest.raises(ValueError, match="inactive"):
+        run.predict(it.input_transition_id)
+
+
+def test_observe_on_cut_input_transition_raises():
+    run = init(_req(), run_id="t_obs_cut")
+    it = run.plan([run.root_node_id], _plan_payload())
+    run.rewind(it.input_transition_id, target_kind="input_transition")
+    with pytest.raises(ValueError, match="inactive"):
+        run.observe(it.input_transition_id, ResultPayload(payload_id="x", target_id="x", status="completed"))
+
+
+def test_observe_on_input_transition_with_cut_input_node_raises():
+    run = init(_req(), run_id="t_obs_cut_node")
+    it1 = run.plan([run.root_node_id], _plan_payload())
+    ot1 = run.observe(it1.input_transition_id, ResultPayload(payload_id="x", target_id="x", status="completed"))
+    # cut the OT so ot1.to_node_id becomes inactive
+    run.rewind(ot1.output_transition_id, target_kind="output_transition")
+    # plan rooted at the now-inactive node
+    it2 = run.run_graph.input_transitions.get(
+        next(
+            (it_id for it_id, it in run.run_graph.input_transitions.items()
+             if ot1.to_node_id in it.input_node_ids),
+            None,
+        )
+    )
+    # instead, manually wire: create IT with inactive input node and check observe rejects it
+    from optagent.core.schema.graph import InputTransition
+    it_bad = InputTransition(input_transition_id="it_bad", input_node_ids=(ot1.to_node_id,))
+    run.run_graph.add_input_transition(it_bad)
+    with pytest.raises(ValueError, match="inactive"):
+        run.observe("it_bad", ResultPayload(payload_id="z", target_id="z", status="completed"))
+
+
+def test_outcomes_returns_predictions_observations_split():
+    run = init(_req(), run_id="t_outcomes_split")
+    it = run.plan([run.root_node_id], _plan_payload())
+    pred_ots = run.predict(it.input_transition_id, max_outcomes=2)
+    obs_ot = run.observe(it.input_transition_id, ResultPayload(payload_id="x", target_id="x", status="completed"))
+    out = run.outcomes(it.input_transition_id)
+    assert out["input_transition_id"] == it.input_transition_id
+    assert obs_ot.output_transition_id in out["observations"]
+    assert obs_ot.output_transition_id in out["active_observations"]
+    assert out["inactive_observations"] == []
+    for pot in pred_ots:
+        assert pot.output_transition_id in out["predictions"]
+
+
+def test_outcomes_marks_inactive_observation():
+    run = init(_req(), run_id="t_outcomes_inactive")
+    it = run.plan([run.root_node_id], _plan_payload())
+    ot1 = run.observe(it.input_transition_id, ResultPayload(payload_id="x", target_id="x", status="completed"))
+    ot2 = run.observe(it.input_transition_id, ResultPayload(payload_id="y", target_id="y", status="completed"))
+    run.rewind(ot1.output_transition_id, target_kind="output_transition")
+    out = run.outcomes(it.input_transition_id)
+    assert ot1.output_transition_id in out["observations"]
+    assert ot1.output_transition_id in out["inactive_observations"]
+    assert ot1.output_transition_id not in out["active_observations"]
+    assert ot2.output_transition_id in out["active_observations"]

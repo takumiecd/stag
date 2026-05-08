@@ -124,6 +124,8 @@ run.predict(
 
 prediction output の `OutputTransition` を作ります。各 output transition には `PredictionPayload` が attach されます。
 
+inactive な input transition（直接 cut 済み、または input node が inactive）に対しては `ValueError` を送出します。
+
 ## `run.observe`
 
 ```python
@@ -141,7 +143,31 @@ run.observe(
 
 1 つの input transition から prediction output は複数作れますし、observed output も複数作れます。確率的に結果が変わる操作では同じ input transition の下に複数 observed output を並べて記録できます。
 
+inactive な input transition（直接 cut 済み、または input node が inactive）に対しては `ValueError` を送出します。
+
 `run.result(...)` は `run.observe(...)` の alias です。
+
+## `run.outcomes`
+
+```python
+run.outcomes(
+    input_transition_id: str,
+) -> dict
+```
+
+1 つの input transition に紐づく全 output transition を分類して返します。
+
+```python
+{
+    "input_transition_id": "it_xxxx",
+    "predictions": [...],          # PredictionPayload を持つ OT（active/inactive 問わず）
+    "observations": [...],         # ResultPayload を持つ OT（active/inactive 問わず）
+    "active_observations": [...],  # inactive でない ResultPayload OT
+    "inactive_observations": [...] # cut により inactive になった ResultPayload OT
+}
+```
+
+input_transition_id が不明な場合は `KeyError` を送出します。
 
 ## `run.rewind`
 
