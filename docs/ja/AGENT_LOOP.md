@@ -12,7 +12,7 @@ node を見る
   -> observe で結果を保存する
   -> derive で finding や decision を付ける
   -> trace で履歴を読む
-  -> 必要なら branch を作って隔離した探索をする
+  -> 必要なら GraphView を作って隔離した探索をする
 ```
 
 ## 1. node を読む
@@ -110,20 +110,20 @@ history = run.trace(observed.to_node_id, depth=3)
 - derived payload ids
 - artifact / raw output / log refs
 
-## 8. branch で探索する
+## 8. GraphView で探索する
 
-長い仮説展開や隔離した探索をしたい場合は branch を作ります。branch は `GraphView` であり、record の実体は `RunGraph` にあります。
+長い仮説展開や隔離した探索をしたい場合は `GraphView` を作ります。record の実体は `RunGraph` にあります。
 
 ```python
-branch = run.branch_create("exp-a", from_node_id=observed.to_node_id)
-future_plan = run.plan(observed.to_node_id, branch=branch.view_id, intent="try variant")[0]
-run.predict(future_plan.plan_id, branch=branch.view_id, max_outcomes=3)
+view = run.view_create("exp-a", from_node_id=observed.to_node_id)
+future_plan = run.plan(observed.to_node_id, view=view.view_id, intent="try variant")[0]
+run.predict(future_plan.plan_id, view=view.view_id, max_outcomes=3)
 ```
 
-採用したい path は branch merge で main の membership に追加します。record はコピーしません。
+採用したい path は view merge で main の membership に追加します。record はコピーしません。
 
 ```python
-run.branch_merge("exp-a", into="main")
+run.view_merge("exp-a", into="main")
 ```
 
 ## Rewind

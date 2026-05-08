@@ -27,7 +27,7 @@ mutating command の user attribution は次の順に解決します。
 3. `<store-dir>/../config.json` の `user.id`
 4. `"user"`
 
-`RunGraph` は run 全体の DAG です。`GraphView` はその部分集合で、CLI では `branch` と呼びます。通常の command は `main` branch を対象にします。branch を明示できる command は `--branch` を受け取ります。
+`RunGraph` は run 全体の DAG です。`GraphView` はその部分集合です。通常の command は `main` view を対象にします。view を明示できる command は `--view` を受け取ります。
 
 ## Commands
 
@@ -37,20 +37,20 @@ mutating command の user attribution は次の順に解決します。
 optagent init <requirement_id> [--target-type code] [--target-id ID] [--run-id RID] [--store-dir DIR]
 ```
 
-run を作成し、`RunGraph` と `main` branch を seed します。root node は `n_0000` です。成功時は run id を出力し、current run も更新します。
+run を作成し、`RunGraph` と `main` view を seed します。root node は `n_0000` です。成功時は run id を出力し、current run も更新します。
 
 ### `plan`
 
 ```bash
-optagent plan --from-node n_0000 [--branch main] [--planner default] [--max-plans 1] [--action-type analysis] [--intent TEXT] [--input k=v]
+optagent plan --from-node n_0000 [--view main] [--planner default] [--max-plans 1] [--action-type analysis] [--intent TEXT] [--input k=v]
 ```
 
-node に grounded された `Plan` を作ります。作成した plan は指定 branch の membership に追加されます。
+node に grounded された `Plan` を作ります。作成した plan は指定 view の membership に追加されます。
 
 ### `predict`
 
 ```bash
-optagent predict <plan_id> [--branch main] [--predictor default] [--max-outcomes 1]
+optagent predict <plan_id> [--view main] [--predictor default] [--max-outcomes 1]
 ```
 
 同じ `RunGraph` に `kind="prediction"` の transition を作ります。各 transition には `ResultPayload` が attach されます。1 つの plan から複数の prediction transition を作れます。
@@ -58,7 +58,7 @@ optagent predict <plan_id> [--branch main] [--predictor default] [--max-outcomes
 ### `observe`
 
 ```bash
-optagent observe --plan <plan_id> [--branch main] [--match-prediction <transition_id>] [--status completed] [--artifact PATH] [--raw-output PATH] [--log PATH] [--metric k=v] [--error MSG]
+optagent observe --plan <plan_id> [--view main] [--match-prediction <transition_id>] [--status completed] [--artifact PATH] [--raw-output PATH] [--log PATH] [--metric k=v] [--error MSG]
 ```
 
 実行結果を `kind="observed"` の transition として記録します。新しい transition に `ResultPayload` が attach されます。
@@ -76,7 +76,7 @@ transition に `DerivedPayload` を attach します。
 ### `rewind`
 
 ```bash
-optagent rewind --transition <transition_id> --from-node <node_id> [--branch main] [--reason TEXT]
+optagent rewind --transition <transition_id> --from-node <node_id> [--view main] [--reason TEXT]
 ```
 
 transition に `CutPayload` を attach します。既存 record は削除しません。
@@ -84,7 +84,7 @@ transition に `CutPayload` を attach します。既存 record は削除しま
 ### `trace`
 
 ```bash
-optagent trace --from-node <node_id> [--branch main] [--depth N] [--include-predictions]
+optagent trace --from-node <node_id> [--view main] [--depth N] [--include-predictions]
 ```
 
 node から過去の履歴を辿ります。デフォルトでは observed transition を中心に読む想定です。prediction transition も含めたい場合は `--include-predictions` を使います。
@@ -92,47 +92,47 @@ node から過去の履歴を辿ります。デフォルトでは observed trans
 ### `show`
 
 ```bash
-optagent show [--branch main] [--node ID | --plan ID | --transition ID | --payload ID]
+optagent show [--view main] [--node ID | --plan ID | --transition ID | --payload ID]
 ```
 
-引数なしなら run 全体を表示します。出力は `graph` と `branches` を含みます。個別 ID 指定時は `RunGraph` の global records から探します。
+引数なしなら run 全体を表示します。出力は `graph` と `views` を含みます。個別 ID 指定時は `RunGraph` の global records から探します。
 
-### `branch create`
+### `view create`
 
 ```bash
-optagent branch create --from-node <node_id> --name <branch_id>
+optagent view create --from-node <node_id> --name <view_id>
 ```
 
-指定 node を root とする `GraphView` を作ります。新しい branch は global records をコピーしません。
+指定 node を root とする `GraphView` を作ります。新しい view は global records をコピーしません。
 
-### `branch list`
+### `view list`
 
 ```bash
-optagent branch list
+optagent view list
 ```
 
-run 内の branch を一覧します。
+run 内の view を一覧します。
 
-### `branch show`
+### `view show`
 
 ```bash
-optagent branch show <branch_id>
+optagent view show <view_id>
 ```
 
-branch の membership と metadata を表示します。
+view の membership と metadata を表示します。
 
-### `branch merge`
+### `view merge`
 
 ```bash
-optagent branch merge <branch_id> --into main [--to-node <node_id>]
+optagent view merge <view_id> --into main [--to-node <node_id>]
 ```
 
-branch の選択した path を別 branch の membership に追加します。record の実体は `RunGraph` にあるため、merge は copy ではありません。
+view の選択した path を別 view の membership に追加します。record の実体は `RunGraph` にあるため、merge は copy ではありません。
 
 ### `state`
 
 ```bash
-optagent state --node-id <node_id> [--add-knowledge TEXT] [--add-open-question TEXT] [--add-artifact ID:TYPE:PATH] [--add-branch ID]
+optagent state --node-id <node_id> [--add-knowledge TEXT] [--add-open-question TEXT] [--add-artifact ID:TYPE:PATH] [--add-view ID]
 ```
 
 node の最新 `SnapshotPayload` を表示または更新します。更新時は新しい payload を append します。prediction は `state` ではなく `predict` で transition として記録します。
@@ -167,7 +167,7 @@ optagent promote-plan
 optagent promote-transition
 ```
 
-`extend` は `plan --branch ...` に統合します。`refresh` は predicted Dag がなくなるため不要です。`promote-transition` は `observe --match-prediction ...` に置き換えます。
+`extend` は `plan --view ...` に統合します。`refresh` は predicted Dag がなくなるため不要です。`promote-transition` は `observe --match-prediction ...` に置き換えます。
 
 ## Storage
 
