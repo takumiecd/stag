@@ -1,31 +1,63 @@
 # 状態モデル
 
-この文書は、optagent が問題解決や最適化の過程をどう記録するかを説明します。
+この文書は、optagent 0.1 alpha で目指す状態モデルを説明します。
 
-0.1 alpha では後方互換よりもモデル整理を優先します。旧 `StateNode` / `ExecutionPlan` / `PredictionPlan` / `ObservedTransition` / `PredictedTransition` / `ActionResult` 形式は廃止し、共通の `Dag` と `Payload` に寄せています。
+0.1 alpha では後方互換よりもモデル整理を優先します。旧 `StateNode` / `ExecutionPlan` / `PredictionPlan` / `ObservedTransition` / `PredictedTransition` / `ActionResult` 形式は廃止し、run 全体の graph record と payload に寄せます。
 
 ## 全体像
 
 ```text
 RunHandle
-  ├── observed_dag
-  │   └── 実際に起きた履歴
-  └── predicted_dag
-      └── まだ実行していない未来候補
+  └── graph: RunGraph
 
-Dag
+RunGraph
   ├── nodes: dict[str, Node]
   ├── plans: dict[str, Plan]
   ├── transitions: dict[str, Transition]
   ├── payloads: dict[str, Payload]
-  ├── child_dags: dict[str, Dag]
+  ├── views: dict[str, GraphView]
   ├── incoming_index
   ├── outgoing_index
   ├── plans_by_node
-  └── transitions_by_plan
+  ├── transitions_by_plan
+  ├── payloads_by_node
+  └── payloads_by_transition
+
+GraphView
+  ├── view_id: str
+  ├── root_node_id: str
+  ├── node_ids: set[str]
+  ├── plan_ids: set[str]
+  ├── transition_ids: set[str]
+  ├── payload_ids: set[str]
+  └── metadata
 ```
 
-observed / predicted の区別は `Node` や `Transition` 自体には持たせません。`Dag.metadata["role"]` が `observed` か `predicted` かで意味を決めます。
+`RunGraph` が run 全体の DAG です。`Node` / `Plan` / `Transition` / `Payload` の ID は run 内で global に一意です。
+
+`GraphView` は `RunGraph` の部分集合です。CLI では主に `branch` と呼びます。`main` も特別な `GraphView` の 1 つです。
+
+## なぜ GraphView にするか
+
+parent Dag / child Dag がそれぞれ `nodes` や `transitions` を持つと、別 Dag 間で同じ ID が使われたときに意味が壊れます。さらに、親の transition が子の node を指すような横断参照は index や storage を曖昧にします。
+
+そのため、record の実体は `RunGraph` に集約します。branch / 実験 / 仮説展開は、record をコピーせず `GraphView` の membership で表します。
+
+```text
+RunGraph
+  nodes = {n_0000, n_0001, n_0100}
+  transitions = {t_0000, t_0100}
+
+GraphView main
+  node_ids = {n_0000, n_0001}
+  transition_ids = {t_0000}
+
+GraphView exp-a
+  node_ids = {n_0001, n_0100}
+  transition_ids = {t_0100}
+```
+
+同じ node は複数の view に所属できます。merge は record のコピーではなく、選択した node / transition / plan / payload の ID を別 view の membership に追加する操作です。
 
 ## Pure Graph Records
 
@@ -52,7 +84,7 @@ Plan(
 )
 ```
 
-observed Dag にある `Plan` は実行可能な計画として扱います。predicted Dag にある `Plan` は未来展開用の仮説として扱います。型は同じで、意味は owning Dag が決めます。
+plan 自体に observed / predicted の区別はありません。どの view に属しているか、どの transition を生むかで workflow 上の意味が決まります。
 
 ### Transition
 
@@ -64,14 +96,31 @@ Transition(
     parent_plan_id="plan_0001",
     from_node_id="n_0000",
     to_node_id="n_0002",
+    kind="prediction",
 )
 ```
 
-observed Dag では、1 つの plan から作れる transition は 1 つだけです。predicted Dag では、1 つの plan から複数の outcome transition を作れます。この cardinality は `Dag` ではなく `RunHandle` の writer が守ります。
+`kind` は transition の意味を表します。
+
+- `prediction`: 実行前の予測 outcome
+- `observed`: 実際に起きた outcome
+
+1 つの plan から prediction transition は複数作れます。observed transition は原則 1 つです。この cardinality は `RunGraph` の低レベル操作ではなく `RunHandle` の writer が守ります。
 
 ## Payload
 
 domain data は graph record に埋め込まず、payload として attach します。1 つの target に複数 payload を付けられます。
+
+payload は `target_kind` と `target_id` を持ちます。
+
+```python
+SnapshotPayload(
+    payload_id="pl_0001",
+    target_kind="node",
+    target_id="n_0000",
+    ...
+)
+```
 
 ### SnapshotPayload
 
@@ -84,11 +133,10 @@ node に attach される working context です。
 - knowledge
 - open questions
 - active branches
-- predictions
 - budget
 - metadata
 
-`StateSnapshot` は source of truth ではありません。次の plan を考えるための作業メモで、必要なら履歴から再構築します。
+prediction は snapshot の手書きメモではなく、`kind="prediction"` の transition として表します。
 
 ### ResultPayload
 
@@ -103,7 +151,7 @@ transition に attach される結果です。
 - errors
 - actual cost
 
-observed Dag では実際の実行結果、predicted Dag では予測 outcome の付加情報として使います。
+prediction transition では予測 outcome の付加情報として、observed transition では実測結果として使います。
 
 ### DerivedPayload
 
@@ -122,41 +170,51 @@ derived payload は source of truth ではありません。あとから別の e
 
 ### MatchPayload
 
-observed transition が、どの predicted transition に対応したかを記録します。予測と実測の比較は、transition 本体ではなく payload として残します。
+observed transition が、どの prediction transition に対応したかを記録します。予測と実測の比較は、transition 本体ではなく payload として残します。
 
 ### CutPayload
 
 rewind は削除ではなく `CutPayload` の append で表します。cut された transition から forward に到達できる node / transition は read-time に inactive として扱います。
 
-## Child Dag と Attach
+## Branch と GraphView
 
-`Dag` は `child_dags` を持てます。将来の branch workflow では、探索を子 Dag として切り出し、あとから親 Dag の node と子 Dag の node を `Transition` で接続します。
+CLI では `GraphView` を `branch` と呼びます。
 
-`Dag.attach(...)` はこの接続を表す低レベル API です。子 Dag の中身はコピーせず、親 Dag 側に接続 transition を 1 本追加します。
+軽い未来予測は main view に prediction transition を追加するだけで十分です。長い仮説展開、隔離した探索、試験的な変更は別 branch を作ります。
+
+```text
+main
+  n_0000 --observed--> n_0001
+
+exp-a
+  n_0001 --prediction--> n_0100 --prediction--> n_0101
+```
+
+branch merge は、選択した path の record ID を main view に追加します。record の実体は `RunGraph` にあるため、copy / attach / ID 衝突の問題を避けます。
 
 ## Rewind
 
-`rewind` は observed Dag の transition に `CutPayload` を attach します。
+`rewind` は transition に `CutPayload` を attach します。
 
 重要な点:
 
 - node / transition / plan / payload は削除しない
-- active / inactive は `optagent.core.cuts` で read-time に計算する
+- active / inactive は read-time に計算する
 - cut 済み subtree の node から新しい plan は作れない
 - 別枝を伸ばす場合は active な node を明示して `plan(...)` する
 
 ## Storage
 
-JSONL storage は新しい pure-DAG 形式だけを扱います。
+JSONL storage は run graph 形式だけを扱います。
 
 ```text
 run.json
-dags.jsonl
+graph.json
+views.jsonl
 nodes.jsonl
 plans.jsonl
 transitions.jsonl
 payloads.jsonl
-selections.jsonl
 ```
 
 旧形式の migration は 0.1 alpha では持ちません。

@@ -5,22 +5,22 @@ optagent は agent そのものではありません。人間、AI、script、ex
 ## 基本サイクル
 
 ```text
-observed node を見る
+node を見る
   -> plan を作る
-  -> 必要なら predicted Dag を伸ばす
+  -> 必要なら prediction transition を作る
   -> optagent の外で実行する
-  -> observe / promote で結果を保存する
+  -> observe で結果を保存する
   -> derive で finding や decision を付ける
   -> trace で履歴を読む
-  -> 必要なら refresh で predicted Dag を作り直す
+  -> 必要なら branch を作って隔離した探索をする
 ```
 
-## 1. observed node を読む
+## 1. node を読む
 
 core は mutable な current pointer を持ちません。caller が起点 node を明示します。
 
 ```python
-node_id = run.root_observed_node_id
+node_id = run.root_node_id
 snapshot = run.state_show(node_id)
 ```
 
@@ -30,19 +30,17 @@ snapshot = run.state_show(node_id)
 plan = run.plan(node_id, intent="run benchmark")[0]
 ```
 
-observed Dag の plan は外部 executor に渡せる計画として扱います。
+plan は外部 executor に渡せる計画として扱います。
 
 ## 3. 予測する
 
-予測は predicted Dag 側で行います。
+予測は同じ `RunGraph` に `kind="prediction"` の transition として記録します。
 
 ```python
-pred_root = run.predicted_dag.metadata["root_node_id"]
-future_plan = run.extend(pred_root, intent="predict benchmark outcomes")[0]
-predicted = run.predict(future_plan.plan_id, max_outcomes=3)
+predicted = run.predict(plan.plan_id, max_outcomes=3)
 ```
 
-1 つの predicted plan から複数の outcome transition を作れます。
+1 つの plan から複数の prediction transition を作れます。
 
 ## 4. 実行する
 
@@ -53,6 +51,7 @@ optagent は executor を内蔵しません。外部の script、test runner、b
 ```python
 result = ResultPayload(
     payload_id="pending",
+    target_kind="transition",
     target_id="pending",
     status="completed",
     raw_outputs=("raw/bench.txt",),
@@ -71,15 +70,14 @@ observed = run.observe(plan.plan_id, result)
 予測 transition と対応づける場合:
 
 ```python
-observed = run.promote(
-    mode="transition",
-    predicted_transition_id=predicted[0].transition_id,
-    plan_id=plan.plan_id,
-    result=result,
+observed = run.observe(
+    plan.plan_id,
+    result,
+    matched_prediction_id=predicted[0].transition_id,
 )
 ```
 
-どちらも observed Dag に新しい `Transition` を追加します。対応づける場合は `MatchPayload` も attach されます。
+どちらも `kind="observed"` の `Transition` を追加します。対応づける場合は `MatchPayload` も attach されます。
 
 ## 6. derived payload を残す
 
@@ -108,19 +106,25 @@ history = run.trace(observed.to_node_id, depth=3)
 - transition ids
 - plan ids
 - result payload ids
-- matched predicted transition ids
+- matched prediction transition ids
 - derived payload ids
 - artifact / raw output / log refs
 
-## 8. predicted Dag を更新する
+## 8. branch で探索する
 
-実測結果を保存したあと、未来予測を別の observed node に anchor し直したい場合:
+長い仮説展開や隔離した探索をしたい場合は branch を作ります。branch は `GraphView` であり、record の実体は `RunGraph` にあります。
 
 ```python
-run.refresh(from_node_id=observed.to_node_id)
+branch = run.branch_create("exp-a", from_node_id=observed.to_node_id)
+future_plan = run.plan(observed.to_node_id, branch=branch.view_id, intent="try variant")[0]
+run.predict(future_plan.plan_id, branch=branch.view_id, max_outcomes=3)
 ```
 
-refresh は自動では走りません。caller が必要なタイミングで明示します。
+採用したい path は branch merge で main の membership に追加します。record はコピーしません。
+
+```python
+run.branch_merge("exp-a", into="main")
+```
 
 ## Rewind
 
