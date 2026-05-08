@@ -67,7 +67,7 @@ def run_show_command(
         "input_transition_count": len(g.input_transitions),
         "output_transition_count": len(g.output_transitions),
         "payload_count": len(g.payloads),
-        "views": [v.name for v in handle.views.values()],
+        "views": [v.name for v in handle.run_graph.views.values()],
     }
 
 

@@ -34,7 +34,6 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument("--metric", action="append")
     parser.add_argument("--error", action="append")
     parser.add_argument("--matched-prediction", default=None, dest="matched_prediction_output_id")
-    parser.add_argument("--view", default="main")
     parser.add_argument("--store-dir", default=".optagent/runs")
     parser.add_argument("--user", default=None)
     return parser
@@ -51,7 +50,6 @@ def run_observe_command(
     metrics: dict[str, float] | None,
     errors: list[str] | None,
     matched_prediction_output_id: str | None = None,
-    view: str = "main",
     store_dir: str,
     user_id: str | None = None,
 ) -> dict:
@@ -70,7 +68,7 @@ def run_observe_command(
         errors=tuple(errors or []),
         matched_prediction_output_id=matched_prediction_output_id,
     )
-    ot = handle.observe(input_transition_id, result, view=view, user_id=user_id)
+    ot = handle.observe(input_transition_id, result, user_id=user_id)
     store.save_run(handle)
     return {"output_transition": ot.to_dict()}
 
@@ -86,7 +84,6 @@ def cli_observe(args) -> int:
         metrics=_parse_metrics(getattr(args, "metric", None)),
         errors=getattr(args, "error", None),
         matched_prediction_output_id=args.matched_prediction_output_id,
-        view=args.view,
         store_dir=args.store_dir,
         user_id=resolve_user_id_from_args(args),
     )

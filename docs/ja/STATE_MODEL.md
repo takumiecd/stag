@@ -8,7 +8,7 @@
 
 ```text
 RunHandle
-  └── graph: RunGraph
+  └── run_graph: RunGraph
 
 RunGraph
   ├── nodes: dict[str, Node]
@@ -16,20 +16,17 @@ RunGraph
   ├── output_transitions: dict[str, OutputTransition]
   ├── payloads: dict[str, Payload]
   ├── views: dict[str, GraphView]
-  ├── input_transitions_by_node
-  ├── output_transitions_by_input
-  ├── output_transitions_by_node
+  ├── input_transitions_from_node
+  ├── output_transitions_from_it
+  ├── output_transitions_to_node
   ├── payloads_by_node
   ├── payloads_by_input_transition
   └── payloads_by_output_transition
 
 GraphView
   ├── view_id: str
-  ├── root_node_ids: set[str]
-  ├── node_ids: set[str]
-  ├── input_transition_ids: set[str]
-  ├── output_transition_ids: set[str]
-  ├── payload_ids: set[str]
+  ├── name: str
+  ├── root_node_id: str   ← 単一 root node
   └── metadata
 ```
 
@@ -49,7 +46,7 @@ GraphView
 - 実行結果は `OutputTransition` と `ResultPayload` を追加する
 - plan の無効化は `InputTransition` に `CutPayload` を追加する
 - prediction / result の無効化は `OutputTransition` に `CutPayload` を追加する
-- view merge は record をコピーまたは削除せず、`GraphView` の membership を追加する
+- view の中身は read-time に `root_node_id` から reachability で算出する
 
 read-time の view、active / inactive 判定、trace の表示によって「今見るべきもの」を決めます。保存済み record を破壊して過去を書き換えることはしません。
 
@@ -227,17 +224,19 @@ node 自体には `CutPayload` を attach しません。node は複数の input
 
 ## GraphView
 
-軽い未来予測は main view に prediction output を追加するだけで十分です。長い仮説展開、隔離した探索、試験的な変更は別 `GraphView` を作ります。
+`GraphView` は `root_node_id` だけを持つラベルです。view の内容（node_ids / input_transition_ids / output_transition_ids / payload_ids）は保存せず、read-time に `RunGraph.reachable_from(root_node_id)` で算出します。
 
 ```text
 main
-  n_0000 -> it_0001 -> ot_0001(observed) -> n_0001
+  root_node_id: n_0000
+  → reachable: n_0000, n_0001, it_0001, ot_0001, ...
 
 exp-a
-  n_0001 -> it_0100 -> ot_0100(prediction) -> n_0100
+  root_node_id: n_0001
+  → reachable: n_0001, n_0100, it_0100, ot_0100, ...
 ```
 
-view merge は、選択した path の record ID を main view に追加します。record の実体は `RunGraph` にあるため、copy / attach / ID 衝突の問題を避けます。
+「view を統合する」場合は、main 内の任意ノードから `exp-a` の `root_node_id` への OutputTransition を 1 本足すだけです。通常の `plan` / `observe` で完結し、`view_merge` は不要です。
 
 ## Rewind
 

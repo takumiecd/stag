@@ -11,7 +11,6 @@ def plan_impl(
     input_node_ids: list[str] | tuple[str, ...],
     payload: PlanPayload,
     *,
-    view: str = "main",
     user_id: str | None = None,
 ) -> InputTransition:
     """Create an InputTransition from one or more input nodes with a PlanPayload.
@@ -41,8 +40,4 @@ def plan_impl(
         metadata=dict(payload.metadata),
     )
     self.run_graph.attach_payload(plan_payload)
-
-    v = self._get_view(view)
-    v.input_transition_ids.add(it_id)
-    v.payload_ids.add(plan_payload.payload_id)
     return it

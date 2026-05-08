@@ -28,8 +28,8 @@ def test_init_seeds_root_node_and_main_view():
     run = init(_req(), run_id="t_init")
     assert run.root_node_id == "n_0000"
     assert "n_0000" in run.run_graph.nodes
-    assert "main" in run.views
-    assert "n_0000" in run.views["main"].node_ids
+    assert "main" in run.run_graph.views
+    assert run.run_graph.views["main"].root_node_id == "n_0000"
 
 
 def test_plan_creates_input_transition():
@@ -39,8 +39,7 @@ def test_plan_creates_input_transition():
     assert run.root_node_id in it.input_node_ids
     # PlanPayload attached
     payloads = run.run_graph.payloads_for_input_transition(it.input_transition_id)
-    plan_payload = next(p for p in payloads if isinstance(p, PlanPayload))
-    assert plan_payload.payload_id in run.views["main"].payload_ids
+    assert any(isinstance(p, PlanPayload) for p in payloads)
 
 
 def test_plan_multi_input_nodes():
@@ -88,7 +87,6 @@ def test_note_attaches_to_node():
     assert note.target_id == run.root_node_id
     payloads = run.run_graph.payloads_for_node(run.root_node_id)
     assert any(isinstance(p, NotePayload) for p in payloads)
-    assert note.payload_id in run.views["main"].payload_ids
 
 
 def test_rewind_input_transition_cuts_it_and_its_ots():
@@ -153,8 +151,8 @@ def test_view_create_and_list():
     run = init(_req(), run_id="t_view")
     it = run.plan([run.root_node_id], _plan_payload())
     ot = run.observe(it.input_transition_id, ResultPayload(payload_id="x", target_id="x", status="completed"))
-    view = run.view_create("exp-a", root_node_ids=[ot.to_node_id])
-    assert "exp-a" in run.views
+    view = run.view_create("exp-a", root_node_id=ot.to_node_id)
+    assert "exp-a" in run.run_graph.views
     views = run.view_list()
     names = [v.name for v in views]
     assert "main" in names
@@ -165,21 +163,24 @@ def test_view_show():
     run = init(_req(), run_id="t_view_show")
     it = run.plan([run.root_node_id], _plan_payload())
     ot = run.observe(it.input_transition_id, ResultPayload(payload_id="x", target_id="x", status="completed"))
-    run.view_create("branch", root_node_ids=[ot.to_node_id])
+    run.view_create("branch", root_node_id=ot.to_node_id)
     v = run.view_show("branch")
     assert v.name == "branch"
 
 
-def test_view_merge_into_main():
-    run = init(_req(), run_id="t_view_merge")
+def test_view_reachable_from():
+    run = init(_req(), run_id="t_view_reach")
     it = run.plan([run.root_node_id], _plan_payload())
     ot = run.observe(it.input_transition_id, ResultPayload(payload_id="x", target_id="x", status="completed"))
-    run.view_create("branch", root_node_ids=[run.root_node_id])
-    # add some records in branch view
-    it2 = run.plan([run.root_node_id], _plan_payload("branch work"), view="branch")
-    ot2 = run.observe(it2.input_transition_id, ResultPayload(payload_id="y", target_id="y", status="completed"), view="branch")
-    merged = run.view_merge("branch", into="main")
-    assert it2.input_transition_id in merged.input_transition_ids
-    branch_plan_payloads = run.run_graph.payloads_for_input_transition(it2.input_transition_id)
-    assert branch_plan_payloads[0].payload_id in merged.payload_ids
-    assert ot2.output_transition_id in merged.output_transition_ids
+    # create a second branch from the observed node
+    it2 = run.plan([ot.to_node_id], _plan_payload("branch"))
+    ot2 = run.observe(it2.input_transition_id, ResultPayload(payload_id="y", target_id="y", status="completed"))
+
+    reachable = run.run_graph.reachable_from(run.root_node_id)
+    assert run.root_node_id in reachable["node_ids"]
+    assert ot.to_node_id in reachable["node_ids"]
+    assert ot2.to_node_id in reachable["node_ids"]
+    assert it.input_transition_id in reachable["input_transition_ids"]
+    assert it2.input_transition_id in reachable["input_transition_ids"]
+    assert ot.output_transition_id in reachable["output_transition_ids"]
+    assert ot2.output_transition_id in reachable["output_transition_ids"]

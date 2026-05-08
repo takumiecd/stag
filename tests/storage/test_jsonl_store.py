@@ -63,16 +63,17 @@ def test_round_trip_preserves_views():
     run = init(_req(), run_id="rt_views")
     it = run.plan([run.root_node_id], _plan_payload())
     ot = run.observe(it.input_transition_id, ResultPayload(payload_id="x", target_id="x", status="completed"))
-    run.view_create("exp-a", root_node_ids=[ot.to_node_id])
+    run.view_create("exp-a", root_node_id=ot.to_node_id)
 
     with tempfile.TemporaryDirectory() as td:
         store = JsonlRunStore(td)
         store.save_run(run)
         loaded = store.load_run("rt_views")
 
-    assert "main" in loaded.views
-    assert "exp-a" in loaded.views
-    assert loaded.views["main"].payload_ids == run.views["main"].payload_ids
+    assert "main" in loaded.run_graph.views
+    assert "exp-a" in loaded.run_graph.views
+    assert loaded.run_graph.views["main"].root_node_id == run.run_graph.views["main"].root_node_id
+    assert loaded.run_graph.views["exp-a"].root_node_id == ot.to_node_id
 
 
 def test_round_trip_cut_payload():

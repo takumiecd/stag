@@ -15,7 +15,6 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument("--text", required=True)
     parser.add_argument("--tag", action="append", dest="tags")
     parser.add_argument("--run", default=None)
-    parser.add_argument("--view", default="main")
     parser.add_argument("--store-dir", default=".optagent/runs")
     parser.add_argument("--user", default=None)
     return parser
@@ -27,7 +26,6 @@ def run_note_command(
     node_id: str,
     text: str,
     tags: list[str] | None = None,
-    view: str = "main",
     store_dir: str,
     user_id: str | None = None,
 ) -> dict:
@@ -35,7 +33,7 @@ def run_note_command(
     if not store.run_path(run_id).exists():
         raise KeyError(f"unknown run_id: {run_id}")
     handle = store.load_run(run_id)
-    payload = handle.note(node_id, text, tags=tuple(tags or []), view=view, user_id=user_id)
+    payload = handle.note(node_id, text, tags=tuple(tags or []), user_id=user_id)
     store.save_run(handle)
     return {"note": payload.to_dict()}
 
@@ -46,7 +44,6 @@ def cli_note(args) -> int:
         node_id=args.node_id,
         text=args.text,
         tags=args.tags,
-        view=args.view,
         store_dir=args.store_dir,
         user_id=resolve_user_id_from_args(args),
     )

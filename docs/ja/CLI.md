@@ -42,7 +42,7 @@ run を作成し、`RunGraph` と `main` view を seed します。root node は
 ### `plan`
 
 ```bash
-optagent plan --input-node n_0000 [--input-node n_0003] [--view main] [--action-type analysis] [--intent TEXT] [--input k=v] [--assumption TEXT]
+optagent plan --input-node n_0000 [--input-node n_0003] [--action-type analysis] [--intent TEXT] [--input k=v] [--assumption TEXT]
 ```
 
 複数 input node から `InputTransition` を作り、`PlanPayload` を attach します。
@@ -50,7 +50,7 @@ optagent plan --input-node n_0000 [--input-node n_0003] [--view main] [--action-
 ### `predict`
 
 ```bash
-optagent predict <input_transition_id> [--view main] [--predictor default] [--max-outcomes 1]
+optagent predict <input_transition_id> [--predictor default] [--max-outcomes 1]
 ```
 
 同じ `RunGraph` に prediction output の `OutputTransition` を作ります。各 output transition には `PredictionPayload` が attach されます。
@@ -58,7 +58,7 @@ optagent predict <input_transition_id> [--view main] [--predictor default] [--ma
 ### `observe`
 
 ```bash
-optagent observe <input_transition_id> [--view main] [--matched-prediction <output_transition_id>] [--status completed] [--artifact PATH] [--raw-output PATH] [--log PATH] [--metric k=v] [--error MSG]
+optagent observe <input_transition_id> [--matched-prediction <output_transition_id>] [--status completed] [--artifact PATH] [--raw-output PATH] [--log PATH] [--metric k=v] [--error MSG]
 ```
 
 実行結果を observed output の `OutputTransition` として記録します。新しい output transition に `ResultPayload` が attach されます。
@@ -68,7 +68,7 @@ optagent observe <input_transition_id> [--view main] [--matched-prediction <outp
 ### `note`
 
 ```bash
-optagent note --node <node_id> --text TEXT [--tag TAG] [--view main]
+optagent note --node <node_id> --text TEXT [--tag TAG]
 ```
 
 node に軽いメモとして `NotePayload` を attach します。既存 record は変更しません。
@@ -76,8 +76,8 @@ node に軽いメモとして `NotePayload` を attach します。既存 record
 ### `rewind`
 
 ```bash
-optagent rewind --input-transition <input_transition_id> [--view main] [--reason TEXT]
-optagent rewind --output-transition <output_transition_id> [--view main] [--reason TEXT]
+optagent rewind --input-transition <input_transition_id> [--reason TEXT]
+optagent rewind --output-transition <output_transition_id> [--reason TEXT]
 ```
 
 `CutPayload` を attach します。input transition に attach した場合は plan 全体を、output transition に attach した場合はその prediction / result output だけを inactive にします。
@@ -85,7 +85,7 @@ optagent rewind --output-transition <output_transition_id> [--view main] [--reas
 ### `trace`
 
 ```bash
-optagent trace --from-node <node_id> [--view main] [--depth N] [--include-predictions]
+optagent trace --from-node <node_id> [--depth N] [--include-predictions]
 ```
 
 node から過去の履歴を辿ります。デフォルトでは observed output を中心に読みます。prediction output も含めたい場合は `--include-predictions` を使います。
@@ -93,18 +93,18 @@ node から過去の履歴を辿ります。デフォルトでは observed outpu
 ### `show`
 
 ```bash
-optagent show [--view main] [--node ID | --input-transition ID | --output-transition ID | --payload ID]
+optagent show [--node ID | --input-transition ID | --output-transition ID | --payload ID]
 ```
 
-引数なしなら run 全体を表示します。出力は `graph` と `views` を含みます。個別 ID 指定時は `RunGraph` の global records から探します。
+引数なしなら run 全体を表示します。出力は `views` の一覧を含みます。個別 ID 指定時は `RunGraph` の global records から探します。
 
 ### `view create`
 
 ```bash
-optagent view create --root-node <node_id> [--root-node <node_id>] --name <view_id>
+optagent view create --root-node <node_id> --name <view_name>
 ```
 
-指定 node を root とする `GraphView` を作ります。新しい view は global records をコピーしません。
+指定 node を root とする `GraphView` を作ります。view の内容は read-time の reachability で決まります。
 
 ### `view list`
 
@@ -117,18 +117,10 @@ run 内の view を一覧します。
 ### `view show`
 
 ```bash
-optagent view show <view_id>
+optagent view show <view_name>
 ```
 
-view の membership と metadata を表示します。
-
-### `view merge`
-
-```bash
-optagent view merge <view_id> --into main [--to-node <node_id>]
-```
-
-view の選択した path を別 view の membership に追加します。record の実体は `RunGraph` にあるため、merge は copy ではありません。
+view の `root_node_id` と metadata を表示します。
 
 ### `list` / `current` / `use`
 

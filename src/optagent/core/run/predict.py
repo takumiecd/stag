@@ -10,7 +10,6 @@ def predict_impl(
     self,
     input_transition_id: str,
     *,
-    view: str = "main",
     payloads: list[PredictionPayload] | None = None,
     max_outcomes: int | None = None,
     user_id: str | None = None,
@@ -58,11 +57,6 @@ def predict_impl(
                 metadata={"ordinal": index},
             )
         self.run_graph.attach_payload(pred_payload)
-
-        v = self._get_view(view)
-        v.node_ids.add(new_node.node_id)
-        v.output_transition_ids.add(ot.output_transition_id)
-        v.payload_ids.add(pred_payload.payload_id)
         output_transitions.append(ot)
 
     return output_transitions

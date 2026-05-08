@@ -16,7 +16,6 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     group.add_argument("--output-transition", dest="output_transition_id", metavar="OT_ID")
     parser.add_argument("--run", default=None)
     parser.add_argument("--reason", default=None)
-    parser.add_argument("--view", default="main")
     parser.add_argument("--store-dir", default=".optagent/runs")
     parser.add_argument("--user", default=None)
     return parser
@@ -28,7 +27,6 @@ def run_rewind_command(
     target_id: str,
     target_kind: str,
     reason: str | None,
-    view: str = "main",
     store_dir: str,
     user_id: str | None = None,
 ) -> dict:
@@ -39,7 +37,6 @@ def run_rewind_command(
     cut = handle.rewind(
         target_id,
         target_kind=target_kind,  # type: ignore[arg-type]
-        view=view,
         reason=reason,
         user_id=user_id,
     )
@@ -60,7 +57,6 @@ def cli_rewind(args) -> int:
         target_id=target_id,
         target_kind=target_kind,
         reason=args.reason,
-        view=args.view,
         store_dir=args.store_dir,
         user_id=resolve_user_id_from_args(args),
     )

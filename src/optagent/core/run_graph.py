@@ -1,13 +1,16 @@
 """Single global graph container for a run.
 
-RunGraph holds all nodes, input/output transitions, and payloads in one
-place with no role-based sub-graphs. GraphView provides filtered subsets.
+RunGraph holds all nodes, input/output transitions, payloads, and views in one
+place. GraphView is a lightweight label anchored to a root node; its contents
+are derived at read time via reachability.
 """
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 
+from optagent.core.graph_view import GraphView
 from optagent.core.schema.graph import InputTransition, Node, OutputTransition
 from optagent.core.schema.payloads import Payload
 from optagent.core.types import JSONValue, to_jsonable
@@ -21,6 +24,7 @@ class RunGraph:
     input_transitions: dict[str, InputTransition] = field(default_factory=dict)
     output_transitions: dict[str, OutputTransition] = field(default_factory=dict)
     payloads: dict[str, Payload] = field(default_factory=dict)
+    views: dict[str, GraphView] = field(default_factory=dict)
 
     # payload lookup by target
     payloads_by_node: dict[str, list[str]] = field(default_factory=dict)
@@ -36,6 +40,64 @@ class RunGraph:
     output_transitions_to_node: dict[str, list[str]] = field(default_factory=dict)
 
     metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    # ----- views -----------------------------------------------------------
+
+    def add_view(self, view: GraphView) -> None:
+        if view.name in self.views:
+            raise ValueError(f"duplicate view name: {view.name!r}")
+        if view.root_node_id not in self.nodes:
+            raise KeyError(f"unknown root_node_id: {view.root_node_id}")
+        self.views[view.name] = view
+
+    def reachable_from(self, node_id: str) -> dict:
+        """BFS from node_id over active output transitions.
+
+        Returns dict with keys node_ids, input_transition_ids,
+        output_transition_ids, payload_ids — each a sorted list.
+        """
+        from optagent.core.cuts import is_active_node, is_inactive_output_transition
+
+        visited_nodes: set[str] = set()
+        visited_its: set[str] = set()
+        visited_ots: set[str] = set()
+
+        queue: deque[str] = deque()
+        if node_id in self.nodes and is_active_node(self, node_id):
+            queue.append(node_id)
+
+        while queue:
+            nid = queue.popleft()
+            if nid in visited_nodes:
+                continue
+            visited_nodes.add(nid)
+            for it_id in self.input_transitions_from_node.get(nid, ()):
+                visited_its.add(it_id)
+                for ot_id in self.output_transitions_from_it.get(it_id, ()):
+                    if is_inactive_output_transition(self, ot_id):
+                        continue
+                    if ot_id in visited_ots:
+                        continue
+                    visited_ots.add(ot_id)
+                    ot = self.output_transitions[ot_id]
+                    to_nid = ot.to_node_id
+                    if to_nid not in visited_nodes and is_active_node(self, to_nid):
+                        queue.append(to_nid)
+
+        payload_ids: set[str] = set()
+        for nid in visited_nodes:
+            payload_ids.update(self.payloads_by_node.get(nid, ()))
+        for it_id in visited_its:
+            payload_ids.update(self.payloads_by_input_transition.get(it_id, ()))
+        for ot_id in visited_ots:
+            payload_ids.update(self.payloads_by_output_transition.get(ot_id, ()))
+
+        return {
+            "node_ids": sorted(visited_nodes),
+            "input_transition_ids": sorted(visited_its),
+            "output_transition_ids": sorted(visited_ots),
+            "payload_ids": sorted(payload_ids),
+        }
 
     # ----- mutations -------------------------------------------------------
 

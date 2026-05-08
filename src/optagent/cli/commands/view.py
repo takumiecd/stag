@@ -16,7 +16,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     # view create
     create = view_sub.add_parser("create", help="Create a new GraphView")
     create.add_argument("--name", required=True)
-    create.add_argument("--root-node", action="append", required=True, dest="root_nodes")
+    create.add_argument("--root-node", required=True, dest="root_node")
     create.add_argument("--run", default=None)
     create.add_argument("--store-dir", default=".optagent/runs")
 
@@ -31,14 +31,6 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     show.add_argument("--run", default=None)
     show.add_argument("--store-dir", default=".optagent/runs")
 
-    # view merge
-    merge = view_sub.add_parser("merge", help="Merge a GraphView into another")
-    merge.add_argument("view_name")
-    merge.add_argument("--into", default="main")
-    merge.add_argument("--to-node", dest="to_node_id", default=None)
-    merge.add_argument("--run", default=None)
-    merge.add_argument("--store-dir", default=".optagent/runs")
-
     return parser
 
 
@@ -50,7 +42,7 @@ def cli_view(args) -> int:
     handle = store.load_run(run_id)
 
     if args.view_command == "create":
-        view = handle.view_create(args.name, root_node_ids=args.root_nodes)
+        view = handle.view_create(args.name, root_node_id=args.root_node)
         store.save_run(handle)
         print(json.dumps(view.to_dict(), ensure_ascii=False, indent=2))
 
@@ -60,13 +52,6 @@ def cli_view(args) -> int:
 
     elif args.view_command == "show":
         view = handle.view_show(args.view_name)
-        print(json.dumps(view.to_dict(), ensure_ascii=False, indent=2))
-
-    elif args.view_command == "merge":
-        view = handle.view_merge(
-            args.view_name, into=args.into, to_node_id=args.to_node_id
-        )
-        store.save_run(handle)
         print(json.dumps(view.to_dict(), ensure_ascii=False, indent=2))
 
     return 0

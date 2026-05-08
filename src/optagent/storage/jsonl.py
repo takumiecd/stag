@@ -8,7 +8,6 @@ from typing import Any
 
 from optagent.core.graph_view import GraphView
 from optagent.core.run import RunHandle
-from optagent.core.run.handle import init as _init_handle
 from optagent.core.run_graph import RunGraph
 from optagent.core.schema.graph import InputTransition, Node, OutputTransition
 from optagent.core.schema.payloads import payload_from_dict
@@ -82,7 +81,7 @@ class JsonlRunStore:
         )
         self._write_jsonl(
             run_path / "views.jsonl",
-            (v.to_dict() for v in run.views.values()),
+            (v.to_dict() for v in run.run_graph.views.values()),
         )
         return run_path
 
@@ -145,35 +144,26 @@ class JsonlRunStore:
                     payload.payload_id
                 )
 
-        views: dict[str, GraphView] = {}
         for row in self._read_jsonl(run_path / "views.jsonl"):
             v = GraphView(
                 view_id=str(row["view_id"]),
                 name=str(row["name"]),
-                root_node_ids=tuple(row.get("root_node_ids") or []),
-                node_ids=set(row.get("node_ids") or []),
-                input_transition_ids=set(row.get("input_transition_ids") or []),
-                output_transition_ids=set(row.get("output_transition_ids") or []),
-                payload_ids=set(row.get("payload_ids") or []),
+                root_node_id=str(row["root_node_id"]),
                 metadata=dict(row.get("metadata") or {}),
             )
-            views[v.name] = v
+            graph.views[v.name] = v
 
-        if not views:
-            from optagent.core.graph_view import GraphView as GV
-            main = GV(
+        if not graph.views:
+            graph.views["main"] = GraphView(
                 view_id="view_main",
                 name="main",
-                root_node_ids=("n_0000",),
-                node_ids={"n_0000"},
+                root_node_id="n_0000",
             )
-            views["main"] = main
 
         return RunHandle(
             run_id=manifest["run_id"],
             requirement=requirement,
             run_graph=graph,
-            views=views,
             _counters={str(k): int(v) for k, v in manifest.get("counters", {}).items()},
         )
 

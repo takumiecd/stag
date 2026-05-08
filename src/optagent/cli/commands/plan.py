@@ -23,7 +23,6 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument("--intent", default="inspect state and propose next action")
     parser.add_argument("--input", action="append", metavar="KEY=VALUE")
     parser.add_argument("--assumption", action="append", metavar="TEXT")
-    parser.add_argument("--view", default="main")
     parser.add_argument("--store-dir", default=".optagent/runs")
     parser.add_argument("--user", default=None)
     return parser
@@ -47,7 +46,6 @@ def run_plan_command(
     intent: str,
     inputs: dict | None = None,
     assumptions: list[str] | None = None,
-    view: str = "main",
     store_dir: str,
     user_id: str | None = None,
 ) -> dict:
@@ -63,7 +61,7 @@ def run_plan_command(
         inputs=dict(inputs or {}),
         assumptions=tuple(assumptions or []),
     )
-    it = handle.plan(input_node_ids, payload, view=view, user_id=user_id)
+    it = handle.plan(input_node_ids, payload, user_id=user_id)
     store.save_run(handle)
     return {"input_transition": it.to_dict()}
 
@@ -77,7 +75,6 @@ def cli_plan(args) -> int:
         intent=args.intent,
         inputs=inputs,
         assumptions=getattr(args, "assumption", None) or [],
-        view=args.view,
         store_dir=args.store_dir,
         user_id=resolve_user_id_from_args(args),
     )

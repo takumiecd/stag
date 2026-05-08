@@ -98,23 +98,18 @@ history = run.trace(observed.to_node_id, depth=3)
 
 ## 7. GraphView で探索する
 
-長い仮説展開や隔離した探索をしたい場合は `GraphView` を作ります。record の実体は `RunGraph` にあります。
+長い仮説展開や隔離した探索をしたい場合は `GraphView` を作ります。view の内容は `root_node_id` からの reachability で read-time に算出します。
 
 ```python
-view = run.view_create("exp-a", root_node_ids=[observed.to_node_id])
+view = run.view_create("exp-a", root_node_id=observed.to_node_id)
 future_input = run.plan(
     [observed.to_node_id],
     PlanPayload(payload_id="pending", target_id="pending", intent="try variant"),
-    view=view.view_id,
 )
-run.predict(future_input.input_transition_id, view=view.view_id, max_outcomes=3)
+run.predict(future_input.input_transition_id, max_outcomes=3)
 ```
 
-採用したい path は view merge で main の membership に追加します。record はコピーしません。
-
-```python
-run.view_merge("exp-a", into="main")
-```
+探索結果を main に統合したい場合は、main 内のノードから `exp-a` の `root_node_id` への OutputTransition を `plan` / `observe` で足します。`view_merge` は不要です。
 
 ## Rewind
 

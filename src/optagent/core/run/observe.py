@@ -11,7 +11,6 @@ def observe_impl(
     input_transition_id: str,
     result: ResultPayload,
     *,
-    view: str = "main",
     user_id: str | None = None,
 ) -> OutputTransition:
     """Record an observed OutputTransition for an InputTransition.
@@ -47,9 +46,4 @@ def observe_impl(
         metadata=dict(result.metadata),
     )
     self.run_graph.attach_payload(result_payload)
-
-    v = self._get_view(view)
-    v.node_ids.add(new_node.node_id)
-    v.output_transition_ids.add(ot.output_transition_id)
-    v.payload_ids.add(result_payload.payload_id)
     return ot

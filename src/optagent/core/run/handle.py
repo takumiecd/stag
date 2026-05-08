@@ -19,7 +19,6 @@ class RunHandle:
     run_id: str
     requirement: Requirement
     run_graph: RunGraph
-    views: dict[str, GraphView] = field(default_factory=dict)
     _counters: dict[str, int] = field(default_factory=dict)
 
     def _next_id(self, prefix: str) -> str:
@@ -41,9 +40,9 @@ class RunHandle:
             )
 
     def _get_view(self, name: str) -> GraphView:
-        if name not in self.views:
+        if name not in self.run_graph.views:
             raise KeyError(f"unknown view: {name!r}")
-        return self.views[name]
+        return self.run_graph.views[name]
 
     def save(self, store) -> object:
         return store.save_run(self)
@@ -61,15 +60,14 @@ def init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle:
     main_view = GraphView(
         view_id="view_main",
         name="main",
-        root_node_ids=(root.node_id,),
-        node_ids={root.node_id},
+        root_node_id=root.node_id,
     )
+    graph.add_view(main_view)
 
     handle = RunHandle(
         run_id=rid,
         requirement=requirement,
         run_graph=graph,
-        views={"main": main_view},
         _counters={
             "n": 0,
             "it": 0,
@@ -90,7 +88,6 @@ from optagent.core.run.trace import trace_impl as _trace_impl  # noqa: E402
 from optagent.core.run.view import (  # noqa: E402
     view_create_impl as _view_create_impl,
     view_list_impl as _view_list_impl,
-    view_merge_impl as _view_merge_impl,
     view_show_impl as _view_show_impl,
 )
 
@@ -105,4 +102,3 @@ RunHandle.history = _trace_impl
 RunHandle.view_create = _view_create_impl
 RunHandle.view_list = _view_list_impl
 RunHandle.view_show = _view_show_impl
-RunHandle.view_merge = _view_merge_impl

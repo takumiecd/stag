@@ -28,7 +28,7 @@ NotePayload / PlanPayload / PredictionPayload / ResultPayload / CutPayload
   = graph に attach される意味
 ```
 
-run 全体の DAG は `RunGraph` です。隔離した仮説展開は別の record 空間を持つ child Dag ではなく、`RunGraph` の部分集合である `GraphView` として表します。
+run 全体の DAG は `RunGraph` です。隔離した仮説展開は別の record 空間を持つ child Dag ではなく、`RunGraph` が管理する `GraphView` として表します。`GraphView` は `root_node_id` を起点に read-time の reachability で中身が決まるラベルです。membership を保存しません。
 
 `InputTransition` は複数 input node を受け取ります。plan の intent、制約、入力パラメータなどは `PlanPayload` として input transition に attach します。
 
@@ -48,7 +48,7 @@ node には軽いメモとして `NotePayload` を attach できます。
 - prediction output と `PredictionPayload` を保存する
 - observed output と `ResultPayload` を保存する
 - rewind を append-only cut として保存する
-- `GraphView` を作成、表示、merge する
+- `GraphView` を作成・表示する
 - JSONL run directory に保存・読み込みする
 
 ## optagent がやらないこと
@@ -84,7 +84,7 @@ executor、planner、predictor、LLM、benchmark runner は外側から接続し
 1. `RunGraph` + `GraphView` + input/output transition model を 0.1 として固める
 2. CLI と JSONL storage の仕様をドキュメントと一致させる
 3. `NotePayload` / `PlanPayload` / `PredictionPayload` / `ResultPayload` / `CutPayload` に payload を整理する
-4. `GraphView` workflow の作成、表示、merge を具体化する
+4. `GraphView` workflow の作成・表示を具体化する
 5. executor / evaluator の protocol を整える
 
 ## ドキュメント

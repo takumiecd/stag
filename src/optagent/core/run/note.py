@@ -11,7 +11,6 @@ def note_impl(
     text: str,
     *,
     tags: list[str] | tuple[str, ...] = (),
-    view: str = "main",
     user_id: str | None = None,
 ) -> NotePayload:
     """Attach a lightweight memo to a node."""
@@ -26,6 +25,4 @@ def note_impl(
         tags=tuple(tags),
     )
     self.run_graph.attach_payload(payload)
-    v = self._get_view(view)
-    v.payload_ids.add(payload.payload_id)
     return payload

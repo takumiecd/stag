@@ -14,7 +14,6 @@ def rewind_impl(
     target_id: str,
     *,
     target_kind: Literal["input_transition", "output_transition"],
-    view: str = "main",
     reason: str | None = None,
     user_id: str | None = None,
 ) -> CutPayload:
@@ -45,6 +44,4 @@ def rewind_impl(
         user_id=user_id,
     )
     self.run_graph.attach_payload(cut)
-    v = self._get_view(view)
-    v.payload_ids.add(cut.payload_id)
     return cut
