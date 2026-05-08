@@ -134,9 +134,30 @@ def test_output_kind_classifies_payloads():
     g2.add_output_transition(ot_empty)
     assert g2.output_kind("ot_empty") == "unknown"
 
-    # both → mixed
-    g.attach_payload(PredictionPayload(payload_id="pl_mix", target_id=ot_result.output_transition_id))
-    assert g.output_kind(ot_result.output_transition_id) == "mixed"
+
+def test_attach_result_to_prediction_ot_raises():
+    g, _, ot_pred, _ = _graph_with_it_and_ots()
+    g.add_node(Node(node_id="n_extra"))
+    with pytest.raises(ValueError, match="already has a PredictionPayload"):
+        g.attach_payload(
+            ResultPayload(payload_id="rp_bad", target_id=ot_pred.output_transition_id, status="completed")
+        )
+
+
+def test_attach_prediction_to_result_ot_raises():
+    g, _, _, ot_result = _graph_with_it_and_ots()
+    with pytest.raises(ValueError, match="already has a ResultPayload"):
+        g.attach_payload(
+            PredictionPayload(payload_id="pl_bad", target_id=ot_result.output_transition_id)
+        )
+
+
+def test_output_kind_no_longer_returns_mixed():
+    g, _, ot_pred, ot_result = _graph_with_it_and_ots()
+    assert g.output_kind(ot_pred.output_transition_id) == "prediction"
+    assert g.output_kind(ot_result.output_transition_id) == "result"
+    assert g.output_kind(ot_pred.output_transition_id) != "mixed"
+    assert g.output_kind(ot_result.output_transition_id) != "mixed"
 
 
 def test_output_ids_for_input_filters_by_kind_and_activity():

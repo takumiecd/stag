@@ -82,6 +82,7 @@ class PredictionPayload(PayloadBase):
     predicted_artifacts: tuple[str, ...] = ()
     predicted_metrics: dict[str, float] = field(default_factory=dict)
     rationale: str | None = None
+    probability: float | None = None
     confidence: float | None = None
     predictor: str | None = None
     metadata: dict[str, JSONValue] = field(default_factory=dict)
@@ -196,6 +197,7 @@ def _prediction_from_dict(data: dict[str, JSONValue]) -> PredictionPayload:
         predicted_artifacts=tuple(str(a) for a in (data.get("predicted_artifacts") or [])),
         predicted_metrics={str(k): float(v) for k, v in (data.get("predicted_metrics") or {}).items()},
         rationale=data.get("rationale"),
+        probability=data.get("probability"),
         confidence=data.get("confidence"),
         predictor=data.get("predictor"),
         metadata=dict(data.get("metadata") or {}),

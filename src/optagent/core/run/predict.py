@@ -51,6 +51,7 @@ def predict_impl(
                 predicted_artifacts=tmpl.predicted_artifacts,
                 predicted_metrics=dict(tmpl.predicted_metrics),
                 rationale=tmpl.rationale,
+                probability=tmpl.probability,
                 confidence=tmpl.confidence,
                 predictor=tmpl.predictor,
                 metadata=dict(tmpl.metadata),

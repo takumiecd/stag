@@ -156,7 +156,22 @@ class RunGraph:
         elif payload.target_kind == "output_transition":
             if payload.target_id not in self.output_transitions:
                 raise KeyError(f"unknown target output_transition: {payload.target_id}")
-            self.payloads_by_output_transition.setdefault(payload.target_id, []).append(
+            ot_id = payload.target_id
+            if isinstance(payload, PredictionPayload):
+                existing = self.payloads_by_output_transition.get(ot_id, [])
+                if any(isinstance(self.payloads[pid], ResultPayload) for pid in existing):
+                    raise ValueError(
+                        f"output_transition already has a ResultPayload; "
+                        f"cannot mix with PredictionPayload: {ot_id}"
+                    )
+            elif isinstance(payload, ResultPayload):
+                existing = self.payloads_by_output_transition.get(ot_id, [])
+                if any(isinstance(self.payloads[pid], PredictionPayload) for pid in existing):
+                    raise ValueError(
+                        f"output_transition already has a PredictionPayload; "
+                        f"cannot mix with ResultPayload: {ot_id}"
+                    )
+            self.payloads_by_output_transition.setdefault(ot_id, []).append(
                 payload.payload_id
             )
         else:
@@ -186,19 +201,16 @@ class RunGraph:
 
     # ----- output classification -------------------------------------------
 
-    def output_kind(self, ot_id: str) -> Literal["prediction", "result", "mixed", "unknown"]:
+    def output_kind(self, ot_id: str) -> Literal["prediction", "result", "unknown"]:
         """Classify an OT by what payloads are attached.
 
-        - "result": at least one ResultPayload, no PredictionPayload
-        - "prediction": at least one PredictionPayload, no ResultPayload
-        - "mixed": both kinds present
+        - "result": at least one ResultPayload
+        - "prediction": at least one PredictionPayload
         - "unknown": neither kind present
         """
         payloads = self.payloads_for_output_transition(ot_id)
         has_result = any(isinstance(p, ResultPayload) for p in payloads)
         has_prediction = any(isinstance(p, PredictionPayload) for p in payloads)
-        if has_result and has_prediction:
-            return "mixed"
         if has_result:
             return "result"
         if has_prediction:
@@ -220,10 +232,8 @@ class RunGraph:
         for ot_id in ot_ids:
             if active_only and is_inactive_output_transition(self, ot_id):
                 continue
-            if kind is not None:
-                ot_kind = self.output_kind(ot_id)
-                if ot_kind != kind and ot_kind != "mixed":
-                    continue
+            if kind is not None and self.output_kind(ot_id) != kind:
+                continue
             result.append(ot_id)
         return result
 

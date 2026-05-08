@@ -91,6 +91,33 @@ def test_round_trip_cut_payload():
     assert is_inactive_output_transition(loaded.run_graph, ot.output_transition_id)
 
 
+def test_prediction_payload_probability_round_trip():
+    run = init(_req(), run_id="rt_prob")
+    it = run.plan([run.root_node_id], _plan_payload())
+    ots = run.predict(
+        it.input_transition_id,
+        payloads=[
+            PredictionPayload(
+                payload_id="pending",
+                target_id="pending",
+                probability=0.75,
+                confidence=0.9,
+            )
+        ],
+    )
+    ot_id = ots[0].output_transition_id
+
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlRunStore(td)
+        store.save_run(run)
+        loaded = store.load_run("rt_prob")
+
+    payloads = loaded.run_graph.payloads_for_output_transition(ot_id)
+    pred = next(p for p in payloads if isinstance(p, PredictionPayload))
+    assert pred.probability == 0.75
+    assert pred.confidence == 0.9
+
+
 def test_list_runs_returns_summaries():
     with tempfile.TemporaryDirectory() as td:
         store = JsonlRunStore(td)
