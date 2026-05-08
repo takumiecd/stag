@@ -1,46 +1,51 @@
 # 問題解決ループ
 
-optagent は agent そのものではありません。人間、AI、script、executor が同じ文脈を共有するために、計画、予測、実行結果、解釈を構造化して保存する基盤です。
+optagent は agent そのものではありません。人間、AI、script、executor が同じ文脈を共有するために、計画、予測、実行結果を構造化して保存する基盤です。
 
 ## 基本サイクル
 
 ```text
-node を見る
-  -> plan を作る
-  -> 必要なら prediction transition を作る
+input node を選ぶ
+  -> InputTransition + PlanPayload を作る
+  -> 必要なら OutputTransition + PredictionPayload を作る
   -> optagent の外で実行する
-  -> observe で結果を保存する
-  -> derive で finding や decision を付ける
+  -> OutputTransition + ResultPayload で結果を保存する
   -> trace で履歴を読む
   -> 必要なら GraphView を作って隔離した探索をする
 ```
 
-## 1. node を読む
+## 1. input node を選ぶ
 
-core は mutable な current pointer を持ちません。caller が起点 node を明示します。
+core は mutable な current pointer を持ちません。caller が input node を明示します。
 
 ```python
-node_id = run.root_node_id
-snapshot = run.state_show(node_id)
+input_node_ids = [run.root_node_id]
 ```
 
 ## 2. plan を作る
 
-```python
-plan = run.plan(node_id, intent="run benchmark")[0]
-```
+plan 情報は graph record ではなく `PlanPayload` です。`run.plan(...)` は `InputTransition` を作り、そこに `PlanPayload` を attach します。
 
-plan は外部 executor に渡せる計画として扱います。
+```python
+input_transition = run.plan(
+    input_node_ids,
+    PlanPayload(
+        payload_id="pending",
+        target_id="pending",
+        intent="run benchmark",
+    ),
+)
+```
 
 ## 3. 予測する
 
-予測は同じ `RunGraph` に `kind="prediction"` の transition として記録します。
+予測は `OutputTransition(kind="prediction")` と `PredictionPayload` として記録します。
 
 ```python
-predicted = run.predict(plan.plan_id, max_outcomes=3)
+predicted = run.predict(input_transition.input_transition_id, max_outcomes=3)
 ```
 
-1 つの plan から複数の prediction transition を作れます。
+1 つの input transition から複数の prediction output を作れます。
 
 ## 4. 実行する
 
@@ -51,50 +56,23 @@ optagent は executor を内蔵しません。外部の script、test runner、b
 ```python
 result = ResultPayload(
     payload_id="pending",
-    target_kind="transition",
     target_id="pending",
     status="completed",
     raw_outputs=("raw/bench.txt",),
     metrics={"latency_ms": 1.5},
+    matched_prediction_output_id=predicted[0].output_transition_id,
 )
 ```
 
 ## 5. 結果を記録する
 
-予測と対応づけない場合:
-
 ```python
-observed = run.observe(plan.plan_id, result)
+observed = run.observe(input_transition.input_transition_id, result)
 ```
 
-予測 transition と対応づける場合:
+`observe` は `OutputTransition(kind="observed")` を追加し、そこに `ResultPayload` を attach します。
 
-```python
-observed = run.observe(
-    plan.plan_id,
-    result,
-    matched_prediction_id=predicted[0].transition_id,
-)
-```
-
-どちらも `kind="observed"` の `Transition` を追加します。対応づける場合は `MatchPayload` も attach されます。
-
-## 6. derived payload を残す
-
-事実から作った解釈や判断は `DerivedPayload` として保存します。
-
-```python
-run.derive(
-    observed.transition_id,
-    "finding",
-    {"text": "baseline latency was 1.5 ms"},
-    generator="benchmark_parser",
-)
-```
-
-derived payload はあとから作り直せる解釈で、source of truth ではありません。
-
-## 7. 履歴を読む
+## 6. 履歴を読む
 
 ```python
 history = run.trace(observed.to_node_id, depth=3)
@@ -103,21 +81,25 @@ history = run.trace(observed.to_node_id, depth=3)
 取得できるもの:
 
 - past node ids
-- transition ids
-- plan ids
+- input transition ids
+- output transition ids
+- plan payload ids
+- prediction payload ids
 - result payload ids
-- matched prediction transition ids
-- derived payload ids
 - artifact / raw output / log refs
 
-## 8. GraphView で探索する
+## 7. GraphView で探索する
 
 長い仮説展開や隔離した探索をしたい場合は `GraphView` を作ります。record の実体は `RunGraph` にあります。
 
 ```python
-view = run.view_create("exp-a", from_node_id=observed.to_node_id)
-future_plan = run.plan(observed.to_node_id, view=view.view_id, intent="try variant")[0]
-run.predict(future_plan.plan_id, view=view.view_id, max_outcomes=3)
+view = run.view_create("exp-a", root_node_ids=[observed.to_node_id])
+future_input = run.plan(
+    [observed.to_node_id],
+    PlanPayload(payload_id="pending", target_id="pending", intent="try variant"),
+    view=view.view_id,
+)
+run.predict(future_input.input_transition_id, view=view.view_id, max_outcomes=3)
 ```
 
 採用したい path は view merge で main の membership に追加します。record はコピーしません。
@@ -128,13 +110,23 @@ run.view_merge("exp-a", into="main")
 
 ## Rewind
 
-間違った枝を無効化したい場合は `rewind` を使います。
+間違った plan を無効化したい場合は input transition を cut します。
 
 ```python
-cut = run.rewind(
-    observed.transition_id,
-    from_node_id=observed.to_node_id,
-    reason="wrong benchmark command",
+run.rewind(
+    input_transition.input_transition_id,
+    target_kind="input_transition",
+    reason="bad plan",
+)
+```
+
+予測や実測 output だけを無効化したい場合は output transition を cut します。
+
+```python
+run.rewind(
+    predicted[0].output_transition_id,
+    target_kind="output_transition",
+    reason="bad prediction",
 )
 ```
 

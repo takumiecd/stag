@@ -6,7 +6,7 @@
 
 ```python
 import optagent
-from optagent import Requirement, ResultPayload
+from optagent import PlanPayload, Requirement, ResultPayload
 
 requirement = Requirement(
     requirement_id="req_kernel",
@@ -16,24 +16,31 @@ requirement = Requirement(
 
 run = optagent.init(requirement, run_id="demo")
 
-plan = run.plan(run.root_node_id, intent="run benchmark")[0]
-prediction = run.predict(plan.plan_id, max_outcomes=1)[0]
-
-result = ResultPayload(
-    payload_id="pending",
-    target_kind="transition",
-    target_id="pending",
-    status="completed",
-    raw_outputs=("raw/bench.txt",),
-    metrics={"latency_ms": 1.5},
+input_transition = run.plan(
+    [run.root_node_id],
+    PlanPayload(
+        payload_id="pending",
+        target_id="pending",
+        intent="run benchmark",
+        inputs={"shape": "small"},
+    ),
 )
 
-transition = run.observe(
-    plan.plan_id,
-    result,
-    matched_prediction_id=prediction.transition_id,
+prediction = run.predict(input_transition.input_transition_id, max_outcomes=1)[0]
+
+observed = run.observe(
+    input_transition.input_transition_id,
+    ResultPayload(
+        payload_id="pending",
+        target_id="pending",
+        status="completed",
+        raw_outputs=("raw/bench.txt",),
+        metrics={"latency_ms": 1.5},
+        matched_prediction_output_id=prediction.output_transition_id,
+    ),
 )
-history = run.trace(transition.to_node_id)
+
+history = run.trace(observed.to_node_id)
 ```
 
 ## Public Dataclasses
@@ -44,20 +51,20 @@ history = run.trace(transition.to_node_id)
 - `RunGraph`
 - `GraphView`
 - `Node`
-- `Plan`
-- `Transition`
+- `InputTransition`
+- `OutputTransition`
 - `PayloadBase`
-- `SnapshotPayload`
+- `PlanPayload`
+- `PredictionPayload`
 - `ResultPayload`
-- `DerivedPayload`
-- `MatchPayload`
 - `CutPayload`
-- `StateSnapshot`
 - `TraceContext`
 
 `Dag` は全体 graph を表す名前としては使わず、`RunGraph` に置き換えます。部分集合は `GraphView` です。
 
-`ExecutionPlan` / `PredictionPlan` / `ObservedTransition` / `PredictedTransition` / `ActionResult` / `DerivedRecord` は現行 API では使いません。
+`Plan` は graph record としては使いません。plan 情報は `InputTransition` に attach される `PlanPayload` です。
+
+`SnapshotPayload` / `DerivedPayload` / `MatchPayload` / `PredictionSelection` / `PredictionPath` は 0.1 の最小 API から外します。
 
 ## `optagent.init`
 
@@ -73,92 +80,73 @@ optagent.init(requirement: Requirement, *, run_id: str | None = None) -> RunHand
 - `run.graph.views["main"]`: default `GraphView`
 - root node: `run.root_node_id`
 
-root node には `SnapshotPayload` が attach されます。
-
 ## `run.plan`
 
 ```python
 run.plan(
-    from_node_id: str,
+    input_node_ids: list[str] | tuple[str, ...],
+    payload: PlanPayload,
     *,
     view: str = "main",
-    planner: str | None = None,
-    max_plans: int | None = None,
-    action_type: str = "analysis",
-    intent: str | None = None,
-    inputs: dict[str, JSONValue] | None = None,
     user_id: str | None = None,
-) -> list[Plan]
+) -> InputTransition
 ```
 
-node に grounded された plan を作ります。作成した plan は指定 view の membership に追加されます。cut 済み subtree の node を渡すと `ValueError` です。
+複数 input node を受け取り、`InputTransition` を作ります。plan の intent、入力、制約、仮定などは `PlanPayload` としてその input transition に attach します。
+
+cut 済み input transition の下流 node や inactive な node を渡すと `ValueError` です。
 
 ## `run.predict`
 
 ```python
 run.predict(
-    plan_id: str,
+    input_transition_id: str,
     *,
     view: str = "main",
-    predictor: str | None = None,
+    payloads: list[PredictionPayload] | None = None,
     max_outcomes: int | None = None,
-) -> list[Transition]
+    user_id: str | None = None,
+) -> list[OutputTransition]
 ```
 
-`kind="prediction"` の transition を作ります。各 transition には `ResultPayload` が attach されます。
+`kind="prediction"` の `OutputTransition` を作ります。各 output transition には `PredictionPayload` が attach されます。
 
 ## `run.observe`
 
 ```python
 run.observe(
-    plan_id: str,
+    input_transition_id: str,
     result: ResultPayload,
     *,
     view: str = "main",
-    matched_prediction_id: str | None = None,
     user_id: str | None = None,
-) -> Transition
+) -> OutputTransition
 ```
 
-実行結果を `kind="observed"` の transition として記録します。新しい transition に `ResultPayload` を attach します。
+実行結果を `kind="observed"` の `OutputTransition` として記録します。新しい output transition に `ResultPayload` を attach します。
 
-`matched_prediction_id` を指定すると、observed transition に `MatchPayload` も attach します。
+予測と実測の対応は `ResultPayload.matched_prediction_output_id` で表します。
 
-1 つの plan から prediction transition は複数作れます。observed transition は原則 1 つだけです。同じ操作を再実行する場合は新しい plan を作ります。
+1 つの input transition から prediction output は複数作れます。observed output は原則 1 つだけです。同じ操作を再実行する場合は新しい input transition を作ります。
 
 `run.result(...)` は `run.observe(...)` の alias です。
-
-## `run.derive`
-
-```python
-run.derive(
-    transition_id: str,
-    derived_type: DerivedType,
-    payload: dict[str, JSONValue],
-    *,
-    payload_id: str | None = None,
-    generator: str = "default",
-    confidence: float | None = None,
-    user_id: str | None = None,
-) -> DerivedPayload
-```
-
-transition に derived payload を attach します。
 
 ## `run.rewind`
 
 ```python
 run.rewind(
-    transition_id: str,
+    target_id: str,
     *,
-    from_node_id: str,
+    target_kind: Literal["input_transition", "output_transition"],
     view: str = "main",
     reason: str | None = None,
     user_id: str | None = None,
 ) -> CutPayload
 ```
 
-transition に `CutPayload` を attach します。既存レコードは削除しません。`transition_id` は `from_node_id` から active path を後ろ向きに辿って到達できる必要があります。
+`CutPayload` を attach します。既存レコードは削除しません。
+
+`target_kind="input_transition"` の場合は plan 全体を inactive にします。`target_kind="output_transition"` の場合は prediction / result output だけを inactive にします。
 
 ## `run.trace`
 
@@ -169,33 +157,22 @@ run.trace(
     view: str = "main",
     depth: int | None = None,
     include_predictions: bool = False,
-    include_derived: bool = True,
     include_raw_refs: bool = True,
 ) -> TraceContext
 ```
 
-node から過去の transition を辿ります。`include_predictions=False` の場合は observed transition を中心に履歴を作ります。`run.history(...)` は alias です。
+node から過去の output transition、input transition、input node を辿ります。`include_predictions=False` の場合は observed output を中心に履歴を作ります。`run.history(...)` は alias です。
 
 ## GraphView API
 
 ```python
-run.view_create(name: str, *, from_node_id: str) -> GraphView
+run.view_create(name: str, *, root_node_ids: list[str] | tuple[str, ...]) -> GraphView
 run.view_list() -> list[GraphView]
 run.view_show(name: str) -> GraphView
 run.view_merge(name: str, *, into: str = "main", to_node_id: str | None = None) -> GraphView
 ```
 
 record の実体は `RunGraph` にあり、view merge は record copy ではなく membership の追加です。
-
-## State Snapshot Helpers
-
-```python
-run.state_show(node_id) -> SnapshotPayload
-run.state_update(..., node_id=...) -> SnapshotPayload
-run.snapshot_rebuild(node_id) -> SnapshotPayload
-```
-
-`state_update` は node に新しい `SnapshotPayload` を追加します。既存 payload は上書きしません。prediction は snapshot ではなく transition として保存します。
 
 ## Storage
 
@@ -213,8 +190,8 @@ loaded = store.load_run("demo")
 - `graph.json`
 - `views.jsonl`
 - `nodes.jsonl`
-- `plans.jsonl`
-- `transitions.jsonl`
+- `input_transitions.jsonl`
+- `output_transitions.jsonl`
 - `payloads.jsonl`
 
 0.1 alpha では旧 storage schema の読み込み互換はありません。
