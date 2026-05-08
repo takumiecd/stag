@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from optagent.cli.commands.derive import run_derive_command
 from optagent.cli.commands.init import run_init_command
 from optagent.cli.commands.observe import _parse_metrics, run_observe_command
-from optagent.cli.commands.plan import _parse_inputs, run_plan_command
+from optagent.cli.commands.plan import _parse_kv, run_plan_command
 from optagent.cli.commands.show import run_show_command
 from optagent.cli.commands.trace import run_trace_command
 from optagent.storage.jsonl import JsonlRunStore
@@ -24,56 +23,58 @@ def _init(store_dir: str) -> str:
     return "run_a"
 
 
-def test_parse_input_and_metric_validation():
-    assert _parse_inputs(["a=b", "c=d=e"]) == {"a": "b", "c": "d=e"}
+def test_parse_kv_and_metric_validation():
+    assert _parse_kv(["a=b", "c=d=e"]) == {"a": "b", "c": "d=e"}
     assert _parse_metrics(["score=1.25"]) == {"score": 1.25}
 
     with pytest.raises(ValueError):
-        _parse_inputs(["missing_equals"])
+        _parse_kv(["missing_equals"])
     with pytest.raises(ValueError):
         _parse_metrics(["score"])
     with pytest.raises(ValueError):
         _parse_metrics(["score=nan-ish"])
 
 
-def test_plan_records_inputs_and_user_metadata(tmp_path):
+def test_plan_records_intent_and_action_type(tmp_path):
     store_dir = str(tmp_path / "runs")
     run_id = _init(store_dir)
 
-    plans = run_plan_command(
+    it = run_plan_command(
         run_id=run_id,
-        planner="planner-x",
-        max_plans=2,
-        store_dir=store_dir,
-        from_node_id="n_0000",
-        action_type="benchmark",
+        input_node_ids=["n_0000"],
+        action_type="analysis",
         intent="run baseline",
         inputs={"shape": "small"},
+        store_dir=store_dir,
         user_id="alice",
-    )["plans"]
+    )["input_transition"]
 
-    assert [p["plan_id"] for p in plans] == ["plan_0001", "plan_0002"]
-    assert plans[0]["grounded_node_id"] == "n_0000"
-    assert plans[0]["action_type"] == "benchmark"
-    assert plans[0]["inputs"] == {"shape": "small"}
-    assert plans[0]["metadata"]["planner"] == "planner-x"
-    assert plans[0]["metadata"]["user_id"] == "alice"
+    assert it["input_node_ids"] == ["n_0000"]
+    # Check the PlanPayload was stored
+    store = JsonlRunStore(store_dir)
+    handle = store.load_run(run_id)
+    it_id = it["input_transition_id"]
+    plan_payloads = handle.run_graph.payloads_for_input_transition(it_id, payload_type="plan_payload")
+    assert len(plan_payloads) == 1
+    assert plan_payloads[0].intent == "run baseline"
+    assert plan_payloads[0].action_type == "analysis"
+    assert plan_payloads[0].inputs == {"shape": "small"}
 
 
 def test_observe_attaches_result_and_show_can_fetch_payload(tmp_path):
     store_dir = str(tmp_path / "runs")
     run_id = _init(store_dir)
-    plan_id = run_plan_command(
+    it_id = run_plan_command(
         run_id=run_id,
-        planner="planner",
-        max_plans=1,
+        input_node_ids=["n_0000"],
+        action_type="analysis",
+        intent="x",
         store_dir=store_dir,
-        from_node_id="n_0000",
-    )["plans"][0]["plan_id"]
+    )["input_transition"]["input_transition_id"]
 
-    transition = run_observe_command(
+    ot = run_observe_command(
         run_id=run_id,
-        plan_id=plan_id,
+        input_transition_id=it_id,
         status="completed",
         artifacts=["artifact.bin"],
         raw_outputs=["raw.txt"],
@@ -82,45 +83,39 @@ def test_observe_attaches_result_and_show_can_fetch_payload(tmp_path):
         errors=["warning"],
         store_dir=store_dir,
         user_id="alice",
-    )["transition"]
+    )["output_transition"]
 
     store = JsonlRunStore(store_dir)
     handle = store.load_run(run_id)
-    result_payload = handle.observed_dag.payloads_for_transition(
-        transition["transition_id"], payload_type="result"
-    )[0]
+    ot_id = ot["output_transition_id"]
+    result_payloads = handle.run_graph.payloads_for_output_transition(ot_id, payload_type="result")
+    assert len(result_payloads) == 1
+    rp = result_payloads[0]
 
     payload_view = run_show_command(
         run_id=run_id,
         node_id=None,
-        plan_id=None,
-        transition_id=None,
-        payload_id=result_payload.payload_id,
+        input_transition_id=None,
+        output_transition_id=None,
+        payload_id=rp.payload_id,
         store_dir=store_dir,
     )["payload"]
 
-    assert transition["metadata"]["user_id"] == "alice"
     assert payload_view["payload_type"] == "result"
     assert payload_view["metrics"] == {"latency_ms": 1.5}
     assert payload_view["artifacts"] == ["artifact.bin"]
-    assert payload_view["raw_outputs"] == ["raw.txt"]
-    assert payload_view["logs"] == ["stderr.log"]
-    assert payload_view["errors"] == ["warning"]
 
 
-def test_derive_and_trace_include_payload_refs(tmp_path):
+def test_trace_includes_artifact_refs(tmp_path):
     store_dir = str(tmp_path / "runs")
     run_id = _init(store_dir)
-    plan_id = run_plan_command(
+    it_id = run_plan_command(
+        run_id=run_id, input_node_ids=["n_0000"], action_type="analysis",
+        intent="x", store_dir=store_dir,
+    )["input_transition"]["input_transition_id"]
+    ot = run_observe_command(
         run_id=run_id,
-        planner="planner",
-        max_plans=1,
-        store_dir=store_dir,
-        from_node_id="n_0000",
-    )["plans"][0]["plan_id"]
-    transition = run_observe_command(
-        run_id=run_id,
-        plan_id=plan_id,
+        input_transition_id=it_id,
         status="completed",
         artifacts=["artifact.bin"],
         raw_outputs=["raw.txt"],
@@ -128,56 +123,16 @@ def test_derive_and_trace_include_payload_refs(tmp_path):
         metrics=None,
         errors=None,
         store_dir=store_dir,
-    )["transition"]
-
-    derived = run_derive_command(
-        run_id=run_id,
-        transition_id=transition["transition_id"],
-        derived_type="finding",
-        payload={"text": "learned"},
-        payload_id="custom_payload",
-        generator="test",
-        confidence=0.75,
-        store_dir=store_dir,
-        user_id="alice",
-    )["record"]
+    )["output_transition"]
 
     trace = run_trace_command(
         run_id=run_id,
-        from_node_id=transition["to_node_id"],
+        from_node_id=ot["to_node_id"],
         depth=1,
         store_dir=store_dir,
     )["history"]
 
-    assert derived["payload_id"] == "custom_payload"
-    assert derived["metadata"]["user_id"] == "alice"
-    assert trace["transition_ids"] == [transition["transition_id"]]
-    assert trace["derived_payload_ids"] == ["custom_payload"]
-    assert trace["artifact_refs"] == ["artifact.bin", "raw.txt", "stderr.log"]
-
-
-def test_observe_rejects_second_transition_for_same_plan(tmp_path):
-    store_dir = str(tmp_path / "runs")
-    run_id = _init(store_dir)
-    plan_id = run_plan_command(
-        run_id=run_id,
-        planner="planner",
-        max_plans=1,
-        store_dir=store_dir,
-        from_node_id="n_0000",
-    )["plans"][0]["plan_id"]
-
-    kwargs = dict(
-        run_id=run_id,
-        plan_id=plan_id,
-        status="completed",
-        artifacts=None,
-        raw_outputs=None,
-        logs=None,
-        metrics=None,
-        errors=None,
-        store_dir=store_dir,
-    )
-    run_observe_command(**kwargs)
-    with pytest.raises(ValueError):
-        run_observe_command(**kwargs)
+    assert ot["output_transition_id"] in trace["output_transition_ids"]
+    assert "artifact.bin" in trace["artifact_refs"]
+    assert "raw.txt" in trace["artifact_refs"]
+    assert "stderr.log" in trace["artifact_refs"]

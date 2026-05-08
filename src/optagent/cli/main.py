@@ -8,48 +8,36 @@ import sys
 from optagent.cli.commands.current import add_parser as add_current_parser, cli_current
 from optagent.cli.commands.init import add_parser as add_init_parser, cli_init
 from optagent.cli.commands.list import add_parser as add_list_parser, cli_list
+from optagent.cli.commands.note import add_parser as add_note_parser, cli_note
 from optagent.cli.commands.observe import add_parser as add_observe_parser, cli_observe
 from optagent.cli.commands.plan import add_parser as add_plan_parser, cli_plan
 from optagent.cli.commands.predict import add_parser as add_predict_parser, cli_predict
-from optagent.cli.commands.promote import (
-    add_parser as add_promote_parser,
-    cli_promote_plan,
-    cli_promote_transition,
-)
-from optagent.cli.commands.derive import add_parser as add_derive_parser, cli_derive
-from optagent.cli.commands.extend import add_parser as add_extend_parser, cli_extend
-from optagent.cli.commands.refresh import add_parser as add_refresh_parser, cli_refresh
 from optagent.cli.commands.rewind import add_parser as add_rewind_parser, cli_rewind
-from optagent.cli.commands.snapshot import add_parser as add_snapshot_parser, cli_snapshot
-from optagent.cli.commands.state import add_parser as add_state_parser, cli_state
 from optagent.cli.commands.show import add_parser as add_show_parser, cli_show
 from optagent.cli.commands.trace import add_parser as add_trace_parser, cli_trace
 from optagent.cli.commands.use import add_parser as add_use_parser, cli_use
+from optagent.cli.commands.view import add_parser as add_view_parser, cli_view
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="optagent",
-        description="State-transition optimization agent framework",
+        description="Record optimization and problem-solving processes",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     add_current_parser(subparsers)
     add_init_parser(subparsers)
     add_list_parser(subparsers)
+    add_note_parser(subparsers)
     add_observe_parser(subparsers)
     add_plan_parser(subparsers)
     add_predict_parser(subparsers)
-    add_promote_parser(subparsers)
-    add_derive_parser(subparsers)
-    add_extend_parser(subparsers)
-    add_refresh_parser(subparsers)
     add_rewind_parser(subparsers)
     add_show_parser(subparsers)
-    add_snapshot_parser(subparsers)
-    add_state_parser(subparsers)
     add_trace_parser(subparsers)
     add_use_parser(subparsers)
+    add_view_parser(subparsers)
 
     return parser
 
@@ -70,34 +58,24 @@ def main(argv: list[str] | None = None) -> int:
         return cli_init(args)
     if args.command == "list":
         return cli_list(args)
+    if args.command == "note":
+        return cli_note(args)
     if args.command == "observe":
         return cli_observe(args)
     if args.command == "plan":
         return cli_plan(args)
     if args.command == "predict":
         return cli_predict(args)
-    if args.command in {"promote", "promote-transition"}:
-        return cli_promote_transition(args)
-    if args.command == "promote-plan":
-        return cli_promote_plan(args)
-    if args.command == "derive":
-        return cli_derive(args)
-    if args.command == "extend":
-        return cli_extend(args)
-    if args.command == "refresh":
-        return cli_refresh(args)
     if args.command == "rewind":
         return cli_rewind(args)
     if args.command == "show":
         return cli_show(args)
-    if args.command == "snapshot":
-        return cli_snapshot(args)
-    if args.command == "state":
-        return cli_state(args)
     if args.command == "trace":
         return cli_trace(args)
     if args.command == "use":
         return cli_use(args)
+    if args.command == "view":
+        return cli_view(args)
 
     return 1
 

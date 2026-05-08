@@ -10,11 +10,13 @@ from optagent.storage.jsonl import JsonlRunStore
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
-    parser = subparsers.add_parser("rewind", help="Cut an observed transition")
-    parser.add_argument("--transition", dest="transition_id", required=True)
-    parser.add_argument("--from-node", required=True)
+    parser = subparsers.add_parser("rewind", help="Cut an InputTransition or OutputTransition")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--input-transition", dest="input_transition_id", metavar="IT_ID")
+    group.add_argument("--output-transition", dest="output_transition_id", metavar="OT_ID")
     parser.add_argument("--run", default=None)
     parser.add_argument("--reason", default=None)
+    parser.add_argument("--view", default="main")
     parser.add_argument("--store-dir", default=".optagent/runs")
     parser.add_argument("--user", default=None)
     return parser
@@ -23,9 +25,10 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
 def run_rewind_command(
     *,
     run_id: str,
-    transition_id: str,
-    from_node_id: str,
+    target_id: str,
+    target_kind: str,
     reason: str | None,
+    view: str = "main",
     store_dir: str,
     user_id: str | None = None,
 ) -> dict:
@@ -34,8 +37,9 @@ def run_rewind_command(
         raise KeyError(f"unknown run_id: {run_id}")
     handle = store.load_run(run_id)
     cut = handle.rewind(
-        transition_id,
-        from_node_id=from_node_id,
+        target_id,
+        target_kind=target_kind,  # type: ignore[arg-type]
+        view=view,
         reason=reason,
         user_id=user_id,
     )
@@ -44,11 +48,19 @@ def run_rewind_command(
 
 
 def cli_rewind(args) -> int:
+    if args.input_transition_id is not None:
+        target_id = args.input_transition_id
+        target_kind = "input_transition"
+    else:
+        target_id = args.output_transition_id
+        target_kind = "output_transition"
+
     result = run_rewind_command(
         run_id=resolve_run_id_from_args(args),
-        transition_id=args.transition_id,
-        from_node_id=args.from_node,
+        target_id=target_id,
+        target_kind=target_kind,
         reason=args.reason,
+        view=args.view,
         store_dir=args.store_dir,
         user_id=resolve_user_id_from_args(args),
     )
