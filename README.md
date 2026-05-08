@@ -32,6 +32,8 @@ GraphView
 
 prediction は別 Dag ではなく、`kind="prediction"` の transition として同じ `RunGraph` に保存します。実測は `kind="observed"` の transition です。
 
+`RunGraph` は append-only です。一度追加した node / plan / transition / payload は削除せず、取り消しや無効化は追加 payload と read-time の計算で表します。
+
 ## Quick Start
 
 ```python

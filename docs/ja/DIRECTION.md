@@ -43,6 +43,8 @@ CLI branch:
 
 prediction は別 Dag ではなく、`kind="prediction"` の transition です。実測は `kind="observed"` の transition です。
 
+`RunGraph` は append-only です。一度追加した node / plan / transition / payload は削除せず、取り消しや無効化は `CutPayload` などの追加 record と read-time 計算で表します。
+
 ## optagent がやること
 
 - run を作る

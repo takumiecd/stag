@@ -37,6 +37,21 @@ GraphView
 
 `GraphView` は `RunGraph` の部分集合です。CLI では主に `branch` と呼びます。`main` も特別な `GraphView` の 1 つです。
 
+## Append-only
+
+`RunGraph` は append-only です。一度追加した `Node` / `Plan` / `Transition` / `Payload` は削除しません。
+
+状態の変化、取り消し、無効化、比較、解釈の更新は、新しい record や payload を追加して表します。
+
+- 実行結果は `kind="observed"` の transition と `ResultPayload` を追加する
+- 予測は `kind="prediction"` の transition と `ResultPayload` を追加する
+- 予測と実測の対応は `MatchPayload` を追加する
+- 解釈の更新は新しい `DerivedPayload` を追加する
+- rewind は対象 transition を削除せず `CutPayload` を追加する
+- branch merge は record をコピーまたは削除せず、`GraphView` の membership を追加する
+
+read-time の view、active / inactive 判定、trace の表示によって「今見るべきもの」を決めます。保存済み record を破壊して過去を書き換えることはしません。
+
 ## なぜ GraphView にするか
 
 parent Dag / child Dag がそれぞれ `nodes` や `transitions` を持つと、別 Dag 間で同じ ID が使われたときに意味が壊れます。さらに、親の transition が子の node を指すような横断参照は index や storage を曖昧にします。
@@ -216,5 +231,7 @@ plans.jsonl
 transitions.jsonl
 payloads.jsonl
 ```
+
+storage も append-only を前提にします。論理的な取り消しや無効化は、既存行の削除ではなく追加 record / payload と read-time 計算で表します。
 
 旧形式の migration は 0.1 alpha では持ちません。
