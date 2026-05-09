@@ -1,22 +1,24 @@
 # optagent
 
-optagent は、問題解決や最適化の過程を DAG と JSONL で記録するための Python ライブラリです。
+optagent is a Python library for recording the process of problem-solving and optimization as DAGs and JSONL.
 
-最終成果だけでなく、途中で立てた plan、実行前の予測、実際に起きた結果を残すことを目的にしています。現在は 0.1 alpha で、後方互換よりもモデル整理を優先します。古い run 保存形式や旧 API との互換は保証しません。
+It aims to preserve not just final results, but also the plans made along the way, predictions before execution, and what actually happened. Currently at 0.1 alpha — model refinement is prioritized over backward compatibility. No guarantees for old run storage formats or legacy APIs.
 
-## 何を構築しているか
+*日本語版は [README.ja.md](README.ja.md) を参照してください。*
 
-optagent が構築しているのは、最適化プロセスのための append-only な履歴グラフです。
+## What It Builds
 
-コード最適化、カーネル最適化、実験、調査では、最終的な成果物だけでなく、途中で何を試し、どうなると予測し、実際に何が起きたかが重要になります。optagent は、その試行錯誤を `RunGraph` と payload の形で保存します。
+What optagent builds is an append-only history graph for the optimization process.
 
-CLI や Python API は、この履歴グラフを操作するための入口です。`init` で run を作り、`plan` で次の試行を記録し、`predict` で実行前の見込みを残し、`observe` で実測結果を保存します。`trace` や `show` は、保存された判断の過程を読み返すために使います。
+In code optimization, kernel optimization, experiments, and investigation, the final artifact alone is not enough — what you tried, what you predicted, and what actually happened are essential. optagent preserves that trial-and-error process as `RunGraph` and payloads.
 
-optagent 自体は executor や code generator ではありません。人間、LLM、script、benchmark runner、executor が行った判断や結果を、あとから共有・検証できる構造として残すための基盤です。
+The CLI and Python API are entry points for manipulating this history graph. `init` creates a run, `plan` records the next attempt, `predict` leaves pre-execution expectations, and `observe` saves measured results. `trace` and `show` are used to read back the preserved decision-making process.
 
-## モデル
+optagent itself is not an executor or code generator. It is a foundation for structurally preserving the decisions and results made by humans, LLMs, scripts, benchmark runners, and executors — so they can be shared and reviewed later.
 
-0.1 の中心は `RunGraph` です。`RunGraph` が run 全体の DAG を持ち、`GraphView` がその部分集合を表します。
+## Model
+
+The center of 0.1 is `RunGraph`. `RunGraph` holds the DAG for the entire run, and `GraphView` represents a subset of it.
 
 ```text
 RunHandle
@@ -34,11 +36,11 @@ GraphView
   └── root_node_id
 ```
 
-`InputTransition` は複数 input node を受け取る入力側 transition です。`PlanPayload` はここに attach します。`OutputTransition` は 1 つの output node に到達する出力側 transition です。`PredictionPayload` / `ResultPayload` はここに attach します。
+`InputTransition` is the input-side transition that accepts multiple input nodes. `PlanPayload` is attached here. `OutputTransition` is the output-side transition that reaches a single output node. `PredictionPayload` / `ResultPayload` are attached here.
 
-node には軽いメモとして `NotePayload` を attach できます。
+Lightweight memos can be attached to nodes as `NotePayload`.
 
-`RunGraph` は append-only です。一度追加した node / input transition / output transition / payload は削除せず、取り消しや無効化は `CutPayload` と read-time の計算で表します。
+`RunGraph` is append-only. Once added, nodes / input transitions / output transitions / payloads are never deleted. Cancellation and invalidation are expressed through `CutPayload` and read-time computation.
 
 ## Quick Start
 
@@ -85,35 +87,39 @@ run.save(store)
 loaded = store.load_run("demo")
 ```
 
-隔離した探索をしたい場合は `GraphView` を作ります。`GraphView` は `root_node_id` だけを持ち、内容は read-time に `RunGraph.reachable_from(root_node_id)` で算出します。
+For isolated exploration, create a `GraphView`. `GraphView` holds only a `root_node_id` — its contents are computed at read-time via `RunGraph.reachable_from(root_node_id)`.
 
 ## Install
 
-Python 3.10 以上が必要です。
+Python 3.10 or later is required.
 
-開発中の checkout から使う場合は、repo root で editable install します。
+When working from a development checkout, do an editable install from the repo root:
 
 ```bash
 python3 -m pip install -e .
 ```
 
-開発用 dependency も入れる場合は次を使います。
+To also install dev dependencies:
 
 ```bash
 python3 -m pip install -e ".[dev]"
 ```
 
-インストールせずに試す場合は、repo root で `PYTHONPATH=src python3 -m optagent.cli.main ...` として実行できます。
+Without installing, you can run as a module from the repo root:
+
+```bash
+PYTHONPATH=src python3 -m optagent.cli.main ...
+```
 
 ## CLI Quick Start
 
-CLI から概念と基本ループを確認するには、次を実行します。
+To explore concepts and the basic loop from the CLI:
 
 ```bash
 optagent guide
 ```
 
-日本語で表示したい場合は `optagent guide --lang ja` を使います。
+For Japanese output, use `optagent guide --lang ja`.
 
 ```bash
 optagent init req_kernel \
@@ -143,25 +149,25 @@ optagent trace --run demo --from-node n_0002
 optagent show --run demo
 ```
 
-未インストールで同じ操作をする場合は、各 command を `PYTHONPATH=src python3 -m optagent.cli.main ...` に置き換えます。
+If not installed, replace each command with `PYTHONPATH=src python3 -m optagent.cli.main ...`.
 
-## 主な用語
+## Key Terms
 
-- `Requirement`: run の目的。
-- `RunGraph`: run 全体の DAG と global records。
-- `GraphView`: `RunGraph` の部分集合。
-- `Node`: pure graph node。
-- `InputTransition`: 複数 input node を受け取る入力側 transition。
-- `OutputTransition`: 1 つの output node に到達する出力側 transition。
-- `NotePayload`: node に attach される軽いメモ。
-- `PlanPayload`: `InputTransition` に attach される plan 情報。
-- `PredictionPayload`: prediction output に attach される予測情報。
-- `ResultPayload`: observed output に attach される実行結果。
-- `CutPayload`: input / output transition の無効化を append-only に表す payload。
+- `Requirement`: the goal of a run.
+- `RunGraph`: the overall DAG and global records for a run.
+- `GraphView`: a subset of `RunGraph`.
+- `Node`: a pure graph node.
+- `InputTransition`: an input-side transition accepting multiple input nodes.
+- `OutputTransition`: an output-side transition that reaches a single output node.
+- `NotePayload`: a lightweight memo attached to a node.
+- `PlanPayload`: plan information attached to an `InputTransition`.
+- `PredictionPayload`: prediction information attached to a prediction output.
+- `ResultPayload`: execution result attached to an observed output.
+- `CutPayload`: an append-only payload that marks an input/output transition as inactive.
 
-## 保存形式
+## Storage Format
 
-`JsonlRunStore` は run をディレクトリとして保存します。
+`JsonlRunStore` persists a run as a directory:
 
 ```text
 <store-dir>/<run-id>/
@@ -174,18 +180,20 @@ optagent show --run demo
   payloads.jsonl
 ```
 
-0.1 alpha では保存形式を破壊的に変える可能性があります。旧 `states.jsonl` / `execution_plans.jsonl` 形式との読み込み互換は持たせません。
+In 0.1 alpha, the storage format may change in breaking ways. Read compatibility with old `states.jsonl` / `execution_plans.jsonl` formats is not provided.
 
-## ドキュメント
+## Documentation
 
-- [コンセプト](docs/ja/CONCEPT.md)
-- [プロジェクトの方向性](docs/ja/DIRECTION.md)
-- [状態モデル](docs/ja/STATE_MODEL.md)
-- [API](docs/ja/API.md)
-- [CLI](docs/ja/CLI.md)
-- [問題解決ループ](docs/ja/AGENT_LOOP.md)
+- [Concept](docs/en/CONCEPT.md)
+- [Project Direction](docs/en/DIRECTION.md)
+- [State Model](docs/en/STATE_MODEL.md)
+- [API](docs/en/API.md)
+- [CLI](docs/en/CLI.md)
+- [Problem-Solving Loop](docs/en/AGENT_LOOP.md)
 
-## 開発
+日本語ドキュメントは [docs/ja/](docs/ja/) にあります。
+
+## Development
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest tests -q
