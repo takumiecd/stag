@@ -101,14 +101,18 @@ def commit_log(repo_root: str | Path, base_commit: str) -> list[dict[str, str]]:
     """Return commits in ``base_commit..HEAD`` as a list of dicts.
 
     Each dict has keys: sha, subject, author, date (ISO 8601 with timezone).
-    Uses ``--format=%H%x00%s%x00%aN%x00%aI`` (NUL-separated fields, one
-    commit per line using a non-ambiguous separator).
+    Uses a record-separator approach: each commit is rendered as 4 lines
+    (sha / subject / author / date) separated by ``\x1e`` (ASCII RS char),
+    and commits are separated by ``\x1f`` (ASCII US char).
     """
-    sep = "\x00"
-    fmt = f"%H{sep}%s{sep}%aN{sep}%aI"
+    # Use ASCII record-separator and unit-separator which git supports as
+    # literals in --format strings.
+    rs = "\x1e"   # record separator between fields within a commit
+    us = "\x1f"   # unit separator between commits
+    fmt = f"%H{rs}%s{rs}%aN{rs}%aI{us}"
     try:
         raw = _git(
-            ["log", f"{base_commit}..HEAD", f"--format={fmt}", "--no-walk=unsorted"],
+            ["log", f"{base_commit}..HEAD", f"--format={fmt}"],
             repo_root,
         )
     except subprocess.CalledProcessError:
@@ -119,12 +123,20 @@ def commit_log(repo_root: str | Path, base_commit: str) -> list[dict[str, str]]:
         return []
 
     entries = []
-    for line in raw.splitlines():
-        parts = line.split(sep, 3)
+    for block in raw.split(us):
+        block = block.strip()
+        if not block:
+            continue
+        parts = block.split(rs, 3)
         if len(parts) < 4:
             continue
-        sha, subject, author, date = parts
-        entries.append({"sha": sha, "subject": subject, "author": author, "date": date})
+        sha, subject, author, date = parts[0], parts[1], parts[2], parts[3]
+        entries.append({
+            "sha": sha.strip(),
+            "subject": subject.strip(),
+            "author": author.strip(),
+            "date": date.strip(),
+        })
     return entries
 
 
