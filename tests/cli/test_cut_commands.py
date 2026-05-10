@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from optagent.cli.commands.init import run_init_command
-from optagent.cli.commands.observe import run_observe_command
-from optagent.cli.commands.plan import run_plan_command
-from optagent.cli.commands.cut import run_cut_command
-from optagent.core.cuts import is_active_node, is_inactive_output_transition
-from optagent.storage.jsonl import JsonlRunStore
+from stag.cli.commands.init import run_init_command
+from stag.cli.commands.observe import run_observe_command
+from stag.cli.commands.plan import run_plan_command
+from stag.cli.commands.cut import run_cut_command
+from stag.core.cuts import is_active_node, is_inactive_output_transition
+from stag.storage.jsonl import JsonlRunStore
 
 
 def _init(store_dir: str) -> str:

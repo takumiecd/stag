@@ -1,6 +1,6 @@
 # Concept
 
-optagent is a foundation for preserving the process of optimization and problem-solving as a "readable-after-the-fact structure."
+STAG is a foundation for preserving the process of optimization and problem-solving as a "readable-after-the-fact structure."
 
 Rather than looking only at the final result, it leaves the following information within a run:
 
@@ -13,7 +13,7 @@ Rather than looking only at the final result, it leaves the following informatio
 
 ## Core Idea
 
-What optagent builds is an append-only history graph for the optimization process.
+What STAG builds is an append-only history graph for the optimization process.
 
 `RunGraph` is the DAG for the entire run. `Node` represents a state at a point in time. `InputTransition` represents "what to try from this state." `OutputTransition` represents "what result was reached from that attempt."
 
@@ -25,7 +25,7 @@ Meaningful information is not embedded directly in graph records but attached as
 - `NotePayload`: memos about a state
 - `CutPayload`: invalidation of mistaken attempts or results
 
-This separation allows optagent to handle the structure of trial and error, not just logs.
+This separation allows STAG to handle the structure of trial and error, not just logs.
 
 ## The Role of the CLI
 
@@ -39,16 +39,16 @@ The basic flow is:
 init
   -> plan
   -> predict
-  -> execute outside optagent
+  -> execute outside STAG
   -> observe
   -> trace / show
 ```
 
-optagent does not perform optimization. It serves as a shareable state graph for the decisions and results made by external humans, LLMs, scripts, benchmark runners, and executors.
+STAG does not perform optimization. It serves as a shareable state graph for the decisions and results made by external humans, LLMs, scripts, benchmark runners, and executors.
 
 ## What It Is Good For
 
-optagent is suited for work where the intermediate process has value:
+STAG is suited for work where the intermediate process has value:
 
 - Code optimization
 - Kernel optimization
@@ -60,7 +60,7 @@ It is especially valuable when multiple attempts share the same goal and predict
 
 ## What It Is Not
 
-optagent is not, at this time:
+STAG is not, at this time:
 
 - A general-purpose chatbot framework
 - A LangChain-style general agent framework
@@ -68,4 +68,4 @@ optagent is not, at this time:
 - An auto-optimization tool with a built-in executor
 - A tool that automatically writes generated code back to source files
 
-Execution, evaluation, code generation, and benchmarking are the responsibility of external systems. optagent's role is to structurally preserve the plans, predictions, and results they produce.
+Execution, evaluation, code generation, and benchmarking are the responsibility of external systems. STAG's role is to structurally preserve the plans, predictions, and results they produce.

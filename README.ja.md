@@ -1,18 +1,18 @@
-# optagent
+# STAG
 
-optagent は、問題解決や最適化の過程を DAG と JSONL で記録するための Python ライブラリです。
+STAG は、問題解決や最適化の過程を DAG と JSONL で記録するための Python ライブラリです。
 
 最終成果だけでなく、途中で立てた plan、実行前の予測、実際に起きた結果を残すことを目的にしています。現在は 0.1 alpha で、後方互換よりもモデル整理を優先します。古い run 保存形式や旧 API との互換は保証しません。
 
 ## 何を構築しているか
 
-optagent が構築しているのは、最適化プロセスのための append-only な履歴グラフです。
+STAG が構築しているのは、最適化プロセスのための append-only な履歴グラフです。
 
-コード最適化、カーネル最適化、実験、調査では、最終的な成果物だけでなく、途中で何を試し、どうなると予測し、実際に何が起きたかが重要になります。optagent は、その試行錯誤を `RunGraph` と payload の形で保存します。
+コード最適化、カーネル最適化、実験、調査では、最終的な成果物だけでなく、途中で何を試し、どうなると予測し、実際に何が起きたかが重要になります。STAG は、その試行錯誤を `RunGraph` と payload の形で保存します。
 
 CLI や Python API は、この履歴グラフを操作するための入口です。`init` で run を作り、`plan` で次の試行を記録し、`predict` で実行前の見込みを残し、`observe` で実測結果を保存します。`trace` や `show` は、保存された判断の過程を読み返すために使います。
 
-optagent 自体は executor や code generator ではありません。人間、LLM、script、benchmark runner、executor が行った判断や結果を、あとから共有・検証できる構造として残すための基盤です。
+STAG 自体は executor や code generator ではありません。人間、LLM、script、benchmark runner、executor が行った判断や結果を、あとから共有・検証できる構造として残すための基盤です。
 
 ## モデル
 
@@ -43,9 +43,9 @@ node には軽いメモとして `NotePayload` を attach できます。
 ## Quick Start
 
 ```python
-import optagent
-from optagent import PlanPayload, Requirement, ResultPayload
-from optagent.storage import JsonlRunStore
+import stag
+from stag import PlanPayload, Requirement, ResultPayload
+from stag.storage import JsonlRunStore
 
 requirement = Requirement(
     requirement_id="req_kernel",
@@ -53,7 +53,7 @@ requirement = Requirement(
     target_id="csc_linear",
 )
 
-run = optagent.init(requirement, run_id="demo")
+run = stag.init(requirement, run_id="demo")
 
 input_transition = run.plan(
     [run.root_node_id],
@@ -103,35 +103,35 @@ python3 -m pip install -e .
 python3 -m pip install -e ".[dev]"
 ```
 
-インストールせずに試す場合は、repo root で `PYTHONPATH=src python3 -m optagent.cli.main ...` として実行できます。
+インストールせずに試す場合は、repo root で `PYTHONPATH=src python3 -m stag.cli.main ...` として実行できます。
 
 ## CLI Quick Start
 
 CLI から概念と基本ループを確認するには、次を実行します。
 
 ```bash
-optagent guide
+stag guide
 ```
 
-日本語で表示したい場合は `optagent guide --lang ja` を使います。
+日本語で表示したい場合は `stag guide --lang ja` を使います。
 
 ```bash
-optagent init req_kernel \
+stag init req_kernel \
   --target-type kernel \
   --target-id csc_linear \
   --run-id demo
 
-optagent plan \
+stag plan \
   --run demo \
   --input-node n_0000 \
   --intent "run baseline benchmark"
 
-optagent predict \
+stag predict \
   --run demo \
   it_0001 \
   --max-outcomes 1
 
-optagent observe \
+stag observe \
   --run demo \
   it_0001 \
   --matched-prediction ot_0001 \
@@ -139,11 +139,11 @@ optagent observe \
   --raw-output raw/profile.txt \
   --metric latency_ms=1.5
 
-optagent trace --run demo --from-node n_0002
-optagent show --run demo
+stag trace --run demo --from-node n_0002
+stag show --run demo
 ```
 
-未インストールで同じ操作をする場合は、各 command を `PYTHONPATH=src python3 -m optagent.cli.main ...` に置き換えます。
+未インストールで同じ操作をする場合は、各 command を `PYTHONPATH=src python3 -m stag.cli.main ...` に置き換えます。
 
 ## 主な用語
 

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from optagent import init
-from optagent.core.run.dump import DumpOptions, dump
-from optagent.core.schema.payloads import (
+from stag import init
+from stag.core.run.dump import DumpOptions, dump
+from stag.core.schema.payloads import (
     PlanPayload,
     PredictionPayload,
     ResultPayload,
 )
-from optagent.core.schema.requirements import Requirement
+from stag.core.schema.requirements import Requirement
 
 
 def _req() -> Requirement:

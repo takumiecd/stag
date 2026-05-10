@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import tempfile
 
-from optagent import init
-from optagent.core.schema.payloads import (
+from stag import init
+from stag.core.schema.payloads import (
     NotePayload,
     PlanPayload,
     PredictionPayload,
     ResultPayload,
 )
-from optagent.core.schema.requirements import Requirement
-from optagent.storage.jsonl import JsonlRunStore
+from stag.core.schema.requirements import Requirement
+from stag.storage.jsonl import JsonlRunStore
 
 
 def _req() -> Requirement:
@@ -87,7 +87,7 @@ def test_round_trip_cut_payload():
         store.save_run(run)
         loaded = store.load_run("rt_cut")
 
-    from optagent.core.cuts import is_inactive_output_transition
+    from stag.core.cuts import is_inactive_output_transition
     assert is_inactive_output_transition(loaded.run_graph, ot.output_transition_id)
 
 

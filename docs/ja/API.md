@@ -5,8 +5,8 @@
 ## 最小例
 
 ```python
-import optagent
-from optagent import PlanPayload, Requirement, ResultPayload
+import stag
+from stag import PlanPayload, Requirement, ResultPayload
 
 requirement = Requirement(
     requirement_id="req_kernel",
@@ -14,7 +14,7 @@ requirement = Requirement(
     target_id="csc_linear",
 )
 
-run = optagent.init(requirement, run_id="demo")
+run = stag.init(requirement, run_id="demo")
 
 input_transition = run.plan(
     [run.root_node_id],
@@ -67,10 +67,10 @@ history = run.trace(observed.to_node_id)
 
 `SnapshotPayload` / `DerivedPayload` / `MatchPayload` / `PredictionSelection` / `PredictionPath` は 0.1 の最小 API から外します。
 
-## `optagent.init`
+## `stag.init`
 
 ```python
-optagent.init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle
+stag.init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle
 ```
 
 新しい run を作ります。
@@ -231,7 +231,7 @@ run.run_graph.reachable_from(node_id: str) -> dict
 ## `dump`
 
 ```python
-from optagent.core.run.dump import dump, DumpOptions
+from stag.core.run.dump import dump, DumpOptions
 
 opts = DumpOptions(
     node_id=None,          # サブツリーの起点（None で root から全体）
@@ -244,7 +244,7 @@ text = dump(handle, fmt="outline", opts=opts)
 # fmt は "outline" または "mermaid"
 ```
 
-run 全体を outline（LLM 向けインデントテキスト）または mermaid（Mermaid flowchart TD）としてレンダリングします。CLI では `optagent dump` として利用できます。
+run 全体を outline（LLM 向けインデントテキスト）または mermaid（Mermaid flowchart TD）としてレンダリングします。CLI では `stag dump` として利用できます。
 
 outline の記号:
 
@@ -258,7 +258,7 @@ outline の記号:
 ## Storage
 
 ```python
-from optagent.storage import JsonlRunStore
+from stag.storage import JsonlRunStore
 
 store = JsonlRunStore("runs")
 run.save(store)

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from optagent.cli.commands.init import run_init_command
-from optagent.cli.commands.observe import run_observe_command
-from optagent.cli.commands.plan import run_plan_command
-from optagent.cli.commands.predict import run_predict_command
-from optagent.storage.jsonl import JsonlRunStore
+from stag.cli.commands.init import run_init_command
+from stag.cli.commands.observe import run_observe_command
+from stag.cli.commands.plan import run_plan_command
+from stag.cli.commands.predict import run_predict_command
+from stag.storage.jsonl import JsonlRunStore
 
 
 def _init(store_dir: str) -> str:

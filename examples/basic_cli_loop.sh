@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Basic CLI loop example for optagent 0.1 alpha.
+# Basic CLI loop example for stag 0.1 alpha.
 #
 # Demonstrates:
 #   init -> plan -> observe -> derive -> trace -> extend -> predict -> refresh -> show -> list
@@ -10,12 +10,12 @@ export PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH=src
 
 RUN_ID="demo_loop"
-STORE_DIR="${STORE_DIR:-/tmp/optagent_demo_runs}"
+STORE_DIR="${STORE_DIR:-/tmp/stag_demo_runs}"
 
 rm -rf "$STORE_DIR/$RUN_ID"
 
 echo "=== 1. init ==="
-python3 -m optagent.cli.main init \
+python3 -m stag.cli.main init \
   "req_optimize_kernel" \
   --target-type "kernel" \
   --target-id "matmul_v1" \
@@ -24,7 +24,7 @@ python3 -m optagent.cli.main init \
 
 echo ""
 echo "=== 2. plan on observed root ==="
-PLAN_RESULT=$(python3 -m optagent.cli.main plan \
+PLAN_RESULT=$(python3 -m stag.cli.main plan \
   --from-node n_0000 \
   --planner default \
   --max-plans 1 \
@@ -35,7 +35,7 @@ PLAN_ID=$(echo "$PLAN_RESULT" | python3 -c "import sys, json; print(json.load(sy
 
 echo ""
 echo "=== 3. observe result ==="
-OBS_RESULT=$(python3 -m optagent.cli.main observe \
+OBS_RESULT=$(python3 -m stag.cli.main observe \
   --plan "$PLAN_ID" \
   --status completed \
   --artifact "build.log" \
@@ -49,20 +49,20 @@ OBS_TRANSITION_ID=$(echo "$OBS_RESULT" | python3 -c "import sys, json; print(jso
 
 echo ""
 echo "=== 4. derive finding ==="
-python3 -m optagent.cli.main derive "$OBS_TRANSITION_ID" \
+python3 -m stag.cli.main derive "$OBS_TRANSITION_ID" \
   --type finding \
   --text "baseline run completed with speedup metric" \
   --store-dir "$STORE_DIR"
 
 echo ""
 echo "=== 5. trace ==="
-python3 -m optagent.cli.main trace \
+python3 -m stag.cli.main trace \
   --from-node "$OBS_NODE_ID" \
   --store-dir "$STORE_DIR"
 
 echo ""
 echo "=== 6. extend predicted root ==="
-PPLAN_RESULT=$(python3 -m optagent.cli.main extend \
+PPLAN_RESULT=$(python3 -m stag.cli.main extend \
   --node-id n_0001 \
   --intent "predict likely benchmark outcomes" \
   --store-dir "$STORE_DIR")
@@ -71,25 +71,25 @@ PPLAN_ID=$(echo "$PPLAN_RESULT" | python3 -c "import sys, json; print(json.load(
 
 echo ""
 echo "=== 7. predict ==="
-python3 -m optagent.cli.main predict \
+python3 -m stag.cli.main predict \
   "$PPLAN_ID" \
   --max-outcomes 2 \
   --store-dir "$STORE_DIR"
 
 echo ""
 echo "=== 8. refresh predicted dag ==="
-python3 -m optagent.cli.main refresh \
+python3 -m stag.cli.main refresh \
   --from-node "$OBS_NODE_ID" \
   --store-dir "$STORE_DIR"
 
 echo ""
 echo "=== 9. show run ==="
-python3 -m optagent.cli.main show \
+python3 -m stag.cli.main show \
   --store-dir "$STORE_DIR"
 
 echo ""
 echo "=== 10. list ==="
-python3 -m optagent.cli.main list \
+python3 -m stag.cli.main list \
   --store-dir "$STORE_DIR"
 
 echo ""

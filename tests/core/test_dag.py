@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from optagent.core.run_graph import RunGraph
-from optagent.core.schema.graph import InputTransition, Node, OutputTransition
-from optagent.core.schema.payloads import CutPayload, NotePayload, PredictionPayload, ResultPayload
+from stag.core.run_graph import RunGraph
+from stag.core.schema.graph import InputTransition, Node, OutputTransition
+from stag.core.schema.payloads import CutPayload, NotePayload, PredictionPayload, ResultPayload
 
 
 def _base_graph() -> RunGraph:

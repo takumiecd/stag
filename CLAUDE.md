@@ -8,7 +8,7 @@ The package is usually not installed during local development. Use `PYTHONPATH=s
 
 - Run all tests: `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest tests -q`
 - Run one test file: `PYTHONPATH=src python3 -m pytest tests/core/test_run_api.py -q`
-- CLI: `PYTHONPATH=src python3 -m optagent.cli.main <subcommand> ...`
+- CLI: `PYTHONPATH=src python3 -m stag.cli.main <subcommand> ...`
 - Optional checks configured in `pyproject.toml`: `ruff check .`, `black .`, `mypy src`
 
 Docs are Japanese-first and should match the current implementation:
@@ -25,17 +25,17 @@ This project is `0.1.0` alpha. Breaking changes are acceptable and expected. Do 
 
 ## Architecture
 
-optagent records the process of optimization/problem-solving. It is not a planner, executor, benchmark runner, or general agent framework.
+STAG records the process of optimization/problem-solving. It is not a planner, executor, benchmark runner, or general agent framework.
 
 The current core model is **a single RunGraph plus attached payloads**. Pure graph records carry no domain data; everything domain-specific is on Payload records.
 
-Pure graph records (`src/optagent/core/schema/graph.py`):
+Pure graph records (`src/stag/core/schema/graph.py`):
 
 - `Node`: pure graph node
 - `InputTransition`: entry point of an operation, with `input_node_ids: tuple[str, ...]` (multi-input allowed)
 - `OutputTransition`: result edge from one InputTransition to one output node
 
-Container (`src/optagent/core/run_graph.py`):
+Container (`src/stag/core/run_graph.py`):
 
 - `RunGraph`: holds all nodes / input_transitions / output_transitions / payloads / views, plus traversal indices
 - `GraphView`: lightweight named label anchored to a root node; contents derived at read time via reachability
@@ -50,7 +50,7 @@ Avoid reintroducing `Dag` (singular per role), `StateNode`, `ExecutionPlan`, `Pr
 
 ## Payloads
 
-Payload types live under `src/optagent/core/schema/payloads.py`.
+Payload types live under `src/stag/core/schema/payloads.py`.
 
 - `NotePayload`: lightweight memo on a node
 - `PlanPayload`: operation intent attached to an InputTransition
@@ -64,9 +64,9 @@ There is no separate `SnapshotPayload` / `DerivedPayload` / `MatchPayload` in th
 
 ## RunHandle
 
-`RunHandle` is defined in `src/optagent/core/run/handle.py` and binds verb implementations from sibling modules.
+`RunHandle` is defined in `src/stag/core/run/handle.py` and binds verb implementations from sibling modules.
 
-Public verbs (each implemented in `src/optagent/core/run/<verb>.py`):
+Public verbs (each implemented in `src/stag/core/run/<verb>.py`):
 
 - `plan(input_node_ids, plan_payload, *, user_id=None)`
 - `observe(input_transition_id, result_payload, *, user_id=None)` (alias: `result`)
@@ -79,11 +79,11 @@ Public verbs (each implemented in `src/optagent/core/run/<verb>.py`):
 - `view_list()`
 - `view_show(name)`
 
-When adding a new RunHandle method, implement it in a focused `src/optagent/core/run/<verb>.py` module and bind it in `handle.py`.
+When adding a new RunHandle method, implement it in a focused `src/stag/core/run/<verb>.py` module and bind it in `handle.py`.
 
 ## CLI
 
-`src/optagent/cli/main.py` dispatches to `src/optagent/cli/commands/<name>.py`.
+`src/stag/cli/main.py` dispatches to `src/stag/cli/commands/<name>.py`.
 
 Current commands:
 
@@ -99,28 +99,28 @@ Current commands:
 Commands resolve the target run in this order:
 
 1. `--run`
-2. `OPTAGENT_RUN_ID`
+2. `STAG_RUN_ID`
 3. `<store-dir>/../current.json`
 
 Mutating commands resolve user attribution in this order:
 
 1. `--user`
-2. `OPTAGENT_USER_ID`
+2. `STAG_USER_ID`
 3. `<store-dir>/../config.json` `user.id`
 4. `"user"`
 
 The `workflows/`, `domains/`, `execution/`, and `search/` packages are scaffolding unless the task explicitly wires them.
 
-## `optagent dump` — render the run
+## `stag dump` — render the run
 
-`optagent dump` is the single command for getting the whole run structure in one shot. Two formats:
+`stag dump` is the single command for getting the whole run structure in one shot. Two formats:
 
 - `--format outline` (default): LLM-optimized indented spanning tree. Each node and each transition is rendered exactly once. Multi-input transitions are anchored under `input_node_ids[0]` (primary parent); additional inputs appear inline as `(+n_X)`; non-primary parents get a one-line `▸ feeds it_X (@n_primary)` pointer. Back-references use `↻n_X`. Predicted OTs use `⇢`, observed `→`, cuts `✂`. When ≥3 multi-input transitions exist, a top-level `joins:` index is emitted.
 - `--format mermaid`: human/visual format. Renders a `flowchart TD` mermaid block. Single-input/single-output transitions become labeled edges; multi-input or multi-output transitions become diamond intermediate nodes. Class styles separate observed / predicted / cut / root.
 
 Useful flags: `--node`, `--depth`, `--observed-only`, `--predicted-only`, `--full-payloads`.
 
-Renderer code: `src/optagent/core/run/dump.py`. Tests: `tests/core/test_dump.py`.
+Renderer code: `src/stag/core/run/dump.py`. Tests: `tests/core/test_dump.py`.
 
 ## IDs
 
@@ -140,7 +140,7 @@ Do not hand-format new IDs except for seed roots created during `init` (the root
 
 Cut is append-only. It attaches a `CutPayload` to an InputTransition or OutputTransition; it does not delete nodes, transitions, plans, or payloads.
 
-Activity is computed at read time in `src/optagent/core/cuts.py`:
+Activity is computed at read time in `src/stag/core/cuts.py`:
 
 - A `CutPayload` on an InputTransition makes the IT and all its OTs and downstream nodes inactive (cascading forward).
 - A `CutPayload` on an OutputTransition makes that OT and its `to_node` (and descendants) inactive.

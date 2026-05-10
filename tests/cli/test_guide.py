@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from optagent.cli.commands.guide import (
+from stag.cli.commands.guide import (
     GUIDES,
     TOPIC_SUMMARIES,
     TOPICS_EN,
@@ -146,7 +146,7 @@ def test_invalid_topic_raises_value_error():
 
 def test_cli_bad_topic_nonzero_exit():
     result = subprocess.run(
-        [sys.executable, "-m", "optagent.cli.main", "guide", "--topic", "does_not_exist"],
+        [sys.executable, "-m", "stag.cli.main", "guide", "--topic", "does_not_exist"],
         capture_output=True,
         text=True,
         env={**__import__("os").environ, "PYTHONPATH": "src"},
@@ -158,7 +158,7 @@ def test_cli_bad_topic_nonzero_exit():
 
 def test_cli_list_shows_seven_topics():
     result = subprocess.run(
-        [sys.executable, "-m", "optagent.cli.main", "guide", "--list"],
+        [sys.executable, "-m", "stag.cli.main", "guide", "--list"],
         capture_output=True,
         text=True,
         env={**__import__("os").environ, "PYTHONPATH": "src"},
@@ -171,19 +171,19 @@ def test_cli_list_shows_seven_topics():
 
 def test_cli_default_shows_overview():
     result = subprocess.run(
-        [sys.executable, "-m", "optagent.cli.main", "guide"],
+        [sys.executable, "-m", "stag.cli.main", "guide"],
         capture_output=True,
         text=True,
         env={**__import__("os").environ, "PYTHONPATH": "src"},
         cwd=str(__import__("pathlib").Path(__file__).parent.parent.parent),
     )
     assert result.returncode == 0
-    assert "RunGraph" in result.stdout or "optagent" in result.stdout
+    assert "RunGraph" in result.stdout or "stag" in result.stdout
 
 
 def test_cli_topic_agent():
     result = subprocess.run(
-        [sys.executable, "-m", "optagent.cli.main", "guide", "--topic", "agent"],
+        [sys.executable, "-m", "stag.cli.main", "guide", "--topic", "agent"],
         capture_output=True,
         text=True,
         env={**__import__("os").environ, "PYTHONPATH": "src"},
@@ -195,7 +195,7 @@ def test_cli_topic_agent():
 
 def test_cli_topic_dump():
     result = subprocess.run(
-        [sys.executable, "-m", "optagent.cli.main", "guide", "--topic", "dump"],
+        [sys.executable, "-m", "stag.cli.main", "guide", "--topic", "dump"],
         capture_output=True,
         text=True,
         env={**__import__("os").environ, "PYTHONPATH": "src"},

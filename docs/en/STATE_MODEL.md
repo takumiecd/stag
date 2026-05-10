@@ -1,6 +1,6 @@
 # State Model
 
-This document describes the state model targeted in optagent 0.1 alpha.
+This document describes the state model targeted in STAG 0.1 alpha.
 
 In 0.1 alpha, model refinement takes priority over backward compatibility. The old `StateNode` / `ExecutionPlan` / `PredictionPlan` / `ObservedTransition` / `PredictedTransition` / `ActionResult` forms are deprecated in favor of run-wide graph records and payloads.
 
@@ -52,7 +52,7 @@ Read-time views, active/inactive determination, and trace display decide "what s
 
 ## Input Side and Output Side
 
-optagent separates transitions into input side and output side.
+STAG separates transitions into input side and output side.
 
 ```text
 input nodes

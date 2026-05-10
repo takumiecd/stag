@@ -1,6 +1,6 @@
 # 問題解決ループ
 
-optagent は agent そのものではありません。人間、AI、script、executor が同じ文脈を共有するために、計画、予測、実行結果を構造化して保存する基盤です。
+STAG は agent そのものではありません。人間、AI、script、executor が同じ文脈を共有するために、計画、予測、実行結果を構造化して保存する基盤です。
 
 ## 基本サイクル
 
@@ -9,7 +9,7 @@ input node を選ぶ
   -> 必要なら NotePayload を node に残す
   -> InputTransition + PlanPayload を作る
   -> 必要なら prediction output と PredictionPayload を作る
-  -> optagent の外で実行する
+  -> STAG の外で実行する
   -> observed output と ResultPayload で結果を保存する
   -> trace で履歴を読む
   -> 必要なら GraphView を作って隔離した探索をする
@@ -56,7 +56,7 @@ predicted = run.predict(input_transition.input_transition_id, max_outcomes=3)
 
 ## 4. 実行する
 
-optagent は executor を内蔵しません。外部の script、test runner、benchmark runner、AI coding tool が実行します。
+STAG は executor を内蔵しません。外部の script、test runner、benchmark runner、AI coding tool が実行します。
 
 実行後、結果を `ResultPayload` として渡します。
 

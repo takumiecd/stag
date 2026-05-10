@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "optagent"
+name = "stag"
 version = "0.1.0"
-description = "State-transition optimization agent framework for auditable code and kernel optimization loops"
+description = "STAG (State Transition Artifact Graph): record plans, predictions, observations, notes, and cuts as artifacts attached to state transitions"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -39,14 +39,14 @@ kernel = [
 ]
 
 [project.scripts]
-optagent = "optagent.cli.main:main"
+stag = "stag.cli.main:main"
 
 [project.urls]
-Homepage = "https://github.com/takumiecd/optimization-agent"
-Repository = "https://github.com/takumiecd/optimization-agent"
+Homepage = "https://github.com/takumiecd/stag"
+Repository = "https://github.com/takumiecd/stag"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/optagent"]
+packages = ["src/stag"]
 
 [tool.black]
 line-length = 100

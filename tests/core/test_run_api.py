@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from optagent import init
-from optagent.core.cuts import is_active_node, is_inactive_output_transition
-from optagent.core.schema.payloads import (
+from stag import init
+from stag.core.cuts import is_active_node, is_inactive_output_transition
+from stag.core.schema.payloads import (
     CutPayload,
     NotePayload,
     PlanPayload,
     PredictionPayload,
     ResultPayload,
 )
-from optagent.core.schema.requirements import Requirement
+from stag.core.schema.requirements import Requirement
 
 
 def _req() -> Requirement:
@@ -229,7 +229,7 @@ def test_observe_on_input_transition_with_cut_input_node_raises():
         )
     )
     # instead, manually wire: create IT with inactive input node and check observe rejects it
-    from optagent.core.schema.graph import InputTransition
+    from stag.core.schema.graph import InputTransition
     it_bad = InputTransition(input_transition_id="it_bad", input_node_ids=(ot1.to_node_id,))
     run.run_graph.add_input_transition(it_bad)
     with pytest.raises(ValueError, match="inactive"):

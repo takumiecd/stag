@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from optagent.core.schema.graph import InputTransition, Node, OutputTransition
-from optagent.core.schema.payloads import (
+from stag.core.schema.graph import InputTransition, Node, OutputTransition
+from stag.core.schema.payloads import (
     CutPayload,
     NotePayload,
     PayloadBase,
@@ -12,7 +12,7 @@ from optagent.core.schema.payloads import (
     ResultPayload,
     payload_from_dict,
 )
-from optagent.core.schema.requirements import Requirement
+from stag.core.schema.requirements import Requirement
 
 
 def test_node_minimal():

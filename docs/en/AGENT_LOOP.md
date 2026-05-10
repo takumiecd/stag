@@ -1,6 +1,6 @@
 # Problem-Solving Loop
 
-optagent is not an agent itself. It is a foundation that structurally stores plans, predictions, and execution results so that humans, AIs, scripts, and executors can share the same context.
+STAG is not an agent itself. It is a foundation that structurally stores plans, predictions, and execution results so that humans, AIs, scripts, and executors can share the same context.
 
 ## Basic Cycle
 
@@ -9,7 +9,7 @@ Select input nodes
   -> Leave NotePayload on nodes if needed
   -> Create InputTransition + PlanPayload
   -> Create prediction outputs and PredictionPayload if needed
-  -> Execute outside of optagent
+  -> Execute outside of STAG
   -> Save results as observed outputs and ResultPayload
   -> Read history via trace
   -> Create GraphView for isolated exploration if needed
@@ -56,7 +56,7 @@ Multiple prediction outputs can be created from a single input transition.
 
 ## 4. Execute
 
-optagent does not include an executor. External scripts, test runners, benchmark runners, and AI coding tools perform execution.
+STAG does not include an executor. External scripts, test runners, benchmark runners, and AI coding tools perform execution.
 
 After execution, pass the results as `ResultPayload`.
 

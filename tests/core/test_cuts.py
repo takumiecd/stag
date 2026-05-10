@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from optagent.core.cuts import (
+from stag.core.cuts import (
     cut_input_transition_ids,
     cut_output_transition_ids,
     inactive_input_transition_ids,
@@ -12,9 +12,9 @@ from optagent.core.cuts import (
     is_inactive_input_transition,
     is_inactive_output_transition,
 )
-from optagent.core.run_graph import RunGraph
-from optagent.core.schema.graph import InputTransition, Node, OutputTransition
-from optagent.core.schema.payloads import CutPayload, ResultPayload
+from stag.core.run_graph import RunGraph
+from stag.core.schema.graph import InputTransition, Node, OutputTransition
+from stag.core.schema.payloads import CutPayload, ResultPayload
 
 
 def _linear_graph() -> RunGraph:

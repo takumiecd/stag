@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from optagent.cli.commands.init import run_init_command
-from optagent.cli.commands.note import run_note_command
-from optagent.cli.commands.observe import run_observe_command
-from optagent.cli.commands.plan import run_plan_command
-from optagent.storage.jsonl import JsonlRunStore
+from stag.cli.commands.init import run_init_command
+from stag.cli.commands.note import run_note_command
+from stag.cli.commands.observe import run_observe_command
+from stag.cli.commands.plan import run_plan_command
+from stag.storage.jsonl import JsonlRunStore
 
 
 def _init(store_dir: str) -> str:
@@ -59,7 +59,7 @@ def test_note_shows_in_trace(tmp_path):
         store_dir=store_dir,
     )["output_transition"]
 
-    from optagent.cli.commands.trace import run_trace_command
+    from stag.cli.commands.trace import run_trace_command
     history = run_trace_command(
         run_id=run_id, from_node_id=ot["to_node_id"], depth=None, store_dir=store_dir
     )["history"]

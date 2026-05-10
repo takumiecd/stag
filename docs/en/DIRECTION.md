@@ -1,8 +1,8 @@
 # Project Direction
 
-optagent is a library for structuring and saving the process of problem-solving and optimization.
+STAG is a library for structuring and saving the process of problem-solving and optimization.
 
-In code optimization, kernel optimization, experiments, and investigation, it is not just the "final code" that matters — what you tried along the way, what happened, and what you learned are equally important. optagent preserves that process in a form that can be read back later.
+In code optimization, kernel optimization, experiments, and investigation, it is not just the "final code" that matters — what you tried along the way, what happened, and what you learned are equally important. STAG preserves that process in a form that can be read back later.
 
 ## 0.1 Alpha Policy
 
@@ -18,7 +18,7 @@ Explicit policies:
 
 ## Core Model
 
-optagent separates pure graph records from domain payloads.
+STAG separates pure graph records from domain payloads.
 
 ```text
 Node / InputTransition / OutputTransition
@@ -38,7 +38,7 @@ Lightweight memos can be attached to nodes as `NotePayload`.
 
 `RunGraph` is append-only. Once added, nodes / input transitions / output transitions / payloads are never deleted. Cancellation and invalidation are expressed through `CutPayload` and read-time computation.
 
-## What optagent Does
+## What STAG Does
 
 - Create a run
 - Manage `RunGraph` and `GraphView`
@@ -51,9 +51,9 @@ Lightweight memos can be attached to nodes as `NotePayload`.
 - Create and display `GraphView`
 - Save to and load from JSONL run directories
 
-## What optagent Does Not Do
+## What STAG Does Not Do
 
-optagent is not, at this time:
+STAG is not, at this time:
 
 - A general-purpose chatbot framework
 - A LangChain-style general agent framework

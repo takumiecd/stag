@@ -6,18 +6,18 @@ import tempfile
 
 import pytest
 
-from optagent.cli.commands.guide import run_guide_command
-from optagent.cli.commands.init import run_init_command
-from optagent.cli.commands.list import run_list_command
-from optagent.cli.commands.note import run_note_command
-from optagent.cli.commands.observe import run_observe_command
-from optagent.cli.commands.outcomes import run_outcomes_command
-from optagent.cli.commands.plan import run_plan_command
-from optagent.cli.commands.predict import run_predict_command
-from optagent.cli.commands.reachable import run_reachable_command
-from optagent.cli.commands.cut import run_cut_command
-from optagent.cli.commands.show import run_show_command
-from optagent.cli.commands.trace import run_trace_command
+from stag.cli.commands.guide import run_guide_command
+from stag.cli.commands.init import run_init_command
+from stag.cli.commands.list import run_list_command
+from stag.cli.commands.note import run_note_command
+from stag.cli.commands.observe import run_observe_command
+from stag.cli.commands.outcomes import run_outcomes_command
+from stag.cli.commands.plan import run_plan_command
+from stag.cli.commands.predict import run_predict_command
+from stag.cli.commands.reachable import run_reachable_command
+from stag.cli.commands.cut import run_cut_command
+from stag.cli.commands.show import run_show_command
+from stag.cli.commands.trace import run_trace_command
 
 
 def _init(td: str, rid: str = "rid") -> str:
@@ -35,7 +35,7 @@ def test_guide_describes_core_concepts():
     guide = run_guide_command()["guide"]
     assert "RunGraph" in guide
     assert "PlanPayload" in guide
-    assert "optagent plan" in guide
+    assert "stag plan" in guide
     assert "append-only" in guide
 
 

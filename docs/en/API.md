@@ -5,8 +5,8 @@ This document describes the Python API targeted in 0.1 alpha. Breaking changes a
 ## Minimal Example
 
 ```python
-import optagent
-from optagent import PlanPayload, Requirement, ResultPayload
+import stag
+from stag import PlanPayload, Requirement, ResultPayload
 
 requirement = Requirement(
     requirement_id="req_kernel",
@@ -14,7 +14,7 @@ requirement = Requirement(
     target_id="csc_linear",
 )
 
-run = optagent.init(requirement, run_id="demo")
+run = stag.init(requirement, run_id="demo")
 
 input_transition = run.plan(
     [run.root_node_id],
@@ -67,10 +67,10 @@ Main public models:
 
 `SnapshotPayload` / `DerivedPayload` / `MatchPayload` / `PredictionSelection` / `PredictionPath` are excluded from the 0.1 minimal API.
 
-## `optagent.init`
+## `stag.init`
 
 ```python
-optagent.init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle
+stag.init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle
 ```
 
 Creates a new run.
@@ -231,7 +231,7 @@ To "integrate a view", simply add an `OutputTransition` from a node in the targe
 ## Storage
 
 ```python
-from optagent.storage import JsonlRunStore
+from stag.storage import JsonlRunStore
 
 store = JsonlRunStore("runs")
 run.save(store)

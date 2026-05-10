@@ -1,6 +1,6 @@
-# optagent
+# STAG
 
-optagent is a Python library for recording the process of problem-solving and optimization as DAGs and JSONL.
+STAG is a Python library for recording the process of problem-solving and optimization as DAGs and JSONL.
 
 It aims to preserve not just final results, but also the plans made along the way, predictions before execution, and what actually happened. Currently at 0.1 alpha — model refinement is prioritized over backward compatibility. No guarantees for old run storage formats or legacy APIs.
 
@@ -8,13 +8,13 @@ It aims to preserve not just final results, but also the plans made along the wa
 
 ## What It Builds
 
-What optagent builds is an append-only history graph for the optimization process.
+What STAG builds is an append-only history graph for the optimization process.
 
-In code optimization, kernel optimization, experiments, and investigation, the final artifact alone is not enough — what you tried, what you predicted, and what actually happened are essential. optagent preserves that trial-and-error process as `RunGraph` and payloads.
+In code optimization, kernel optimization, experiments, and investigation, the final artifact alone is not enough — what you tried, what you predicted, and what actually happened are essential. STAG preserves that trial-and-error process as `RunGraph` and payloads.
 
 The CLI and Python API are entry points for manipulating this history graph. `init` creates a run, `plan` records the next attempt, `predict` leaves pre-execution expectations, and `observe` saves measured results. `trace` and `show` are used to read back the preserved decision-making process.
 
-optagent itself is not an executor or code generator. It is a foundation for structurally preserving the decisions and results made by humans, LLMs, scripts, benchmark runners, and executors — so they can be shared and reviewed later.
+STAG itself is not an executor or code generator. It is a foundation for structurally preserving the decisions and results made by humans, LLMs, scripts, benchmark runners, and executors — so they can be shared and reviewed later.
 
 ## Model
 
@@ -45,9 +45,9 @@ Lightweight memos can be attached to nodes as `NotePayload`.
 ## Quick Start
 
 ```python
-import optagent
-from optagent import PlanPayload, Requirement, ResultPayload
-from optagent.storage import JsonlRunStore
+import stag
+from stag import PlanPayload, Requirement, ResultPayload
+from stag.storage import JsonlRunStore
 
 requirement = Requirement(
     requirement_id="req_kernel",
@@ -55,7 +55,7 @@ requirement = Requirement(
     target_id="csc_linear",
 )
 
-run = optagent.init(requirement, run_id="demo")
+run = stag.init(requirement, run_id="demo")
 
 input_transition = run.plan(
     [run.root_node_id],
@@ -108,7 +108,7 @@ python3 -m pip install -e ".[dev]"
 Without installing, you can run as a module from the repo root:
 
 ```bash
-PYTHONPATH=src python3 -m optagent.cli.main ...
+PYTHONPATH=src python3 -m stag.cli.main ...
 ```
 
 ## CLI Quick Start
@@ -116,28 +116,28 @@ PYTHONPATH=src python3 -m optagent.cli.main ...
 To explore concepts and the basic loop from the CLI:
 
 ```bash
-optagent guide
+stag guide
 ```
 
-For Japanese output, use `optagent guide --lang ja`.
+For Japanese output, use `stag guide --lang ja`.
 
 ```bash
-optagent init req_kernel \
+stag init req_kernel \
   --target-type kernel \
   --target-id csc_linear \
   --run-id demo
 
-optagent plan \
+stag plan \
   --run demo \
   --input-node n_0000 \
   --intent "run baseline benchmark"
 
-optagent predict \
+stag predict \
   --run demo \
   it_0001 \
   --max-outcomes 1
 
-optagent observe \
+stag observe \
   --run demo \
   it_0001 \
   --matched-prediction ot_0001 \
@@ -145,11 +145,11 @@ optagent observe \
   --raw-output raw/profile.txt \
   --metric latency_ms=1.5
 
-optagent trace --run demo --from-node n_0002
-optagent show --run demo
+stag trace --run demo --from-node n_0002
+stag show --run demo
 ```
 
-If not installed, replace each command with `PYTHONPATH=src python3 -m optagent.cli.main ...`.
+If not installed, replace each command with `PYTHONPATH=src python3 -m stag.cli.main ...`.
 
 ## Key Terms
 

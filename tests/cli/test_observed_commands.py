@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from optagent.cli.commands.init import run_init_command
-from optagent.cli.commands.observe import _parse_metrics, run_observe_command
-from optagent.cli.commands.plan import _parse_kv, run_plan_command
-from optagent.cli.commands.show import run_show_command
-from optagent.cli.commands.trace import run_trace_command
-from optagent.storage.jsonl import JsonlRunStore
+from stag.cli.commands.init import run_init_command
+from stag.cli.commands.observe import _parse_metrics, run_observe_command
+from stag.cli.commands.plan import _parse_kv, run_plan_command
+from stag.cli.commands.show import run_show_command
+from stag.cli.commands.trace import run_trace_command
+from stag.storage.jsonl import JsonlRunStore
 
 
 def _init(store_dir: str) -> str:
