@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import argparse
 
-from stag.cli.context import resolve_run_id_from_args
+from stag.cli.context import resolve_store, resolve_run_id_from_args
 from stag.core.run.dump import DumpOptions, dump
-from stag.storage.jsonl import JsonlRunStore
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
@@ -39,7 +38,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
 def cli_dump(args) -> int:
     if args.observed_only and args.predicted_only:
         raise ValueError("--observed-only and --predicted-only are mutually exclusive")
-    store = JsonlRunStore(args.store_dir)
+    store = resolve_store(args.store_dir)
     run_id = resolve_run_id_from_args(args)
     if not store.run_path(run_id).exists():
         raise KeyError(f"unknown run_id: {run_id}")

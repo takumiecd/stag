@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from stag.cli.context import save_current_run
-from stag.storage.jsonl import JsonlRunStore
+from stag.cli.context import resolve_store, save_current_run
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
@@ -43,7 +42,7 @@ def run_use_command(
     KeyError
         If the run_id does not exist.
     """
-    store = JsonlRunStore(store_dir)
+    store = resolve_store(store_dir)
     run_path = store.run_path(run_id)
     if not run_path.exists():
         raise KeyError(f"unknown run_id: {run_id}")

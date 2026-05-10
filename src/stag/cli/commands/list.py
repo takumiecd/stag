@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from stag.storage.jsonl import JsonlRunStore
+from stag.cli.context import resolve_store
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
@@ -31,7 +31,7 @@ def run_list_command(*, store_dir: str) -> dict:
     -------
     dict with ``runs`` key containing a list of run summary dicts.
     """
-    store = JsonlRunStore(store_dir)
+    store = resolve_store(store_dir)
     return {"runs": store.list_runs()}
 
 

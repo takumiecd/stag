@@ -92,3 +92,34 @@ def resolve_user_id(user_id: str | None, store_dir: str) -> str:
 def resolve_user_id_from_args(args) -> str:
     """Resolve user attribution from parsed CLI args."""
     return resolve_user_id(getattr(args, "user", None), args.store_dir)
+
+
+def resolve_store(store_dir: str):
+    """Pick a RunStore implementation.
+
+    Resolution chain:
+    1. STAG_STORE env var ("jsonl" | "sqlite")
+    2. <store-dir>/../config.json ``storage.backend``
+    3. default: "jsonl"
+
+    Raises
+    ------
+    RuntimeError
+        If the resolved backend name is not "jsonl" or "sqlite".
+    """
+    backend: str | None = os.environ.get("STAG_STORE")
+    if not backend:
+        config_path = Path(store_dir).parent / "config.json"
+        if config_path.exists():
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            backend = data.get("storage", {}).get("backend")
+    if not backend:
+        backend = "jsonl"
+
+    if backend == "jsonl":
+        from stag.storage.jsonl import JsonlRunStore  # noqa: PLC0415
+        return JsonlRunStore(store_dir)
+    if backend == "sqlite":
+        from stag.storage.sqlite import SqliteRunStore  # noqa: PLC0415
+        return SqliteRunStore(store_dir)
+    raise RuntimeError(f"unknown store backend: {backend!r}. Expected 'jsonl' or 'sqlite'.")

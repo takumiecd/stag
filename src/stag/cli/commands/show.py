@@ -5,8 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from stag.cli.context import resolve_run_id_from_args
-from stag.storage.jsonl import JsonlRunStore
+from stag.cli.context import resolve_store, resolve_run_id_from_args
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
@@ -39,7 +38,7 @@ def run_show_command(
     if with_payloads and payload_id is not None:
         raise ValueError("--with-payloads cannot be used with --payload")
 
-    store = JsonlRunStore(store_dir)
+    store = resolve_store(store_dir)
     if not store.run_path(run_id).exists():
         raise KeyError(f"unknown run_id: {run_id}")
     handle = store.load_run(run_id)

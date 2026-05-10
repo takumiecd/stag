@@ -6,9 +6,8 @@ import argparse
 from pathlib import Path
 
 import stag
-from stag.cli.context import save_current_run
+from stag.cli.context import resolve_store, save_current_run
 from stag.core.schema.requirements import Requirement
-from stag.storage.jsonl import JsonlRunStore
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
@@ -78,7 +77,7 @@ def run_init_command(
 
     handle = stag.init(requirement, run_id=run_id)
 
-    store = JsonlRunStore(store_dir)
+    store = resolve_store(store_dir)
     run_path = store.run_path(handle.run_id)
     if run_path.exists():
         raise FileExistsError(f"run directory already exists: {run_path}")
