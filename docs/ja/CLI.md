@@ -330,3 +330,109 @@ payloads.jsonl
 ```
 
 0.1 alpha では旧 storage schema との互換は持ちません。
+
+## stag git
+
+Git repository の変更履歴を STAG の DAG に紐付ける subcommand 群です。`stag git <subcommand>` の形で呼び出します。
+
+### `stag git start <input_transition_id>`
+
+指定した InputTransition に対して GitSession を作成します。起点コミット・ブランチを記録し、`<run_dir>/git/sessions/<session_id>.json` に保存します。
+
+```bash
+stag git start it_0001 [--run <run_id>] [--store-dir .stag/runs] [--user <user_id>]
+```
+
+- detached HEAD はエラー。
+- 開始時点で working tree が dirty の場合は warning を出力しますが、エラーにはしません。
+- 出力: `session_id`, `base_commit`, `branch`, `dirty`, `warnings`, `next`
+
+### `stag git finish <session_id>`
+
+GitSession を閉じて `GitChangePayload` を `OutputTransition` に attach します。2 形式があります。
+
+#### 形式 A: OutputTransition を自動作成
+
+```bash
+stag git finish gs_0001 \
+  [--status completed] \
+  [--summary TEXT] \
+  [--artifact PATH] [--raw-output PATH] [--log PATH] \
+  [--metric k=v] [--error MSG] \
+  [--matched-prediction <ot_id>] \
+  [--run <run_id>] [--store-dir .stag/runs] [--user <user_id>]
+```
+
+`observe` 相当の処理で新しい OT + ResultPayload を作成し、さらに `GitChangePayload` を attach します。
+
+#### 形式 B: 既存 OutputTransition に attach
+
+```bash
+stag git finish gs_0001 --output-transition ot_0003 \
+  [--run <run_id>] [--store-dir .stag/runs] [--user <user_id>]
+```
+
+既存の observed OT (ResultPayload 付き) に `GitChangePayload` のみを追加します。`--status` / `--summary` / `--artifact` / `--matched-prediction` 等は形式 B では受け付けません。
+
+#### 共通制約
+
+- `finish` 時に branch 切替があるとエラー。
+- `finish` 時に tracked files が dirty だとエラー（untracked files は許容）。
+- `finish` 時に detached HEAD だとエラー。
+- `base_commit == HEAD` など差分がない場合は warning のみで `GitChangePayload` を通常通り attach します。
+
+### `stag git status`
+
+現在の run と Git repository の状態を表示します。
+
+```bash
+stag git status [--run <run_id>] [--store-dir .stag/runs]
+```
+
+出力: `run_id`, `open_sessions`, `current_session_pointer`, `git` (repo_root / branch / head_commit / dirty / untracked_count), `latest_git_change_payload`
+
+### `stag git diff`
+
+Session の base..HEAD diff、または OT に attach された patch artifact を表示します。
+
+```bash
+stag git diff <session_id>                        # base..HEAD の live diff
+stag git diff --output-transition <ot_id>         # attach 済み patch artifact
+```
+
+1 OT に複数 GitChangePayload が attach されている場合は一覧を表示します。
+
+### `stag git log`
+
+Session の base..HEAD commit log、または OT に保存された commit_log を表示します。
+
+```bash
+stag git log <session_id>
+stag git log --output-transition <ot_id>
+```
+
+### Storage
+
+Git session と artifact は run directory 配下に保存されます。
+
+```text
+<run_dir>/git/sessions/gs_0001.json   # GitSession
+<run_dir>/git/current.json            # 最後に start した open session へのポインタ
+<run_dir>/artifacts/git/pl_0008.patch # patch artifact
+```
+
+### 典型的な使い方
+
+```bash
+# plan を立てる
+stag plan --input-node n_0000 --intent "add feature"
+
+# Git session 開始
+stag git start it_0001
+
+# ファイルを編集して commit
+git commit -m "Add feature"
+
+# 結果を記録して session を閉じる
+stag git finish gs_0001 --summary "Feature added" --status completed
+```
