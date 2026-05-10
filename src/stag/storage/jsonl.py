@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 from typing import Any
@@ -63,25 +64,30 @@ class JsonlRunStore:
             run_path / "graph.json",
             {"metadata": dict(run.run_graph.metadata)},
         )
-        self._write_jsonl(
+        self._append_jsonl(
             run_path / "nodes.jsonl",
-            (node.to_dict() for node in run.run_graph.nodes.values()),
+            list(run.run_graph.nodes.values()),
+            lambda node: node.to_dict(),
         )
-        self._write_jsonl(
+        self._append_jsonl(
             run_path / "input_transitions.jsonl",
-            (it.to_dict() for it in run.run_graph.input_transitions.values()),
+            list(run.run_graph.input_transitions.values()),
+            lambda it: it.to_dict(),
         )
-        self._write_jsonl(
+        self._append_jsonl(
             run_path / "output_transitions.jsonl",
-            (ot.to_dict() for ot in run.run_graph.output_transitions.values()),
+            list(run.run_graph.output_transitions.values()),
+            lambda ot: ot.to_dict(),
         )
-        self._write_jsonl(
+        self._append_jsonl(
             run_path / "payloads.jsonl",
-            (payload.to_dict() for payload in run.run_graph.payloads.values()),
+            list(run.run_graph.payloads.values()),
+            lambda payload: payload.to_dict(),
         )
-        self._write_jsonl(
+        self._append_jsonl(
             run_path / "views.jsonl",
-            (v.to_dict() for v in run.run_graph.views.values()),
+            list(run.run_graph.views.values()),
+            lambda v: v.to_dict(),
         )
         return run_path
 
@@ -168,17 +174,39 @@ class JsonlRunStore:
         )
 
     @staticmethod
+    def _append_jsonl(path: Path, records: list, to_dict) -> None:
+        """Append only new records to a JSONL file.
+
+        Counts the lines already on disk (N) and appends records[N:].
+        Raises RuntimeError if disk has more lines than memory records.
+        """
+        disk_count = 0
+        if path.exists():
+            with path.open("r", encoding="utf-8") as f:
+                disk_count = sum(1 for line in f if line.strip())
+
+        mem_count = len(records)
+        if disk_count > mem_count:
+            raise RuntimeError(
+                f"{path.name}: disk has {disk_count} lines but memory has {mem_count} records. "
+                "The run directory may be corrupt or was modified externally."
+            )
+
+        new_records = list(itertools.islice(records, disk_count, None))
+        if not new_records:
+            return
+
+        mode = "a" if disk_count > 0 else "w"
+        with path.open(mode, encoding="utf-8") as f:
+            for rec in new_records:
+                f.write(json.dumps(to_dict(rec), ensure_ascii=False, sort_keys=True) + "\n")
+
+    @staticmethod
     def _write_json(path: Path, data: dict[str, Any]) -> None:
         path.write_text(
             json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-
-    @staticmethod
-    def _write_jsonl(path: Path, rows) -> None:
-        with path.open("w", encoding="utf-8") as f:
-            for row in rows:
-                f.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
     @staticmethod
     def _read_json(path: Path) -> dict[str, Any]:
