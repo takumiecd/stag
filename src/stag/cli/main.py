@@ -7,6 +7,7 @@ import sys
 
 from stag.cli.commands.current import add_parser as add_current_parser, cli_current
 from stag.cli.commands.dump import add_parser as add_dump_parser, cli_dump
+from stag.cli.commands.git import add_parser as add_git_parser, cli_git
 from stag.cli.commands.guide import add_parser as add_guide_parser, cli_guide
 from stag.cli.commands.init import add_parser as add_init_parser, cli_init
 from stag.cli.commands.list import add_parser as add_list_parser, cli_list
@@ -33,6 +34,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     add_current_parser(subparsers)
     add_dump_parser(subparsers)
+    add_git_parser(subparsers)
     add_guide_parser(subparsers)
     add_init_parser(subparsers)
     add_list_parser(subparsers)
@@ -66,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
         return cli_current(args)
     if args.command == "dump":
         return cli_dump(args)
+    if args.command == "git":
+        return cli_git(args)
     if args.command == "guide":
         return cli_guide(args)
     if args.command == "init":
