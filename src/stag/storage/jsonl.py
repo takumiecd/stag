@@ -14,6 +14,7 @@ from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import InputTransition, Node, OutputTransition
 from stag.core.schema.payloads import payload_from_dict
 from stag.core.schema.requirements import Requirement
+from stag.storage._cache import load_cache, save_cache
 
 
 class JsonlRunStore:
@@ -48,6 +49,18 @@ class JsonlRunStore:
             except (KeyError, json.JSONDecodeError):
                 continue
         return runs
+
+    def _row_counts(self, run_path: Path) -> tuple[int, ...]:
+        """Return current on-disk row counts for the five JSONL collections."""
+        counts = []
+        for name in ("nodes", "input_transitions", "output_transitions", "payloads", "views"):
+            p = run_path / f"{name}.jsonl"
+            if not p.exists():
+                counts.append(0)
+            else:
+                with p.open("r", encoding="utf-8") as fh:
+                    counts.append(sum(1 for line in fh if line.strip()))
+        return tuple(counts)
 
     def save_run(self, run: RunHandle) -> Path:
         run_path = self.run_path(run.run_id)
@@ -90,6 +103,17 @@ class JsonlRunStore:
             list(run.run_graph.views.values()),
             lambda v: v.to_dict(),
         )
+
+        # Update cache with the final row counts now on disk.
+        row_counts = (
+            len(run.run_graph.nodes),
+            len(run.run_graph.input_transitions),
+            len(run.run_graph.output_transitions),
+            len(run.run_graph.payloads),
+            len(run.run_graph.views),
+        )
+        save_cache(run_path, row_counts, run.run_graph)
+
         return run_path
 
     def load_run(self, run_id: str) -> RunHandle:
@@ -97,6 +121,18 @@ class JsonlRunStore:
         manifest = self._read_json(run_path / "run.json")
         requirement = _requirement_from_dict(manifest["requirement"])
 
+        # --- Cache fast path ---
+        row_counts = self._row_counts(run_path)
+        cached_graph = load_cache(run_path, row_counts)
+        if cached_graph is not None:
+            return RunHandle(
+                run_id=manifest["run_id"],
+                requirement=requirement,
+                run_graph=cached_graph,
+                _counters={str(k): int(v) for k, v in manifest.get("counters", {}).items()},
+            )
+
+        # --- Full load ---
         graph = RunGraph()
         if (run_path / "graph.json").exists():
             gdata = self._read_json(run_path / "graph.json")
@@ -166,6 +202,9 @@ class JsonlRunStore:
                 name="main",
                 root_node_id="n_0000",
             )
+
+        # Write cache so next load_run is fast.
+        save_cache(run_path, row_counts, graph)
 
         return RunHandle(
             run_id=manifest["run_id"],

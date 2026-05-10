@@ -14,6 +14,7 @@ from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import InputTransition, Node, OutputTransition
 from stag.core.schema.payloads import payload_from_dict
 from stag.core.schema.requirements import Requirement
+from stag.storage._cache import load_cache, save_cache
 
 
 class SqliteRunStore:
@@ -157,11 +158,30 @@ class SqliteRunStore:
         finally:
             con.close()
 
+        # Update cache with the row counts now persisted.
+        row_counts = (
+            len(run.run_graph.nodes),
+            len(run.run_graph.input_transitions),
+            len(run.run_graph.output_transitions),
+            len(run.run_graph.payloads),
+            len(run.run_graph.views),
+        )
+        save_cache(run_path, row_counts, run.run_graph)
+
         return run_path
 
     # ------------------------------------------------------------------
     # Protocol: load_run
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _row_counts_from_db(con: sqlite3.Connection) -> tuple[int, ...]:
+        """Return current row counts for the five graph tables."""
+        counts = []
+        for table in ("nodes", "input_transitions", "output_transitions", "payloads", "views"):
+            (n,) = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()  # type: ignore[misc]
+            counts.append(n)
+        return tuple(counts)
 
     def load_run(self, run_id: str) -> RunHandle:
         run_path = self.run_path(run_id)
@@ -172,6 +192,18 @@ class SqliteRunStore:
         con = sqlite3.connect(str(db_path))
         con.row_factory = sqlite3.Row
         try:
+            # --- Cache fast path ---
+            row_counts = self._row_counts_from_db(con)
+            cached_graph = load_cache(run_path, row_counts)
+            if cached_graph is not None:
+                return RunHandle(
+                    run_id=manifest["run_id"],
+                    requirement=requirement,
+                    run_graph=cached_graph,
+                    _counters={str(k): int(v) for k, v in manifest.get("counters", {}).items()},
+                )
+
+            # --- Full load ---
             graph = RunGraph()
 
             # Restore graph metadata from run_meta
@@ -262,6 +294,9 @@ class SqliteRunStore:
 
         finally:
             con.close()
+
+        # Write cache so next load_run is fast.
+        save_cache(run_path, row_counts, graph)
 
         return RunHandle(
             run_id=manifest["run_id"],
