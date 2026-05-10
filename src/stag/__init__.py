@@ -4,7 +4,10 @@ from stag.core.graph_view import GraphView
 from stag.core.run import RunHandle, init
 from stag.core.run_graph import RunGraph
 from stag.core.schema import (
+    CommitEntry,
     CutPayload,
+    DiffSummary,
+    GitChangePayload,
     InputTransition,
     NotePayload,
     Node,
@@ -28,7 +31,10 @@ __version__ = "0.1.0"
 
 __all__ = [
     "ActionType",
+    "CommitEntry",
     "CutPayload",
+    "DiffSummary",
+    "GitChangePayload",
     "GraphView",
     "InputTransition",
     "NotePayload",
