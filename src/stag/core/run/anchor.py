@@ -13,6 +13,7 @@ def anchor_impl(
     *,
     metadata: dict | None = None,
     user_id: str | None = None,
+    work_session_id: str | None = None,
 ) -> OutputTransition:
     """Create a lightweight scope anchor node from an existing node.
 
@@ -32,7 +33,7 @@ def anchor_impl(
         action_type="scope_refinement",
         metadata={"kind": "anchor", "label": label},
     )
-    it = self.plan([from_node_id], plan, user_id=user_id)
+    it = self.plan([from_node_id], plan, user_id=user_id, work_session_id=work_session_id)
 
     result = ResultPayload(
         payload_id="pending",
@@ -40,4 +41,9 @@ def anchor_impl(
         status="completed",
         metadata=meta,
     )
-    return self.observe(it.input_transition_id, result, user_id=user_id)
+    return self.observe(
+        it.input_transition_id,
+        result,
+        user_id=user_id,
+        work_session_id=work_session_id,
+    )

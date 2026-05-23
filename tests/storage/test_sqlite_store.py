@@ -51,6 +51,33 @@ def test_round_trip_basic():
     assert dict(loaded._counters) == dict(run._counters)
 
 
+def test_round_trip_work_history():
+    run = init(_req(), run_id="sq_work")
+    it = run.plan(
+        [run.root_node_id],
+        _plan("x"),
+        user_id="alice",
+        work_session_id="ws_1",
+    )
+    run.observe(
+        it.input_transition_id,
+        _result(),
+        user_id="alice",
+        work_session_id="ws_1",
+    )
+
+    with tempfile.TemporaryDirectory() as td:
+        store = SqliteRunStore(td)
+        store.save_run(run)
+        loaded = store.load_run("sq_work")
+
+    assert loaded.run_graph.work_sessions["ws_1"].user_id == "alice"
+    assert [event.event_type for event in loaded.run_graph.work_events] == [
+        "plan_created",
+        "result_observed",
+    ]
+
+
 def test_round_trip_with_predictions():
     run = init(_req(), run_id="sq_pred")
     run.note(run.root_node_id, "start", tags=["t"])

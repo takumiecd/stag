@@ -10,6 +10,7 @@ from stag.cli.context import (
     current_path,
     resolve_run_id,
     resolve_user_id,
+    resolve_work_session_id,
     save_current_run,
 )
 from stag.cli.commands.current import run_current_command
@@ -87,3 +88,23 @@ def test_resolve_user_id_precedence(tmp_path, monkeypatch):
 
     config_path.unlink()
     assert resolve_user_id(None, store_dir) == "user"
+
+
+def test_resolve_work_session_id_precedence(tmp_path, monkeypatch):
+    store_dir = str(tmp_path / "runs")
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps({"work_session": {"id": "from_config"}}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("STAG_WORK_SESSION_ID", "from_env")
+
+    assert resolve_work_session_id("explicit", store_dir) == "explicit"
+    assert resolve_work_session_id(None, store_dir) == "from_env"
+
+    monkeypatch.delenv("STAG_WORK_SESSION_ID")
+    assert resolve_work_session_id(None, store_dir) == "from_config"
+
+    config_path.unlink()
+    assert resolve_work_session_id(None, store_dir) == "default"

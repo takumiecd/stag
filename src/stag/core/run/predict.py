@@ -15,6 +15,7 @@ def predict_impl(
     payloads: list[PredictionPayload] | None = None,
     max_outcomes: int | None = None,
     user_id: str | None = None,
+    work_session_id: str | None = None,
 ) -> list[OutputTransition]:
     """Create one or more predicted OutputTransitions for an InputTransition.
 
@@ -39,6 +40,8 @@ def predict_impl(
         ot_meta: dict[str, JSONValue] = {"ordinal": index}
         if user_id is not None:
             ot_meta["user_id"] = user_id
+        if work_session_id is not None:
+            ot_meta["work_session_id"] = work_session_id
         ot = OutputTransition(
             output_transition_id=self._next_id("ot"),
             input_transition_id=input_transition_id,
@@ -69,4 +72,17 @@ def predict_impl(
         self.run_graph.attach_payload(pred_payload)
         output_transitions.append(ot)
 
+    self.record_work_event(
+        user_id=user_id,
+        work_session_id=work_session_id,
+        event_type="prediction_created",
+        target_kind="input_transition",
+        target_id=input_transition_id,
+        created_records=tuple(
+            record_id
+            for ot in output_transitions
+            for record_id in (ot.to_node_id, ot.output_transition_id)
+        ),
+        summary=f"{len(output_transitions)} predicted outcome(s)",
+    )
     return output_transitions

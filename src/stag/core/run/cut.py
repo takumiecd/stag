@@ -16,6 +16,7 @@ def cut_impl(
     target_kind: Literal["input_transition", "output_transition"],
     reason: str | None = None,
     user_id: str | None = None,
+    work_session_id: str | None = None,
 ) -> CutPayload:
     """Append a CutPayload to mark an InputTransition or OutputTransition as inactive.
 
@@ -44,4 +45,13 @@ def cut_impl(
         user_id=user_id,
     )
     self.run_graph.attach_payload(cut)
+    self.record_work_event(
+        user_id=user_id,
+        work_session_id=work_session_id,
+        event_type="cut_added",
+        target_kind=target_kind,
+        target_id=target_id,
+        created_records=(cut.payload_id,),
+        summary=reason,
+    )
     return cut

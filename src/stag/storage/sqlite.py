@@ -14,6 +14,7 @@ from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import InputTransition, Node, OutputTransition
 from stag.core.schema.payloads import payload_from_dict
 from stag.core.schema.requirements import Requirement
+from stag.core.schema.work import work_event_from_dict, work_session_from_dict
 from stag.storage._cache import load_cache, save_cache
 
 
@@ -153,6 +154,20 @@ class SqliteRunStore:
                 to_dict=lambda v: v.to_dict(),
                 extra_cols={"name": lambda v: v.name},
             )
+            _delta_insert(
+                con,
+                table="work_sessions",
+                id_col="work_session_id",
+                records=list(run.run_graph.work_sessions.values()),
+                to_dict=lambda s: s.to_dict(),
+            )
+            _delta_insert(
+                con,
+                table="work_events",
+                id_col="event_id",
+                records=list(run.run_graph.work_events),
+                to_dict=lambda e: e.to_dict(),
+            )
 
             con.commit()
         finally:
@@ -165,6 +180,8 @@ class SqliteRunStore:
             len(run.run_graph.output_transitions),
             len(run.run_graph.payloads),
             len(run.run_graph.views),
+            len(run.run_graph.work_sessions),
+            len(run.run_graph.work_events),
         )
         save_cache(run_path, row_counts, run.run_graph)
 
@@ -178,7 +195,15 @@ class SqliteRunStore:
     def _row_counts_from_db(con: sqlite3.Connection) -> tuple[int, ...]:
         """Return current row counts for the five graph tables."""
         counts = []
-        for table in ("nodes", "input_transitions", "output_transitions", "payloads", "views"):
+        for table in (
+            "nodes",
+            "input_transitions",
+            "output_transitions",
+            "payloads",
+            "views",
+            "work_sessions",
+            "work_events",
+        ):
             (n,) = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()  # type: ignore[misc]
             counts.append(n)
         return tuple(counts)
@@ -192,6 +217,7 @@ class SqliteRunStore:
         con = sqlite3.connect(str(db_path))
         con.row_factory = sqlite3.Row
         try:
+            _setup_db(con)
             # --- Cache fast path ---
             row_counts = self._row_counts_from_db(con)
             cached_graph = load_cache(run_path, row_counts)
@@ -285,6 +311,13 @@ class SqliteRunStore:
                 )
                 graph.views[v.name] = v
 
+            for row in con.execute("SELECT data_json FROM work_sessions ORDER BY seq ASC"):
+                session = work_session_from_dict(_fast_json.loads(row["data_json"]))
+                graph.work_sessions[session.work_session_id] = session
+
+            for row in con.execute("SELECT data_json FROM work_events ORDER BY seq ASC"):
+                graph.work_events.append(work_event_from_dict(_fast_json.loads(row["data_json"])))
+
             if not graph.views:
                 root_node_id = str(graph.metadata.get("root_node_id") or "n_0000")
                 graph.views["main"] = GraphView(
@@ -366,6 +399,24 @@ def _setup_db(con: sqlite3.Connection) -> None:
             view_id   TEXT UNIQUE,
             name      TEXT UNIQUE,
             data_json TEXT
+        )
+        """
+    )
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS work_sessions (
+            seq              INTEGER PRIMARY KEY AUTOINCREMENT,
+            work_session_id  TEXT UNIQUE,
+            data_json        TEXT
+        )
+        """
+    )
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS work_events (
+            seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id   TEXT UNIQUE,
+            data_json  TEXT
         )
         """
     )

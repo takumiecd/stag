@@ -12,6 +12,7 @@ def note_impl(
     *,
     tags: list[str] | tuple[str, ...] = (),
     user_id: str | None = None,
+    work_session_id: str | None = None,
 ) -> NotePayload:
     """Attach a lightweight memo to a node."""
     if node_id not in self.run_graph.nodes:
@@ -25,4 +26,13 @@ def note_impl(
         tags=tuple(tags),
     )
     self.run_graph.attach_payload(payload)
+    self.record_work_event(
+        user_id=user_id,
+        work_session_id=work_session_id,
+        event_type="note_added",
+        target_kind="node",
+        target_id=node_id,
+        created_records=(payload.payload_id,),
+        summary=text,
+    )
     return payload

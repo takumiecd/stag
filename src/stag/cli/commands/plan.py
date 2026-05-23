@@ -5,7 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 
-from stag.cli.context import resolve_store, resolve_run_id_from_args, resolve_user_id_from_args
+from stag.cli.context import (
+    resolve_run_id_from_args,
+    resolve_store,
+    resolve_user_id_from_args,
+    resolve_work_session_id_from_args,
+)
 from stag.core.schema.payloads import PlanPayload
 
 
@@ -24,6 +29,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument("--assumption", action="append", metavar="TEXT")
     parser.add_argument("--store-dir", default=".stag/runs")
     parser.add_argument("--user", default=None)
+    parser.add_argument("--work-session", default=None)
     return parser
 
 
@@ -47,6 +53,7 @@ def run_plan_command(
     assumptions: list[str] | None = None,
     store_dir: str,
     user_id: str | None = None,
+    work_session_id: str | None = None,
 ) -> dict:
     store = resolve_store(store_dir)
     if not store.run_path(run_id).exists():
@@ -60,7 +67,7 @@ def run_plan_command(
         inputs=dict(inputs or {}),
         assumptions=tuple(assumptions or []),
     )
-    it = handle.plan(input_node_ids, payload, user_id=user_id)
+    it = handle.plan(input_node_ids, payload, user_id=user_id, work_session_id=work_session_id)
     store.save_run(handle)
     return {"input_transition": it.to_dict()}
 
@@ -76,6 +83,7 @@ def cli_plan(args) -> int:
         assumptions=getattr(args, "assumption", None) or [],
         store_dir=args.store_dir,
         user_id=resolve_user_id_from_args(args),
+        work_session_id=resolve_work_session_id_from_args(args),
     )
     print(json.dumps(result["input_transition"], ensure_ascii=False, indent=2))
     return 0

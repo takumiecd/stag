@@ -14,6 +14,7 @@ from typing import Literal
 from stag.core.graph_view import GraphView
 from stag.core.schema.graph import InputTransition, Node, OutputTransition
 from stag.core.schema.payloads import Payload, PredictionPayload, ResultPayload
+from stag.core.schema.work import WorkEvent, WorkSession
 from stag.core.types import JSONValue, to_jsonable
 
 
@@ -26,6 +27,8 @@ class RunGraph:
     output_transitions: dict[str, OutputTransition] = field(default_factory=dict)
     payloads: dict[str, Payload] = field(default_factory=dict)
     views: dict[str, GraphView] = field(default_factory=dict)
+    work_sessions: dict[str, WorkSession] = field(default_factory=dict)
+    work_events: list[WorkEvent] = field(default_factory=list)
 
     # payload lookup by target
     payloads_by_node: dict[str, list[str]] = field(default_factory=dict)
@@ -50,6 +53,24 @@ class RunGraph:
         if view.root_node_id not in self.nodes:
             raise KeyError(f"unknown root_node_id: {view.root_node_id}")
         self.views[view.name] = view
+
+    def add_work_session(self, session: WorkSession) -> None:
+        if session.work_session_id in self.work_sessions:
+            existing = self.work_sessions[session.work_session_id]
+            if existing.user_id != session.user_id:
+                raise ValueError(
+                    f"work_session_id {session.work_session_id!r} belongs to "
+                    f"user {existing.user_id!r}, not {session.user_id!r}"
+                )
+            return
+        self.work_sessions[session.work_session_id] = session
+
+    def add_work_event(self, event: WorkEvent) -> None:
+        if event.work_session_id not in self.work_sessions:
+            raise KeyError(f"unknown work_session_id: {event.work_session_id}")
+        if any(existing.event_id == event.event_id for existing in self.work_events):
+            raise ValueError(f"duplicate work_event_id: {event.event_id}")
+        self.work_events.append(event)
 
     def reachable_from(self, node_id: str) -> dict:
         """BFS from node_id over active output transitions.

@@ -13,6 +13,7 @@ def observe_impl(
     result: ResultPayload,
     *,
     user_id: str | None = None,
+    work_session_id: str | None = None,
 ) -> OutputTransition:
     """Record an observed OutputTransition for an InputTransition.
 
@@ -46,11 +47,16 @@ def observe_impl(
     new_node = Node(node_id=self._next_id("n"))
     self.run_graph.add_node(new_node)
 
+    metadata = {}
+    if user_id is not None:
+        metadata["user_id"] = user_id
+    if work_session_id is not None:
+        metadata["work_session_id"] = work_session_id
     ot = OutputTransition(
         output_transition_id=self._next_id("ot"),
         input_transition_id=input_transition_id,
         to_node_id=new_node.node_id,
-        metadata={**({"user_id": user_id} if user_id is not None else {})},
+        metadata=metadata,
     )
     self.run_graph.add_output_transition(ot)
 
@@ -68,4 +74,13 @@ def observe_impl(
         metadata=dict(result.metadata),
     )
     self.run_graph.attach_payload(result_payload)
+    self.record_work_event(
+        user_id=user_id,
+        work_session_id=work_session_id,
+        event_type="result_observed",
+        target_kind="output_transition",
+        target_id=ot.output_transition_id,
+        created_records=(new_node.node_id, ot.output_transition_id, result_payload.payload_id),
+        summary=result.status,
+    )
     return ot

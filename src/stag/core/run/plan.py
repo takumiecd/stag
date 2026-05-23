@@ -12,6 +12,7 @@ def plan_impl(
     payload: PlanPayload,
     *,
     user_id: str | None = None,
+    work_session_id: str | None = None,
 ) -> InputTransition:
     """Create an InputTransition from one or more input nodes with a PlanPayload.
 
@@ -21,10 +22,15 @@ def plan_impl(
         self._ensure_active_node(nid)
 
     it_id = self._next_id("it")
+    metadata = {}
+    if user_id is not None:
+        metadata["user_id"] = user_id
+    if work_session_id is not None:
+        metadata["work_session_id"] = work_session_id
     it = InputTransition(
         input_transition_id=it_id,
         input_node_ids=tuple(input_node_ids),
-        metadata={**({"user_id": user_id} if user_id is not None else {})},
+        metadata=metadata,
     )
     self.run_graph.add_input_transition(it)
 
@@ -40,4 +46,13 @@ def plan_impl(
         metadata=dict(payload.metadata),
     )
     self.run_graph.attach_payload(plan_payload)
+    self.record_work_event(
+        user_id=user_id,
+        work_session_id=work_session_id,
+        event_type="plan_created",
+        target_kind="input_transition",
+        target_id=it_id,
+        created_records=(it_id, plan_payload.payload_id),
+        summary=payload.intent,
+    )
     return it

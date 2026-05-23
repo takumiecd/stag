@@ -14,6 +14,7 @@ from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import InputTransition, Node, OutputTransition
 from stag.core.schema.payloads import payload_from_dict
 from stag.core.schema.requirements import Requirement
+from stag.core.schema.work import work_event_from_dict, work_session_from_dict
 from stag.storage._cache import load_cache, save_cache
 
 
@@ -53,7 +54,15 @@ class JsonlRunStore:
     def _row_counts(self, run_path: Path) -> tuple[int, ...]:
         """Return current on-disk row counts for the five JSONL collections."""
         counts = []
-        for name in ("nodes", "input_transitions", "output_transitions", "payloads", "views"):
+        for name in (
+            "nodes",
+            "input_transitions",
+            "output_transitions",
+            "payloads",
+            "views",
+            "work_sessions",
+            "work_events",
+        ):
             p = run_path / f"{name}.jsonl"
             if not p.exists():
                 counts.append(0)
@@ -103,6 +112,16 @@ class JsonlRunStore:
             list(run.run_graph.views.values()),
             lambda v: v.to_dict(),
         )
+        self._append_jsonl(
+            run_path / "work_sessions.jsonl",
+            list(run.run_graph.work_sessions.values()),
+            lambda s: s.to_dict(),
+        )
+        self._append_jsonl(
+            run_path / "work_events.jsonl",
+            list(run.run_graph.work_events),
+            lambda e: e.to_dict(),
+        )
 
         # Update cache with the final row counts now on disk.
         row_counts = (
@@ -111,6 +130,8 @@ class JsonlRunStore:
             len(run.run_graph.output_transitions),
             len(run.run_graph.payloads),
             len(run.run_graph.views),
+            len(run.run_graph.work_sessions),
+            len(run.run_graph.work_events),
         )
         save_cache(run_path, row_counts, run.run_graph)
 
@@ -195,6 +216,13 @@ class JsonlRunStore:
                 metadata=dict(row.get("metadata") or {}),
             )
             graph.views[v.name] = v
+
+        for row in self._read_jsonl(run_path / "work_sessions.jsonl"):
+            session = work_session_from_dict(row)
+            graph.work_sessions[session.work_session_id] = session
+
+        for row in self._read_jsonl(run_path / "work_events.jsonl"):
+            graph.work_events.append(work_event_from_dict(row))
 
         if not graph.views:
             root_node_id = str(graph.metadata.get("root_node_id") or "n_0000")

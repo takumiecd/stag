@@ -66,6 +66,32 @@ def test_plan_records_intent_and_action_type(tmp_path):
     assert plan_payloads[0].inputs == {"shape": "small"}
 
 
+def test_plan_records_work_session_event(tmp_path):
+    store_dir = str(tmp_path / "runs")
+    run_id = _init(store_dir)
+    root = _root(store_dir, run_id)
+
+    it = run_plan_command(
+        run_id=run_id,
+        input_node_ids=[root],
+        action_type="analysis",
+        intent="run baseline",
+        store_dir=store_dir,
+        user_id="alice",
+        work_session_id="ws_cli",
+    )["input_transition"]
+
+    handle = JsonlRunStore(store_dir).load_run(run_id)
+    assert it["metadata"] == {"user_id": "alice", "work_session_id": "ws_cli"}
+    assert handle.run_graph.work_sessions["ws_cli"].user_id == "alice"
+    assert len(handle.run_graph.work_events) == 1
+    event = handle.run_graph.work_events[0]
+    assert event.event_type == "plan_created"
+    assert event.user_id == "alice"
+    assert event.work_session_id == "ws_cli"
+    assert event.target_id == it["input_transition_id"]
+
+
 def test_observe_attaches_result_and_show_can_fetch_payload(tmp_path):
     store_dir = str(tmp_path / "runs")
     run_id = _init(store_dir)

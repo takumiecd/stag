@@ -41,6 +41,33 @@ def test_round_trip_basic():
     assert len(loaded.run_graph.payloads) == len(run.run_graph.payloads)
 
 
+def test_round_trip_work_history():
+    run = init(_req(), run_id="rt_work")
+    it = run.plan(
+        [run.root_node_id],
+        _plan_payload("x"),
+        user_id="alice",
+        work_session_id="ws_1",
+    )
+    run.observe(
+        it.input_transition_id,
+        ResultPayload(payload_id="x", target_id="x", status="completed"),
+        user_id="alice",
+        work_session_id="ws_1",
+    )
+
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlRunStore(td)
+        store.save_run(run)
+        loaded = store.load_run("rt_work")
+
+    assert loaded.run_graph.work_sessions["ws_1"].user_id == "alice"
+    assert [event.event_type for event in loaded.run_graph.work_events] == [
+        "plan_created",
+        "result_observed",
+    ]
+
+
 def test_round_trip_with_predictions():
     run = init(_req(), run_id="rt_pred")
     run.note(run.root_node_id, "start note", tags=["setup"])

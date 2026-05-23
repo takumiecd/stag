@@ -94,6 +94,27 @@ def resolve_user_id_from_args(args) -> str:
     return resolve_user_id(getattr(args, "user", None), args.store_dir)
 
 
+def resolve_work_session_id(work_session_id: str | None, store_dir: str) -> str:
+    """Resolve work-session attribution for mutating commands."""
+    if work_session_id:
+        return work_session_id
+    env = os.environ.get("STAG_WORK_SESSION_ID")
+    if env:
+        return env
+    config_path = Path(store_dir).parent / "config.json"
+    if config_path.exists():
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        configured = data.get("work_session", {}).get("id")
+        if configured:
+            return str(configured)
+    return "default"
+
+
+def resolve_work_session_id_from_args(args) -> str:
+    """Resolve work-session attribution from parsed CLI args."""
+    return resolve_work_session_id(getattr(args, "work_session", None), args.store_dir)
+
+
 def resolve_store(store_dir: str):
     """Pick a RunStore implementation.
 

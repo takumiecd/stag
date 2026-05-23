@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from stag.core.cuts import is_active_node
 from stag.core.graph_view import GraphView
@@ -10,6 +11,8 @@ from stag.core.ids import opaque_id, slugify, timestamp_id
 from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import Node
 from stag.core.schema.requirements import Requirement
+from stag.core.schema.work import WorkEvent, WorkSession
+from stag.core.types import JSONValue
 
 
 @dataclass
@@ -51,6 +54,64 @@ class RunHandle:
 
     def save(self, store) -> object:
         return store.save_run(self)
+
+    def ensure_work_session(
+        self,
+        *,
+        user_id: str | None,
+        work_session_id: str | None,
+        metadata: dict[str, JSONValue] | None = None,
+    ) -> WorkSession | None:
+        if user_id is None or work_session_id is None:
+            return None
+        existing = self.run_graph.work_sessions.get(work_session_id)
+        if existing is not None:
+            if existing.user_id != user_id:
+                raise ValueError(
+                    f"work_session_id {work_session_id!r} belongs to "
+                    f"user {existing.user_id!r}, not {user_id!r}"
+                )
+            return existing
+        session = WorkSession(
+            work_session_id=work_session_id,
+            run_id=self.run_id,
+            user_id=user_id,
+            started_at=datetime.now(timezone.utc).isoformat(),
+            metadata=dict(metadata or {}),
+        )
+        self.run_graph.add_work_session(session)
+        return session
+
+    def record_work_event(
+        self,
+        *,
+        user_id: str | None,
+        work_session_id: str | None,
+        event_type: str,
+        target_kind: str | None = None,
+        target_id: str | None = None,
+        created_records: tuple[str, ...] = (),
+        summary: str | None = None,
+        data: dict[str, JSONValue] | None = None,
+    ) -> WorkEvent | None:
+        if user_id is None or work_session_id is None:
+            return None
+        self.ensure_work_session(user_id=user_id, work_session_id=work_session_id)
+        event = WorkEvent(
+            event_id=self._next_id("we"),
+            run_id=self.run_id,
+            work_session_id=work_session_id,
+            user_id=user_id,
+            event_type=event_type,
+            target_kind=target_kind,
+            target_id=target_id,
+            created_records=tuple(created_records),
+            summary=summary,
+            data=dict(data or {}),
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        self.run_graph.add_work_event(event)
+        return event
 
 
 def init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle:
