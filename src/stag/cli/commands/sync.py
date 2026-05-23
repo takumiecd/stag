@@ -130,7 +130,6 @@ def run_sync_push_command(
     )
     return sync_push(
         handle=handle,
-        run_path=store.run_path(run_id),
         remote=cfg["remote"],
         shared_run_id=cfg["shared_run_id"],
         remote_dir=cfg["remote_dir"],
@@ -160,7 +159,6 @@ def run_sync_pull_command(
     )
     result = sync_pull(
         handle=handle,
-        run_path=store.run_path(run_id),
         remote=cfg["remote"],
         shared_run_id=cfg["shared_run_id"],
         remote_dir=cfg["remote_dir"],

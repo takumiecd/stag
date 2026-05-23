@@ -19,12 +19,10 @@ from stag.core.run import RunHandle
 from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import InputTransition, Node, OutputTransition
 from stag.core.schema.payloads import payload_from_dict
-from stag.core.sync.idmap import append_idmap, idmap_key, idmap_row, read_idmap
 from stag.core.sync.records import (
     RecordTuple,
     body_key,
     flatten_batches,
-    local_id_for_body,
     new_shared_id,
     records_path,
 )
@@ -113,7 +111,6 @@ def sync_status(
 def sync_push(
     *,
     handle: RunHandle,
-    run_path: Path,
     remote: str,
     shared_run_id: str,
     remote_dir: str | Path,
@@ -131,38 +128,26 @@ def sync_push(
         body_key(r["record_kind"], r["body"]): r
         for r in remote_records
     }
-    idmap = read_idmap(run_path=run_path, remote=remote, shared_run_id=shared_run_id)
 
     next_seq = len(remote_batches) + 1
     pushed_batches: list[dict[str, Any]] = []
-    new_mappings: list[dict[str, str]] = []
     for batch in _local_batches(handle):
         missing_records: list[dict[str, Any]] = []
         for kind, local_id, body in batch["records"]:
             key = body_key(kind, body)
             existing = remote_by_key.get(key)
-            map_key = idmap_key(remote, shared_run_id, kind, local_id)
             if existing is not None:
                 if existing["body"] != body:
                     raise RuntimeError(f"remote already has different body for {kind}:{local_id}")
-                if map_key not in idmap:
-                    new_mappings.append(
-                        idmap_row(remote, shared_run_id, kind, local_id, existing["shared_id"])
-                    )
-                    idmap[map_key] = existing["shared_id"]
                 continue
 
-            shared_id = idmap.get(map_key) or new_shared_id(kind)
             missing_records.append(
                 {
                     "record_kind": kind,
-                    "local_id": local_id,
-                    "shared_id": shared_id,
+                    "record_id": local_id,
                     "body": body,
                 }
             )
-            new_mappings.append(idmap_row(remote, shared_run_id, kind, local_id, shared_id))
-            idmap[map_key] = shared_id
 
         if not missing_records:
             continue
@@ -188,11 +173,6 @@ def sync_push(
         next_seq += 1
 
     shared_store.append_batches(remote, shared_run_id, pushed_batches)
-    if new_mappings:
-        append_idmap(
-            run_path=run_path,
-            rows=new_mappings,
-        )
 
     return {
         "run_id": handle.run_id,
@@ -207,7 +187,6 @@ def sync_push(
 def sync_pull(
     *,
     handle: RunHandle,
-    run_path: Path,
     remote: str,
     shared_run_id: str,
     remote_dir: str | Path,
@@ -218,22 +197,10 @@ def sync_pull(
     if batches and batches[0].get("operation") == "seed" and _is_empty_seed_graph(handle.run_graph):
         _clear_graph(handle.run_graph)
     pulled = 0
-    new_mappings: list[dict[str, str]] = []
     for record in flatten_batches(batches):
         if _apply_record(handle.run_graph, record["record_kind"], record["body"]):
             pulled += 1
-        local_id = local_id_for_body(record["record_kind"], record["body"])
-        new_mappings.append(
-            idmap_row(
-                remote,
-                shared_run_id,
-                record["record_kind"],
-                local_id,
-                record["shared_id"],
-            )
-        )
     _refresh_counters(handle)
-    append_idmap(run_path=run_path, rows=new_mappings)
     return {
         "run_id": handle.run_id,
         "remote": remote,

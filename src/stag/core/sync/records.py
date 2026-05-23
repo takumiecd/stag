@@ -38,9 +38,7 @@ def read_batches(remote_dir: str | Path, remote: str, shared_run_id: str) -> lis
                     "records": [
                         {
                             "record_kind": item["record_kind"],
-                            "local_id": local_id_for_body(item["record_kind"], item["body"]),
-                            "shared_id": item.get("shared_id")
-                            or new_shared_id(item["record_kind"]),
+                            "record_id": record_id_for_body(item["record_kind"], item["body"]),
                             "body": item["body"],
                         }
                     ],
@@ -57,8 +55,7 @@ def flatten_batches(batches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
             "record_kind": record["record_kind"],
-            "local_id": record.get("local_id"),
-            "shared_id": record["shared_id"],
+            "record_id": record.get("record_id") or record_id_for_body(record["record_kind"], record["body"]),
             "body": record["body"],
         }
         for batch in batches
@@ -81,8 +78,8 @@ def body_key(kind: str, body: dict[str, Any]) -> tuple[str, str]:
     raise ValueError(f"unknown sync record kind: {kind!r}")
 
 
-def local_id_for_body(kind: str, body: dict[str, Any]) -> str:
-    """Return the local id encoded in a graph record body."""
+def record_id_for_body(kind: str, body: dict[str, Any]) -> str:
+    """Return the record id encoded in a graph record body."""
     return body_key(kind, body)[1]
 
 

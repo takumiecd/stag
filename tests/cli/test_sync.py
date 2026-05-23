@@ -86,9 +86,17 @@ def test_local_shared_sync_push_pull_round_trip(tmp_path):
     assert all("actor" in batch for batch in batches)
     assert all("origin" in batch for batch in batches)
     assert len(batches[1]["records"]) == 5
-
-    idmap_a = tmp_path / "runs" / "local_a" / "idmap.jsonl"
-    assert len(idmap_a.read_text(encoding="utf-8").splitlines()) == 7
+    for batch in batches:
+        for record in batch["records"]:
+            assert "record_id" in record, f"missing record_id in {record}"
+            assert "shared_id" not in record, f"unexpected shared_id in {record}"
+            assert record["record_id"] == record["body"][{
+                "node": "node_id",
+                "input_transition": "input_transition_id",
+                "output_transition": "output_transition_id",
+                "payload": "payload_id",
+                "view": "view_id",
+            }[record["record_kind"]]]
 
     pulled = run_sync_pull_command(
         run_id="local_b",
@@ -98,8 +106,6 @@ def test_local_shared_sync_push_pull_round_trip(tmp_path):
     )
     assert pulled["pulled_records"] == 7
     assert pulled["pulled_batches"] == 2
-    idmap_b = tmp_path / "runs" / "local_b" / "idmap.jsonl"
-    assert len(idmap_b.read_text(encoding="utf-8").splitlines()) == 7
 
     handle = resolve_store(store_dir).load_run("local_b")
     rendered = dump(handle, "outline", DumpOptions())
