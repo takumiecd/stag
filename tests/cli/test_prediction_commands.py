@@ -20,12 +20,17 @@ def _init(store_dir: str) -> str:
     return "run_a"
 
 
+def _root(store_dir: str, run_id: str) -> str:
+    return JsonlRunStore(store_dir).load_run(run_id).root_node_id
+
+
 def test_predict_adds_multiple_output_transitions_with_prediction_payloads(tmp_path):
     store_dir = str(tmp_path / "runs")
     run_id = _init(store_dir)
+    root = _root(store_dir, run_id)
     it_id = run_plan_command(
         run_id=run_id,
-        input_node_ids=["n_0000"],
+        input_node_ids=[root],
         action_type="analysis",
         intent="x",
         store_dir=store_dir,
@@ -53,9 +58,10 @@ def test_predict_adds_multiple_output_transitions_with_prediction_payloads(tmp_p
 def test_observe_with_matched_prediction(tmp_path):
     store_dir = str(tmp_path / "runs")
     run_id = _init(store_dir)
+    root = _root(store_dir, run_id)
     it_id = run_plan_command(
         run_id=run_id,
-        input_node_ids=["n_0000"],
+        input_node_ids=[root],
         action_type="analysis",
         intent="x",
         store_dir=store_dir,

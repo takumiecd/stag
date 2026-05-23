@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 from datetime import datetime, timezone
 
 
@@ -24,3 +25,8 @@ def timestamp_id(prefix: str, now: datetime | None = None) -> str:
 def sequential_id(prefix: str, index: int, width: int = 4) -> str:
     """Return ids such as ``state_0001``."""
     return f"{slugify(prefix)}_{index:0{width}d}"
+
+
+def opaque_id(prefix: str) -> str:
+    """Return a collision-resistant opaque id with a readable kind prefix."""
+    return f"{slugify(prefix)}_{uuid.uuid4().hex}"

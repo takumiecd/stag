@@ -215,6 +215,8 @@ def sync_pull(
     """Apply records missing from the shared run into the local graph."""
     shared_store = FileSharedRunStore(remote_dir)
     batches = shared_store.read_batches(remote, shared_run_id)
+    if batches and batches[0].get("operation") == "seed" and _is_empty_seed_graph(handle.run_graph):
+        _clear_graph(handle.run_graph)
     pulled = 0
     new_mappings: list[dict[str, str]] = []
     for record in flatten_batches(batches):
@@ -397,6 +399,8 @@ def _apply_record(graph: RunGraph, kind: str, body: dict[str, Any]) -> bool:
             _ensure_same(existing.to_dict(), body, kind, view.name)
             return False
         graph.add_view(view)
+        if view.name == "main":
+            graph.metadata["root_node_id"] = view.root_node_id
         return True
 
     raise ValueError(f"unknown sync record kind: {kind!r}")
@@ -407,6 +411,31 @@ def _refresh_counters(handle: RunHandle) -> None:
     handle._counters["it"] = _max_suffix(handle.run_graph.input_transitions)
     handle._counters["ot"] = _max_suffix(handle.run_graph.output_transitions)
     handle._counters["pl"] = _max_suffix(handle.run_graph.payloads)
+
+
+def _is_empty_seed_graph(graph: RunGraph) -> bool:
+    return (
+        len(graph.nodes) == 1
+        and not graph.input_transitions
+        and not graph.output_transitions
+        and not graph.payloads
+        and set(graph.views) <= {"main"}
+    )
+
+
+def _clear_graph(graph: RunGraph) -> None:
+    graph.nodes.clear()
+    graph.input_transitions.clear()
+    graph.output_transitions.clear()
+    graph.payloads.clear()
+    graph.views.clear()
+    graph.payloads_by_node.clear()
+    graph.payloads_by_input_transition.clear()
+    graph.payloads_by_output_transition.clear()
+    graph.input_transitions_from_node.clear()
+    graph.output_transitions_from_it.clear()
+    graph.output_transitions_to_node.clear()
+    graph.metadata.pop("root_node_id", None)
 
 
 def _max_suffix(ids: dict[str, object]) -> int:

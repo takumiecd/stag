@@ -239,10 +239,7 @@ def git_finish_form_a(
 
     # Step 2-5: patch artifact
     # Mint payload id for patch naming
-    pl_count = handle._counters.get("pl", 0) + 1
-    handle._counters["pl"] = pl_count
-    from stag.core.ids import sequential_id
-    git_payload_id_tentative = sequential_id("pl", pl_count)
+    git_payload_id_tentative = handle._next_id("pl")
 
     patch_artifact: str | None = None
     if gdata["patch_text"]:
@@ -453,10 +450,7 @@ def git_finish_form_b(
         )
 
     # Mint payload id
-    pl_count = handle._counters.get("pl", 0) + 1
-    handle._counters["pl"] = pl_count
-    from stag.core.ids import sequential_id
-    git_payload_id = sequential_id("pl", pl_count)
+    git_payload_id = handle._next_id("pl")
 
     patch_artifact: str | None = None
     if gdata["patch_text"]:

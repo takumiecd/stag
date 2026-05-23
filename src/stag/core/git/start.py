@@ -20,7 +20,7 @@ from stag.core.git.session import (
     save_current_pointer,
     save_session,
 )
-from stag.core.ids import sequential_id
+from stag.core.ids import opaque_id
 from stag.core.run.handle import RunHandle
 
 
@@ -75,9 +75,7 @@ def git_start(
     dirty = git_repo.is_dirty(repo_root)
 
     # 5. Mint session_id using handle counter style
-    gs_count = handle._counters.get("gs", 0) + 1
-    handle._counters["gs"] = gs_count
-    session_id = sequential_id("gs", gs_count)
+    session_id = opaque_id("gs")
 
     # 6. Collect warnings
     warnings: list[str] = []

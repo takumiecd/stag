@@ -84,7 +84,7 @@ def run_init_command(
 
     store.save_run(handle)
     save_current_run(handle.run_id, store_dir)
-    return {"run_id": handle.run_id}
+    return {"run_id": handle.run_id, "root_node_id": handle.root_node_id}
 
 
 def cli_init(args) -> int:

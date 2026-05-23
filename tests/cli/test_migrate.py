@@ -26,9 +26,10 @@ def _init_jsonl_run(store_dir: str, run_id: str = "run_test") -> str:
         run_id=run_id,
         store_dir=store_dir,
     )
+    root = JsonlRunStore(store_dir).load_run(run_id).root_node_id
     it = run_plan_command(
         run_id=run_id,
-        input_node_ids=["n_0000"],
+        input_node_ids=[root],
         action_type="analysis",
         intent="test intent",
         store_dir=store_dir,

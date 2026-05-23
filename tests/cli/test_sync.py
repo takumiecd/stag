@@ -27,15 +27,20 @@ def _init(store_dir: str, run_id: str) -> None:
     )
 
 
+def _root(store_dir: str, run_id: str) -> str:
+    return resolve_store(store_dir).load_run(run_id).root_node_id
+
+
 def test_local_shared_sync_push_pull_round_trip(tmp_path):
     store_dir = str(tmp_path / "runs")
     remote_dir = str(tmp_path / "remotes")
     _init(store_dir, "local_a")
     _init(store_dir, "local_b")
+    root = _root(store_dir, "local_a")
 
     anchor = run_anchor_command(
         run_id="local_a",
-        from_node_id="n_0000",
+        from_node_id=root,
         label="common benchmark setup",
         store_dir=store_dir,
     )["anchor"]
@@ -91,7 +96,7 @@ def test_local_shared_sync_push_pull_round_trip(tmp_path):
         shared_run_id="sr_demo",
         remote_dir=remote_dir,
     )
-    assert pulled["pulled_records"] == 5
+    assert pulled["pulled_records"] == 7
     assert pulled["pulled_batches"] == 2
     idmap_b = tmp_path / "runs" / "local_b" / "idmap.jsonl"
     assert len(idmap_b.read_text(encoding="utf-8").splitlines()) == 7
@@ -107,7 +112,7 @@ def test_local_shared_sync_push_pull_round_trip(tmp_path):
         intent="run variant B",
         store_dir=store_dir,
     )["input_transition"]
-    assert it["input_transition_id"] == "it_0002"
+    assert it["input_transition_id"].startswith("it_")
     assert it["input_node_ids"] == [anchor["node_id"]]
 
 

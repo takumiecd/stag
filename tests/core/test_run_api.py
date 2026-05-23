@@ -26,10 +26,10 @@ def _plan_payload(intent: str = "test") -> PlanPayload:
 
 def test_init_seeds_root_node_and_main_view():
     run = init(_req(), run_id="t_init")
-    assert run.root_node_id == "n_0000"
-    assert "n_0000" in run.run_graph.nodes
+    assert run.root_node_id.startswith("n_")
+    assert run.root_node_id in run.run_graph.nodes
     assert "main" in run.run_graph.views
-    assert run.run_graph.views["main"].root_node_id == "n_0000"
+    assert run.run_graph.views["main"].root_node_id == run.root_node_id
 
 
 def test_plan_creates_input_transition():

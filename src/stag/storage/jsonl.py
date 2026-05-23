@@ -197,10 +197,11 @@ class JsonlRunStore:
             graph.views[v.name] = v
 
         if not graph.views:
+            root_node_id = str(graph.metadata.get("root_node_id") or "n_0000")
             graph.views["main"] = GraphView(
                 view_id="view_main",
                 name="main",
-                root_node_id="n_0000",
+                root_node_id=root_node_id,
             )
 
         # Write cache so next load_run is fast.

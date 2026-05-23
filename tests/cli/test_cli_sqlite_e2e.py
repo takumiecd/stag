@@ -25,12 +25,13 @@ def test_sqlite_init_plan_dump(monkeypatch):
             store_dir=td,
         )
         run_id = result["run_id"]
+        root = result["root_node_id"]
         assert run_id == "run_e2e"
 
         # plan
         plan_result = run_plan_command(
             run_id=run_id,
-            input_node_ids=["n_0000"],
+            input_node_ids=[root],
             action_type="analysis",
             intent="e2e test",
             store_dir=td,
@@ -41,7 +42,7 @@ def test_sqlite_init_plan_dump(monkeypatch):
         store = resolve_store(td)
         handle = store.load_run(run_id)
         output = dump(handle, "outline", DumpOptions())
-        assert "n_0000" in output
+        assert root in output
 
         # run.db exists, nodes.jsonl does NOT
         run_dir = Path(td) / run_id
