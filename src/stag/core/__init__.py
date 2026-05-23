@@ -1,7 +1,7 @@
 """Core graph model."""
 
 from stag.core.graph_view import GraphView
-from stag.core.ids import sequential_id, slugify, timestamp_id
+from stag.core.ids import opaque_id, sequential_id, slugify, timestamp_id
 from stag.core.run import RunHandle, init
 from stag.core.run_graph import RunGraph
 from stag.core.schema import (
@@ -46,6 +46,7 @@ __all__ = [
     "TargetKind",
     "TraceContext",
     "init",
+    "opaque_id",
     "sequential_id",
     "slugify",
     "timestamp_id",

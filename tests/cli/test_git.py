@@ -80,9 +80,10 @@ def stag_env(tmp_path, git_repo, monkeypatch):
         run_id=run_id,
         store_dir=store_dir,
     )
+    root = JsonlRunStore(store_dir).load_run(run_id).root_node_id
     it_id = run_plan_command(
         run_id=run_id,
-        input_node_ids=["n_0000"],
+        input_node_ids=[root],
         action_type="analysis",
         intent="do stuff",
         store_dir=store_dir,
@@ -704,9 +705,10 @@ def test_git_finish_form_b_rejects_wrong_it(stag_env, git_repo):
     store = JsonlRunStore(store_dir)
 
     # Create a second plan + observe
+    root = store.load_run(run_id).root_node_id
     it2_id = run_plan_command(
         run_id=run_id,
-        input_node_ids=["n_0000"],
+        input_node_ids=[root],
         action_type="analysis",
         intent="second plan",
         store_dir=store_dir,

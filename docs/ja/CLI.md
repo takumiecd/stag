@@ -103,12 +103,12 @@ STAG が何を構築しているか、内部の `RunGraph` / transition / payloa
 stag init <requirement_id> [--target-type code] [--target-id ID] [--run-id RID] [--store-dir DIR]
 ```
 
-run を作成し、`RunGraph` と `main` view を seed します。root node は `n_0000` です。成功時は run id を出力し、current run も更新します。
+run を作成し、`RunGraph` と `main` view を seed します。root node には opaque な `n_<id>` が割り当てられます。programmatic init は `root_node_id` を返し、CLI は current run を更新します。
 
 ### `plan`
 
 ```bash
-stag plan --input-node n_0000 [--input-node n_0003] [--action-type analysis] [--intent TEXT] [--input k=v] [--assumption TEXT]
+stag plan --input-node <node_id> [--input-node <node_id>] [--action-type analysis] [--intent TEXT] [--input k=v] [--assumption TEXT]
 ```
 
 複数 input node から `InputTransition` を作り、`PlanPayload` を attach します。
@@ -116,7 +116,7 @@ stag plan --input-node n_0000 [--input-node n_0003] [--action-type analysis] [--
 ### `anchor`
 
 ```bash
-stag anchor --from n_0000 --label "common benchmark setup"
+stag anchor --from <node_id> --label "common benchmark setup"
 ```
 
 共通条件や問題設定を表す branching point を作ります。内部的には `action_type=scope_refinement` の `PlanPayload` と、`metadata.kind=anchor` の completed `ResultPayload` を作り、新しい output node を返します。その node から複数の実験を生やせます。
@@ -155,6 +155,19 @@ stag cut --output-transition <output_transition_id> [--reason TEXT]
 ```
 
 `CutPayload` を attach します。input transition に attach した場合は plan 全体を、output transition に attach した場合はその prediction / result output だけを inactive にします。
+
+### `sync`
+
+```bash
+stag sync init --run local_a --shared-run sr_demo
+stag sync status --run local_a
+stag sync push --run local_a
+stag sync pull --run local_b --shared-run sr_demo
+```
+
+ローカル完結の shared DAG 実験用 command です。既定では `.stag/remotes/local-shared/runs/<shared_run_id>/records.jsonl` を共有append logとして使います。HTTP server や DB は使わず、local run の graph record を shared log に push し、別の local run に pull できます。
+
+`sync init` は `<run>/sync.json` に remote / shared run 設定を書きます。`push` / `pull` / `status` は `--shared-run` を直接指定するか、保存済み設定を使います。
 
 ### `trace`
 

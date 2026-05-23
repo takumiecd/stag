@@ -7,7 +7,6 @@ from pathlib import Path
 from stag.core.cuts import is_inactive_output_transition
 from stag.core.git import repo as git_repo
 from stag.core.git.finish import _write_patch_artifact
-from stag.core.ids import sequential_id
 from stag.core.run.handle import RunHandle
 from stag.core.schema.payloads import CommitEntry, DiffSummary, GitChangePayload
 
@@ -58,8 +57,7 @@ def attach_commits_to_output_transition(
     changed_files = tuple(git_repo.diff_name_only_for_commits(repo_root, resolved))
     patch_text = git_repo.diff_patch_for_commits(repo_root, resolved)
 
-    handle._counters["pl"] = handle._counters.get("pl", 0) + 1
-    payload_id = sequential_id("pl", handle._counters["pl"])
+    payload_id = handle._next_id("pl")
     patch_artifact = None
     if patch_text:
         patch_artifact = _write_patch_artifact(patch_text, payload_id, run_dir)

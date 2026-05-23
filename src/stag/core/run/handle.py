@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from stag.core.cuts import is_active_node
 from stag.core.graph_view import GraphView
-from stag.core.ids import sequential_id, slugify, timestamp_id
+from stag.core.ids import opaque_id, slugify, timestamp_id
 from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import Node
 from stag.core.schema.requirements import Requirement
@@ -22,11 +22,16 @@ class RunHandle:
     _counters: dict[str, int] = field(default_factory=dict)
 
     def _next_id(self, prefix: str) -> str:
-        self._counters[prefix] = self._counters.get(prefix, 0) + 1
-        return sequential_id(prefix, self._counters[prefix])
+        return opaque_id(prefix)
 
     @property
     def root_node_id(self) -> str:
+        root = self.run_graph.metadata.get("root_node_id")
+        if root is not None:
+            return str(root)
+        roots = self.run_graph.roots()
+        if roots:
+            return roots[0]
         return "n_0000"
 
     def _ensure_active_node(self, node_id: str) -> None:
@@ -54,11 +59,12 @@ def init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle:
     rid = run_id or timestamp_id(f"run_{slugify(requirement.requirement_id)}")
 
     graph = RunGraph()
-    root = Node(node_id="n_0000")
+    root = Node(node_id=opaque_id("n"))
     graph.add_node(root)
+    graph.metadata["root_node_id"] = root.node_id
 
     main_view = GraphView(
-        view_id="view_main",
+        view_id=opaque_id("view"),
         name="main",
         root_node_id=root.node_id,
     )
@@ -68,12 +74,7 @@ def init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle:
         run_id=rid,
         requirement=requirement,
         run_graph=graph,
-        _counters={
-            "n": 0,
-            "it": 0,
-            "ot": 0,
-            "pl": 0,
-        },
+        _counters={},
     )
     return handle
 

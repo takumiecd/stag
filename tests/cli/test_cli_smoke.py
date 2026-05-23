@@ -19,6 +19,7 @@ from stag.cli.commands.reachable import run_reachable_command
 from stag.cli.commands.cut import run_cut_command
 from stag.cli.commands.show import run_show_command
 from stag.cli.commands.trace import run_trace_command
+from stag.storage.jsonl import JsonlRunStore
 
 
 def _init(td: str, rid: str = "rid") -> str:
@@ -30,6 +31,10 @@ def _init(td: str, rid: str = "rid") -> str:
         store_dir=td,
     )
     return rid
+
+
+def _root(td: str, rid: str = "rid") -> str:
+    return JsonlRunStore(td).load_run(rid).root_node_id
 
 
 def test_guide_describes_core_concepts():
@@ -50,13 +55,14 @@ def test_init_creates_run():
 def test_full_observed_flow():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
+        root = _root(td, rid)
         # note
-        note = run_note_command(run_id=rid, node_id="n_0000", text="baseline", store_dir=td)["note"]
+        note = run_note_command(run_id=rid, node_id=root, text="baseline", store_dir=td)["note"]
         assert note["text"] == "baseline"
         # plan
         it = run_plan_command(
             run_id=rid,
-            input_node_ids=["n_0000"],
+            input_node_ids=[root],
             action_type="analysis",
             intent="test",
             store_dir=td,
@@ -82,26 +88,27 @@ def test_full_observed_flow():
         assert it_id in history["input_transition_ids"]
         # show node
         node_view = run_show_command(
-            run_id=rid, node_id="n_0000",
+            run_id=rid, node_id=root,
             input_transition_id=None, output_transition_id=None, payload_id=None,
             with_payloads=False, outputs=False,
             store_dir=td,
         )
-        assert node_view["node"]["node_id"] == "n_0000"
+        assert node_view["node"]["node_id"] == root
 
 
 def test_anchor_command_creates_branch_point():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
+        root = _root(td, rid)
         anchor = run_anchor_command(
             run_id=rid,
-            from_node_id="n_0000",
+            from_node_id=root,
             label="common benchmark setup",
             store_dir=td,
         )["anchor"]
-        assert anchor["input_transition_id"] == "it_0001"
-        assert anchor["output_transition_id"] == "ot_0001"
-        assert anchor["node_id"] == "n_0001"
+        assert anchor["input_transition_id"].startswith("it_")
+        assert anchor["output_transition_id"].startswith("ot_")
+        assert anchor["node_id"].startswith("n_")
         assert anchor["label"] == "common benchmark setup"
 
         it = run_plan_command(
@@ -117,8 +124,9 @@ def test_anchor_command_creates_branch_point():
 def test_predict_flow():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
+        root = _root(td, rid)
         it = run_plan_command(
-            run_id=rid, input_node_ids=["n_0000"], action_type="analysis",
+            run_id=rid, input_node_ids=[root], action_type="analysis",
             intent="predict test", store_dir=td,
         )["input_transition"]
         it_id = it["input_transition_id"]
@@ -133,8 +141,9 @@ def test_predict_flow():
 def test_cut_input_transition():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
+        root = _root(td, rid)
         it = run_plan_command(
-            run_id=rid, input_node_ids=["n_0000"], action_type="analysis",
+            run_id=rid, input_node_ids=[root], action_type="analysis",
             intent="x", store_dir=td,
         )["input_transition"]
         it_id = it["input_transition_id"]
@@ -149,8 +158,9 @@ def test_cut_input_transition():
 def test_cut_output_transition():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
+        root = _root(td, rid)
         it = run_plan_command(
-            run_id=rid, input_node_ids=["n_0000"], action_type="analysis",
+            run_id=rid, input_node_ids=[root], action_type="analysis",
             intent="x", store_dir=td,
         )["input_transition"]
         ot = run_observe_command(
@@ -169,8 +179,9 @@ def test_cut_output_transition():
 def test_outcomes_command():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
+        root = _root(td, rid)
         it = run_plan_command(
-            run_id=rid, input_node_ids=["n_0000"], action_type="analysis",
+            run_id=rid, input_node_ids=[root], action_type="analysis",
             intent="outcomes test", store_dir=td,
         )["input_transition"]
         it_id = it["input_transition_id"]
@@ -196,8 +207,9 @@ def test_outcomes_command():
 def test_outcomes_include_payloads():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
+        root = _root(td, rid)
         it = run_plan_command(
-            run_id=rid, input_node_ids=["n_0000"], action_type="analysis",
+            run_id=rid, input_node_ids=[root], action_type="analysis",
             intent="payloads test", store_dir=td,
         )["input_transition"]
         it_id = it["input_transition_id"]
@@ -222,8 +234,9 @@ def test_outcomes_include_payloads():
 def test_reachable_from_node():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
+        root = _root(td, rid)
         it = run_plan_command(
-            run_id=rid, input_node_ids=["n_0000"], action_type="analysis",
+            run_id=rid, input_node_ids=[root], action_type="analysis",
             intent="reachable test", store_dir=td,
         )["input_transition"]
         run_observe_command(
@@ -234,10 +247,10 @@ def test_reachable_from_node():
         )
 
         result = run_reachable_command(
-            run_id=rid, from_node="n_0000", view_name=None,
+            run_id=rid, from_node=root, view_name=None,
             include_records=False, store_dir=td,
         )
-        assert "n_0000" in result["node_ids"]
+        assert root in result["node_ids"]
         assert len(result["input_transition_ids"]) >= 1
         assert len(result["output_transition_ids"]) >= 1
 
@@ -245,40 +258,43 @@ def test_reachable_from_node():
 def test_reachable_from_view():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
+        root = _root(td, rid)
 
         result = run_reachable_command(
             run_id=rid, from_node=None, view_name="main",
             include_records=False, store_dir=td,
         )
-        assert result["root_node_id"] == "n_0000"
-        assert "n_0000" in result["node_ids"]
+        assert result["root_node_id"] == root
+        assert root in result["node_ids"]
 
 
 def test_reachable_include_records():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
+        root = _root(td, rid)
 
         result = run_reachable_command(
-            run_id=rid, from_node="n_0000", view_name=None,
+            run_id=rid, from_node=root, view_name=None,
             include_records=True, store_dir=td,
         )
         assert "nodes" in result
         assert isinstance(result["nodes"], list)
-        assert result["nodes"][0]["node_id"] == "n_0000"
+        assert result["nodes"][0]["node_id"] == root
 
 
 def test_show_node_with_payloads():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
-        run_note_command(run_id=rid, node_id="n_0000", text="hello", store_dir=td)
+        root = _root(td, rid)
+        run_note_command(run_id=rid, node_id=root, text="hello", store_dir=td)
 
         result = run_show_command(
-            run_id=rid, node_id="n_0000",
+            run_id=rid, node_id=root,
             input_transition_id=None, output_transition_id=None, payload_id=None,
             with_payloads=True, outputs=False,
             store_dir=td,
         )
-        assert result["node"]["node_id"] == "n_0000"
+        assert result["node"]["node_id"] == root
         assert len(result["payloads"]) == 1
         assert result["payloads"][0]["payload_type"] == "note"
 
@@ -286,8 +302,9 @@ def test_show_node_with_payloads():
 def test_show_input_transition_with_outputs():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
+        root = _root(td, rid)
         it = run_plan_command(
-            run_id=rid, input_node_ids=["n_0000"], action_type="analysis",
+            run_id=rid, input_node_ids=[root], action_type="analysis",
             intent="outputs test", store_dir=td,
         )["input_transition"]
         it_id = it["input_transition_id"]
@@ -316,9 +333,10 @@ def test_show_input_transition_with_outputs():
 def test_show_outputs_without_input_transition_raises():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
+        root = _root(td, rid)
         with pytest.raises(ValueError, match="--outputs"):
             run_show_command(
-                run_id=rid, node_id="n_0000",
+                run_id=rid, node_id=root,
                 input_transition_id=None, output_transition_id=None, payload_id=None,
                 with_payloads=False, outputs=True,
                 store_dir=td,
@@ -328,11 +346,12 @@ def test_show_outputs_without_input_transition_raises():
 def test_show_with_payloads_and_payload_raises():
     with tempfile.TemporaryDirectory() as td:
         rid = _init(td)
-        run_note_command(run_id=rid, node_id="n_0000", text="hello", store_dir=td)
+        root = _root(td, rid)
+        note = run_note_command(run_id=rid, node_id=root, text="hello", store_dir=td)["note"]
         with pytest.raises(ValueError, match="--with-payloads"):
             run_show_command(
                 run_id=rid, node_id=None,
-                input_transition_id=None, output_transition_id=None, payload_id="pl_0001",
+                input_transition_id=None, output_transition_id=None, payload_id=note["payload_id"],
                 with_payloads=True, outputs=False,
                 store_dir=td,
             )

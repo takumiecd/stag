@@ -46,11 +46,11 @@ def test_outline_linear_chain():
     run.observe(it2.input_transition_id, _result({"y": 2.0}))
 
     out = dump(run, "outline", _opts())
-    assert "n_0000" in out
+    assert run.root_node_id in out
     assert "step1" in out
     assert "step2" in out
     # Each node id should appear exactly once as a primary header (no back-ref)
-    assert out.count("↻n_0000") == 0
+    assert f"↻{run.root_node_id}" not in out
     # results use → marker
     assert "→" in out
 

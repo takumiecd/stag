@@ -23,6 +23,10 @@ def _init(store_dir: str) -> str:
     return "run_a"
 
 
+def _root(store_dir: str, run_id: str) -> str:
+    return JsonlRunStore(store_dir).load_run(run_id).root_node_id
+
+
 def test_parse_kv_and_metric_validation():
     assert _parse_kv(["a=b", "c=d=e"]) == {"a": "b", "c": "d=e"}
     assert _parse_metrics(["score=1.25"]) == {"score": 1.25}
@@ -38,10 +42,11 @@ def test_parse_kv_and_metric_validation():
 def test_plan_records_intent_and_action_type(tmp_path):
     store_dir = str(tmp_path / "runs")
     run_id = _init(store_dir)
+    root = _root(store_dir, run_id)
 
     it = run_plan_command(
         run_id=run_id,
-        input_node_ids=["n_0000"],
+        input_node_ids=[root],
         action_type="analysis",
         intent="run baseline",
         inputs={"shape": "small"},
@@ -49,7 +54,7 @@ def test_plan_records_intent_and_action_type(tmp_path):
         user_id="alice",
     )["input_transition"]
 
-    assert it["input_node_ids"] == ["n_0000"]
+    assert it["input_node_ids"] == [root]
     # Check the PlanPayload was stored
     store = JsonlRunStore(store_dir)
     handle = store.load_run(run_id)
@@ -64,9 +69,10 @@ def test_plan_records_intent_and_action_type(tmp_path):
 def test_observe_attaches_result_and_show_can_fetch_payload(tmp_path):
     store_dir = str(tmp_path / "runs")
     run_id = _init(store_dir)
+    root = _root(store_dir, run_id)
     it_id = run_plan_command(
         run_id=run_id,
-        input_node_ids=["n_0000"],
+        input_node_ids=[root],
         action_type="analysis",
         intent="x",
         store_dir=store_dir,
@@ -110,8 +116,9 @@ def test_observe_attaches_result_and_show_can_fetch_payload(tmp_path):
 def test_trace_includes_artifact_refs(tmp_path):
     store_dir = str(tmp_path / "runs")
     run_id = _init(store_dir)
+    root = _root(store_dir, run_id)
     it_id = run_plan_command(
-        run_id=run_id, input_node_ids=["n_0000"], action_type="analysis",
+        run_id=run_id, input_node_ids=[root], action_type="analysis",
         intent="x", store_dir=store_dir,
     )["input_transition"]["input_transition_id"]
     ot = run_observe_command(

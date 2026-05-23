@@ -20,13 +20,18 @@ def _init(store_dir: str) -> str:
     return "run_a"
 
 
+def _root(store_dir: str, run_id: str) -> str:
+    return JsonlRunStore(store_dir).load_run(run_id).root_node_id
+
+
 def test_note_attaches_to_node(tmp_path):
     store_dir = str(tmp_path / "runs")
     run_id = _init(store_dir)
+    root = _root(store_dir, run_id)
 
     note = run_note_command(
         run_id=run_id,
-        node_id="n_0000",
+        node_id=root,
         text="baseline setup",
         tags=["context", "setup"],
         store_dir=store_dir,
@@ -34,12 +39,12 @@ def test_note_attaches_to_node(tmp_path):
     )["note"]
 
     assert note["text"] == "baseline setup"
-    assert note["target_id"] == "n_0000"
+    assert note["target_id"] == root
     assert note["payload_type"] == "note"
     assert set(note["tags"]) == {"context", "setup"}
 
     handle = JsonlRunStore(store_dir).load_run(run_id)
-    note_payloads = handle.run_graph.payloads_for_node("n_0000", payload_type="note")
+    note_payloads = handle.run_graph.payloads_for_node(root, payload_type="note")
     assert len(note_payloads) == 1
     assert note_payloads[0].text == "baseline setup"
 
@@ -47,10 +52,11 @@ def test_note_attaches_to_node(tmp_path):
 def test_note_shows_in_trace(tmp_path):
     store_dir = str(tmp_path / "runs")
     run_id = _init(store_dir)
+    root = _root(store_dir, run_id)
 
-    run_note_command(run_id=run_id, node_id="n_0000", text="root note", store_dir=store_dir)
+    run_note_command(run_id=run_id, node_id=root, text="root note", store_dir=store_dir)
     it_id = run_plan_command(
-        run_id=run_id, input_node_ids=["n_0000"], action_type="analysis",
+        run_id=run_id, input_node_ids=[root], action_type="analysis",
         intent="x", store_dir=store_dir,
     )["input_transition"]["input_transition_id"]
     ot = run_observe_command(

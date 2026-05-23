@@ -135,7 +135,7 @@ Current prefixes include:
 - `pl` — Payload
 - `run` — Run
 
-Do not hand-format new IDs except for seed roots created during `init` (the root node is always `n_0000`).
+IDs are opaque and collision-resistant (`n_<uuid>`, `it_<uuid>`, `ot_<uuid>`, `pl_<uuid>`). Do not assume sequential IDs such as `n_0000` or `it_0001`. The root node is also opaque; use `run.root_node_id` or the `root_node_id` returned by `run_init_command`.
 
 ## Cut
 

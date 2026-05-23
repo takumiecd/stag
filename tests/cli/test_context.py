@@ -28,7 +28,8 @@ def test_init_sets_current_run(tmp_path):
         store_dir=store_dir,
     )
 
-    assert result == {"run_id": "run_a"}
+    assert result["run_id"] == "run_a"
+    assert result["root_node_id"].startswith("n_")
     assert run_current_command(store_dir=store_dir)["run_id"] == "run_a"
     marker = json.loads(current_path(store_dir).read_text(encoding="utf-8"))
     assert marker == {"run_id": "run_a", "store_dir": store_dir}
