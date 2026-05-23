@@ -23,7 +23,7 @@ from stag.core.sync.records import (
     RecordTuple,
     body_key,
     flatten_batches,
-    new_shared_id,
+    new_sync_id,
     records_path,
 )
 from stag.core.sync.shared_store import FileSharedRunStore
@@ -154,7 +154,7 @@ def sync_push(
 
         envelope = {
             "seq": next_seq,
-            "batch_id": new_shared_id("batch"),
+            "batch_id": new_sync_id("batch"),
             "operation": batch["operation"],
             "records": missing_records,
             "actor": {
@@ -414,7 +414,12 @@ def _max_suffix(ids: dict[str, object]) -> int:
     return max_seen
 
 
-def _ensure_same(existing: dict[str, Any], incoming: dict[str, Any], kind: str, item_id: str) -> None:
+def _ensure_same(
+    existing: dict[str, Any],
+    incoming: dict[str, Any],
+    kind: str,
+    item_id: str,
+) -> None:
     if existing != incoming:
         raise RuntimeError(f"local {kind}:{item_id} differs from remote record")
 

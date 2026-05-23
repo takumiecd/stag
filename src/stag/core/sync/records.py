@@ -8,7 +8,6 @@ from typing import Any
 
 from stag.core import _json as _fast_json
 
-
 RecordTuple = tuple[str, str, dict[str, Any]]
 
 
@@ -33,7 +32,7 @@ def read_batches(remote_dir: str | Path, remote: str, shared_run_id: str) -> lis
             batches.append(
                 {
                     "seq": item["seq"],
-                    "batch_id": item.get("batch_id") or new_shared_id("batch"),
+                    "batch_id": item.get("batch_id") or new_sync_id("batch"),
                     "operation": item.get("record_kind", "record"),
                     "records": [
                         {
@@ -55,7 +54,8 @@ def flatten_batches(batches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
             "record_kind": record["record_kind"],
-            "record_id": record.get("record_id") or record_id_for_body(record["record_kind"], record["body"]),
+            "record_id": record.get("record_id")
+            or record_id_for_body(record["record_kind"], record["body"]),
             "body": record["body"],
         }
         for batch in batches
@@ -83,6 +83,6 @@ def record_id_for_body(kind: str, body: dict[str, Any]) -> str:
     return body_key(kind, body)[1]
 
 
-def new_shared_id(kind: str) -> str:
-    """Return a collision-resistant shared-layer id."""
+def new_sync_id(kind: str) -> str:
+    """Return a collision-resistant sync-layer id."""
     return f"{kind}_{uuid.uuid4().hex}"
