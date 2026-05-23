@@ -9,7 +9,6 @@ introducing HTTP or database backends.
 from __future__ import annotations
 
 import json
-import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,9 +20,16 @@ from stag.core.run import RunHandle
 from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import InputTransition, Node, OutputTransition
 from stag.core.schema.payloads import payload_from_dict
-
-
-RecordTuple = tuple[str, str, dict[str, Any]]
+from stag.core.sync.idmap import append_idmap, idmap_key, idmap_row, read_idmap
+from stag.core.sync.records import (
+    RecordTuple,
+    body_key,
+    flatten_batches,
+    local_id_for_body,
+    new_shared_id,
+    read_batches,
+    records_path,
+)
 
 
 @dataclass(frozen=True)
@@ -66,7 +72,7 @@ def sync_init(
     )
     run_path.mkdir(parents=True, exist_ok=True)
     _write_json(run_path / "sync.json", cfg.to_dict())
-    path = _records_path(remote_dir, remote, shared_run_id)
+    path = records_path(remote_dir, remote, shared_run_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.touch(exist_ok=True)
     return {
@@ -86,9 +92,9 @@ def sync_status(
 ) -> dict[str, Any]:
     """Return local/remote counts and pending push/pull counts."""
     local_records = _local_records(handle)
-    remote_records = _flatten_batches(_read_batches(remote_dir, remote, shared_run_id))
-    remote_keys = {_body_key(r["record_kind"], r["body"]) for r in remote_records}
-    local_keys = {_body_key(kind, body) for kind, _, body in local_records}
+    remote_records = flatten_batches(read_batches(remote_dir, remote, shared_run_id))
+    remote_keys = {body_key(r["record_kind"], r["body"]) for r in remote_records}
+    local_keys = {body_key(kind, body) for kind, _, body in local_records}
     return {
         "run_id": handle.run_id,
         "remote": remote,
@@ -96,13 +102,13 @@ def sync_status(
         "local_records": len(local_records),
         "remote_records": len(remote_records),
         "unpushed_records": sum(
-            1 for kind, _, body in local_records if _body_key(kind, body) not in remote_keys
+            1 for kind, _, body in local_records if body_key(kind, body) not in remote_keys
         ),
         "unpulled_records": sum(
             1 for record in remote_records
-            if _body_key(record["record_kind"], record["body"]) not in local_keys
+            if body_key(record["record_kind"], record["body"]) not in local_keys
         ),
-        "records_path": str(_records_path(remote_dir, remote, shared_run_id)),
+        "records_path": str(records_path(remote_dir, remote, shared_run_id)),
     }
 
 
@@ -118,15 +124,15 @@ def sync_push(
     actor_type: str = "human",
 ) -> dict[str, Any]:
     """Append local records missing from the file-backed shared run."""
-    path = _records_path(remote_dir, remote, shared_run_id)
+    path = records_path(remote_dir, remote, shared_run_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    remote_batches = _read_batches(remote_dir, remote, shared_run_id)
-    remote_records = _flatten_batches(remote_batches)
+    remote_batches = read_batches(remote_dir, remote, shared_run_id)
+    remote_records = flatten_batches(remote_batches)
     remote_by_key = {
-        _body_key(r["record_kind"], r["body"]): r
+        body_key(r["record_kind"], r["body"]): r
         for r in remote_records
     }
-    idmap = _read_idmap(run_path=run_path, remote=remote, shared_run_id=shared_run_id)
+    idmap = read_idmap(run_path=run_path, remote=remote, shared_run_id=shared_run_id)
 
     next_seq = len(remote_batches) + 1
     pushed_batches: list[dict[str, Any]] = []
@@ -134,20 +140,20 @@ def sync_push(
     for batch in _local_batches(handle):
         missing_records: list[dict[str, Any]] = []
         for kind, local_id, body in batch["records"]:
-            key = _body_key(kind, body)
+            key = body_key(kind, body)
             existing = remote_by_key.get(key)
-            map_key = _idmap_key(remote, shared_run_id, kind, local_id)
+            map_key = idmap_key(remote, shared_run_id, kind, local_id)
             if existing is not None:
                 if existing["body"] != body:
                     raise RuntimeError(f"remote already has different body for {kind}:{local_id}")
                 if map_key not in idmap:
                     new_mappings.append(
-                        _idmap_row(remote, shared_run_id, kind, local_id, existing["shared_id"])
+                        idmap_row(remote, shared_run_id, kind, local_id, existing["shared_id"])
                     )
                     idmap[map_key] = existing["shared_id"]
                 continue
 
-            shared_id = idmap.get(map_key) or _new_shared_id(kind)
+            shared_id = idmap.get(map_key) or new_shared_id(kind)
             missing_records.append(
                 {
                     "record_kind": kind,
@@ -156,7 +162,7 @@ def sync_push(
                     "body": body,
                 }
             )
-            new_mappings.append(_idmap_row(remote, shared_run_id, kind, local_id, shared_id))
+            new_mappings.append(idmap_row(remote, shared_run_id, kind, local_id, shared_id))
             idmap[map_key] = shared_id
 
         if not missing_records:
@@ -164,7 +170,7 @@ def sync_push(
 
         envelope = {
             "seq": next_seq,
-            "batch_id": _new_shared_id("batch"),
+            "batch_id": new_shared_id("batch"),
             "operation": batch["operation"],
             "records": missing_records,
             "actor": {
@@ -179,7 +185,7 @@ def sync_push(
         }
         pushed_batches.append(envelope)
         for record in missing_records:
-            remote_by_key[_body_key(record["record_kind"], record["body"])] = record
+            remote_by_key[body_key(record["record_kind"], record["body"])] = record
         next_seq += 1
 
     if pushed_batches:
@@ -187,7 +193,7 @@ def sync_push(
             for batch in pushed_batches:
                 fh.write(_fast_json.dumps(batch) + "\n")
     if new_mappings:
-        _append_idmap(
+        append_idmap(
             run_path=run_path,
             rows=new_mappings,
         )
@@ -211,15 +217,15 @@ def sync_pull(
     remote_dir: str | Path,
 ) -> dict[str, Any]:
     """Apply records missing from the shared run into the local graph."""
-    batches = _read_batches(remote_dir, remote, shared_run_id)
+    batches = read_batches(remote_dir, remote, shared_run_id)
     pulled = 0
     new_mappings: list[dict[str, str]] = []
-    for record in _flatten_batches(batches):
+    for record in flatten_batches(batches):
         if _apply_record(handle.run_graph, record["record_kind"], record["body"]):
             pulled += 1
-        local_id = _local_id_for_body(record["record_kind"], record["body"])
+        local_id = local_id_for_body(record["record_kind"], record["body"])
         new_mappings.append(
-            _idmap_row(
+            idmap_row(
                 remote,
                 shared_run_id,
                 record["record_kind"],
@@ -228,14 +234,14 @@ def sync_pull(
             )
         )
     _refresh_counters(handle)
-    _append_idmap(run_path=run_path, rows=new_mappings)
+    append_idmap(run_path=run_path, rows=new_mappings)
     return {
         "run_id": handle.run_id,
         "remote": remote,
         "shared_run_id": shared_run_id,
         "pulled_batches": len(batches),
         "pulled_records": pulled,
-        "records_path": str(_records_path(remote_dir, remote, shared_run_id)),
+        "records_path": str(records_path(remote_dir, remote, shared_run_id)),
     }
 
 
@@ -420,155 +426,6 @@ def _ensure_same(existing: dict[str, Any], incoming: dict[str, Any], kind: str, 
         raise RuntimeError(f"local {kind}:{item_id} differs from remote record")
 
 
-def _read_batches(remote_dir: str | Path, remote: str, shared_run_id: str) -> list[dict[str, Any]]:
-    path = _records_path(remote_dir, remote, shared_run_id)
-    if not path.exists():
-        return []
-    batches = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        item = _fast_json.loads(line)
-        if "records" in item:
-            batches.append(item)
-        else:
-            batches.append(
-                {
-                    "seq": item["seq"],
-                    "batch_id": item.get("batch_id") or _new_shared_id("batch"),
-                    "operation": item.get("record_kind", "record"),
-                    "records": [
-                        {
-                            "record_kind": item["record_kind"],
-                            "local_id": _local_id_for_body(item["record_kind"], item["body"]),
-                            "shared_id": item.get("shared_id") or _new_shared_id(item["record_kind"]),
-                            "body": item["body"],
-                        }
-                    ],
-                    "actor": item.get("actor", {}),
-                    "origin": item.get("origin", {}),
-                    "created_at": item.get("created_at"),
-                }
-            )
-    return batches
-
-
-def _flatten_batches(batches: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [
-        {
-            "record_kind": record["record_kind"],
-            "local_id": record.get("local_id"),
-            "shared_id": record["shared_id"],
-            "body": record["body"],
-        }
-        for batch in batches
-        for record in batch["records"]
-    ]
-
-
-def _records_path(remote_dir: str | Path, remote: str, shared_run_id: str) -> Path:
-    return Path(remote_dir) / remote / "runs" / shared_run_id / "records.jsonl"
-
-
-def _body_key(kind: str, body: dict[str, Any]) -> tuple[str, str]:
-    if kind == "node":
-        return kind, str(body["node_id"])
-    if kind == "input_transition":
-        return kind, str(body["input_transition_id"])
-    if kind == "output_transition":
-        return kind, str(body["output_transition_id"])
-    if kind == "payload":
-        return kind, str(body["payload_id"])
-    if kind == "view":
-        return kind, str(body["view_id"])
-    raise ValueError(f"unknown sync record kind: {kind!r}")
-
-
-def _local_id_for_body(kind: str, body: dict[str, Any]) -> str:
-    return _body_key(kind, body)[1]
-
-
-def _idmap_key(remote: str, shared_run_id: str, kind: str, local_id: str) -> tuple[str, str, str, str]:
-    return remote, shared_run_id, kind, local_id
-
-
-def _idmap_row(
-    remote: str,
-    shared_run_id: str,
-    kind: str,
-    local_id: str,
-    shared_id: str,
-) -> dict[str, str]:
-    return {
-        "remote": remote,
-        "shared_run_id": shared_run_id,
-        "record_kind": kind,
-        "local_id": local_id,
-        "shared_id": shared_id,
-    }
-
-
-def _read_idmap(
-    *,
-    run_path: Path,
-    remote: str,
-    shared_run_id: str,
-) -> dict[tuple[str, str, str, str], str]:
-    path = run_path / "idmap.jsonl"
-    if not path.exists():
-        return {}
-    result: dict[tuple[str, str, str, str], str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        row = _fast_json.loads(line)
-        if row.get("remote") != remote or row.get("shared_run_id") != shared_run_id:
-            continue
-        key = _idmap_key(
-            str(row["remote"]),
-            str(row["shared_run_id"]),
-            str(row["record_kind"]),
-            str(row["local_id"]),
-        )
-        result[key] = str(row["shared_id"])
-    return result
-
-
-def _append_idmap(*, run_path: Path, rows: list[dict[str, str]]) -> None:
-    if not rows:
-        return
-    path = run_path / "idmap.jsonl"
-    existing: set[tuple[str, str, str, str]] = set()
-    if path.exists():
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            row = _fast_json.loads(line)
-            existing.add(
-                _idmap_key(
-                    str(row["remote"]),
-                    str(row["shared_run_id"]),
-                    str(row["record_kind"]),
-                    str(row["local_id"]),
-                )
-            )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        for row in rows:
-            key = _idmap_key(
-                row["remote"],
-                row["shared_run_id"],
-                row["record_kind"],
-                row["local_id"],
-            )
-            if key in existing:
-                continue
-            fh.write(_fast_json.dumps(row) + "\n")
-            existing.add(key)
-
-
-def _new_shared_id(kind: str) -> str:
-    return f"{kind}_{uuid.uuid4().hex}"
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
