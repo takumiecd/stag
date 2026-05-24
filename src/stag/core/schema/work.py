@@ -39,6 +39,7 @@ class WorkEvent:
     summary: str | None = None
     data: dict[str, JSONValue] = field(default_factory=dict)
     created_at: str | None = None
+    seq: int | None = None
 
     def to_dict(self) -> dict[str, JSONValue]:
         return to_jsonable(self)  # type: ignore[return-value]
@@ -74,4 +75,5 @@ def work_event_from_dict(data: dict[str, JSONValue]) -> WorkEvent:
         summary=str(data["summary"]) if data.get("summary") is not None else None,
         data=dict(data.get("data") or {}),
         created_at=str(data["created_at"]) if data.get("created_at") is not None else None,
+        seq=int(data["seq"]) if data.get("seq") is not None else None,
     )

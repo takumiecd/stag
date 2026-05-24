@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from stag.core import _json as _fast_json
+from stag.core.append import AppendBatch, AppendResult, GraphRecordEnvelope
+from stag.core.cuts import is_active_node
 from stag.core.graph_view import GraphView
 from stag.core.run import RunHandle
 from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import InputTransition, Node, OutputTransition
 from stag.core.schema.payloads import payload_from_dict
 from stag.core.schema.requirements import Requirement
-from stag.core.schema.work import work_event_from_dict, work_session_from_dict
+from stag.core.schema.work import WorkEvent, work_event_from_dict, work_session_from_dict
 from stag.storage._cache import load_cache, save_cache
 
 
@@ -187,6 +190,43 @@ class SqliteRunStore:
 
         return run_path
 
+    def append_batch(self, batch: AppendBatch) -> AppendResult:
+        """Atomically append a small set of new records for one work event.
+
+        This is the concurrent-writer path. SQLite serializes writers at
+        ``BEGIN IMMEDIATE``; validation then runs against the latest committed
+        graph before new rows are inserted.
+        """
+        run_path = self.run_path(batch.run_id)
+        if not run_path.exists():
+            raise KeyError(f"unknown run_id: {batch.run_id}")
+
+        db_path = run_path / "run.db"
+        con = sqlite3.connect(str(db_path), timeout=30.0)
+        con.row_factory = sqlite3.Row
+        try:
+            _setup_db(con)
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                latest_graph = _load_graph_from_connection(con)
+                _validate_append_batch(latest_graph, batch)
+                _insert_work_session_if_needed(con, batch)
+                for envelope in batch.records:
+                    _insert_graph_record(con, envelope)
+                event_seq = _insert_work_event(con, batch.event)
+                con.commit()
+            except Exception:
+                con.rollback()
+                raise
+        finally:
+            con.close()
+
+        return AppendResult(
+            event_id=batch.event.event_id,
+            event_seq=event_seq,
+            record_ids=tuple(envelope.record_id for envelope in batch.records),
+        )
+
     # ------------------------------------------------------------------
     # Protocol: load_run
     # ------------------------------------------------------------------
@@ -315,8 +355,11 @@ class SqliteRunStore:
                 session = work_session_from_dict(_fast_json.loads(row["data_json"]))
                 graph.work_sessions[session.work_session_id] = session
 
-            for row in con.execute("SELECT data_json FROM work_events ORDER BY seq ASC"):
-                graph.work_events.append(work_event_from_dict(_fast_json.loads(row["data_json"])))
+            for row in con.execute("SELECT seq, data_json FROM work_events ORDER BY seq ASC"):
+                data = _fast_json.loads(row["data_json"])
+                if data.get("seq") is None:
+                    data["seq"] = row["seq"]
+                graph.work_events.append(work_event_from_dict(data))
 
             if not graph.views:
                 root_node_id = str(graph.metadata.get("root_node_id") or "n_0000")
@@ -420,6 +463,188 @@ def _setup_db(con: sqlite3.Connection) -> None:
         )
         """
     )
+
+
+def _load_graph_from_connection(con: sqlite3.Connection) -> RunGraph:
+    """Load the latest graph from an open SQLite connection."""
+    graph = RunGraph()
+
+    meta_row = con.execute(
+        "SELECT value FROM run_meta WHERE key = 'graph_metadata_json'"
+    ).fetchone()
+    if meta_row:
+        graph.metadata = dict(_fast_json.loads(meta_row["value"]))
+
+    for row in con.execute("SELECT data_json FROM nodes ORDER BY seq ASC"):
+        data = _fast_json.loads(row["data_json"])
+        graph.nodes[data["node_id"]] = Node(
+            node_id=data["node_id"],
+            metadata=dict(data.get("metadata") or {}),
+        )
+
+    for row in con.execute("SELECT data_json FROM input_transitions ORDER BY seq ASC"):
+        data = _fast_json.loads(row["data_json"])
+        it = InputTransition(
+            input_transition_id=data["input_transition_id"],
+            input_node_ids=tuple(data.get("input_node_ids") or []),
+            metadata=dict(data.get("metadata") or {}),
+        )
+        graph.input_transitions[it.input_transition_id] = it
+        for node_id in it.input_node_ids:
+            graph.input_transitions_from_node.setdefault(node_id, []).append(
+                it.input_transition_id
+            )
+
+    for row in con.execute("SELECT data_json FROM output_transitions ORDER BY seq ASC"):
+        data = _fast_json.loads(row["data_json"])
+        ot = OutputTransition(
+            output_transition_id=data["output_transition_id"],
+            input_transition_id=data["input_transition_id"],
+            to_node_id=data["to_node_id"],
+            metadata=dict(data.get("metadata") or {}),
+        )
+        graph.output_transitions[ot.output_transition_id] = ot
+        graph.output_transitions_from_it.setdefault(ot.input_transition_id, []).append(
+            ot.output_transition_id
+        )
+        graph.output_transitions_to_node.setdefault(ot.to_node_id, []).append(
+            ot.output_transition_id
+        )
+
+    for row in con.execute("SELECT data_json FROM payloads ORDER BY seq ASC"):
+        payload = payload_from_dict(_fast_json.loads(row["data_json"]))
+        graph.payloads[payload.payload_id] = payload
+        if payload.target_kind == "node":
+            graph.payloads_by_node.setdefault(payload.target_id, []).append(
+                payload.payload_id
+            )
+        elif payload.target_kind == "input_transition":
+            graph.payloads_by_input_transition.setdefault(payload.target_id, []).append(
+                payload.payload_id
+            )
+        elif payload.target_kind == "output_transition":
+            graph.payloads_by_output_transition.setdefault(payload.target_id, []).append(
+                payload.payload_id
+            )
+
+    for row in con.execute("SELECT data_json FROM views ORDER BY seq ASC"):
+        data = _fast_json.loads(row["data_json"])
+        view = GraphView(
+            view_id=str(data["view_id"]),
+            name=str(data["name"]),
+            root_node_id=str(data["root_node_id"]),
+            metadata=dict(data.get("metadata") or {}),
+        )
+        graph.views[view.name] = view
+
+    for row in con.execute("SELECT data_json FROM work_sessions ORDER BY seq ASC"):
+        session = work_session_from_dict(_fast_json.loads(row["data_json"]))
+        graph.work_sessions[session.work_session_id] = session
+
+    for row in con.execute("SELECT seq, data_json FROM work_events ORDER BY seq ASC"):
+        data = _fast_json.loads(row["data_json"])
+        if data.get("seq") is None:
+            data["seq"] = row["seq"]
+        graph.work_events.append(work_event_from_dict(data))
+
+    return graph
+
+
+def _validate_append_batch(graph: RunGraph, batch: AppendBatch) -> None:
+    if batch.work_session.work_session_id != batch.work_session_id:
+        raise ValueError("batch work_session_id does not match WorkSession")
+    if batch.event.work_session_id != batch.work_session_id:
+        raise ValueError("batch work_session_id does not match WorkEvent")
+    if batch.work_session.user_id != batch.user_id or batch.event.user_id != batch.user_id:
+        raise ValueError("batch user_id does not match work records")
+
+    existing_session = graph.work_sessions.get(batch.work_session_id)
+    if existing_session is not None and existing_session.user_id != batch.user_id:
+        raise ValueError(
+            f"work_session_id {batch.work_session_id!r} belongs to "
+            f"user {existing_session.user_id!r}, not {batch.user_id!r}"
+        )
+
+    if batch.event.event_type == "plan_created":
+        input_transition = _single_batch_record(batch, "input_transition")
+        if not isinstance(input_transition.record, InputTransition):
+            raise ValueError("plan_created batch must contain an InputTransition")
+        for node_id in input_transition.record.input_node_ids:
+            if node_id not in graph.nodes:
+                raise KeyError(f"unknown input node_id: {node_id}")
+            if not is_active_node(graph, node_id):
+                raise ValueError(
+                    f"node is in a cut (inactive) branch: {node_id}; "
+                    "no new plans can extend it"
+                )
+
+
+def _single_batch_record(
+    batch: AppendBatch,
+    record_kind: str,
+) -> GraphRecordEnvelope:
+    matches = [envelope for envelope in batch.records if envelope.record_kind == record_kind]
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one {record_kind} record, got {len(matches)}")
+    return matches[0]
+
+
+def _insert_work_session_if_needed(con: sqlite3.Connection, batch: AppendBatch) -> None:
+    con.execute(
+        """
+        INSERT OR IGNORE INTO work_sessions(work_session_id, data_json)
+        VALUES (?, ?)
+        """,
+        (
+            batch.work_session.work_session_id,
+            _fast_json.dumps(batch.work_session.to_dict()),
+        ),
+    )
+
+
+def _insert_graph_record(con: sqlite3.Connection, envelope: GraphRecordEnvelope) -> None:
+    table, id_col = _table_for_record_kind(envelope.record_kind)
+    data = envelope.record.to_dict()
+    if envelope.record_kind == "view":
+        con.execute(
+            f"INSERT INTO {table} ({id_col}, name, data_json) VALUES (?, ?, ?)",
+            (envelope.record_id, data["name"], _fast_json.dumps(data)),
+        )
+        return
+    con.execute(
+        f"INSERT INTO {table} ({id_col}, data_json) VALUES (?, ?)",
+        (envelope.record_id, _fast_json.dumps(data)),
+    )
+
+
+def _insert_work_event(con: sqlite3.Connection, event: WorkEvent) -> int:
+    data = event.to_dict()
+    data.pop("seq", None)
+    cur = con.execute(
+        "INSERT INTO work_events(event_id, data_json) VALUES (?, ?)",
+        (event.event_id, _fast_json.dumps(data)),
+    )
+    event_seq = int(cur.lastrowid)
+    seq_event = replace(event, seq=event_seq)
+    con.execute(
+        "UPDATE work_events SET data_json = ? WHERE event_id = ?",
+        (_fast_json.dumps(seq_event.to_dict()), event.event_id),
+    )
+    return event_seq
+
+
+def _table_for_record_kind(record_kind: str) -> tuple[str, str]:
+    if record_kind == "node":
+        return "nodes", "node_id"
+    if record_kind == "input_transition":
+        return "input_transitions", "input_transition_id"
+    if record_kind == "output_transition":
+        return "output_transitions", "output_transition_id"
+    if record_kind == "payload":
+        return "payloads", "payload_id"
+    if record_kind == "view":
+        return "views", "view_id"
+    raise ValueError(f"unknown record_kind: {record_kind!r}")
 
 
 def _delta_insert(

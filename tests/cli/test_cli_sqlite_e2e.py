@@ -48,3 +48,36 @@ def test_sqlite_init_plan_dump(monkeypatch):
         run_dir = Path(td) / run_id
         assert (run_dir / "run.db").exists(), "run.db should exist for sqlite backend"
         assert not (run_dir / "nodes.jsonl").exists(), "nodes.jsonl should not exist for sqlite backend"
+
+
+def test_sqlite_plan_uses_append_batch_for_work_events(monkeypatch):
+    monkeypatch.setenv("STAG_STORE", "sqlite")
+    with tempfile.TemporaryDirectory() as td:
+        result = run_init_command(
+            requirement_id="r1",
+            target_type="task",
+            target_id="t1",
+            run_id="run_append",
+            store_dir=td,
+        )
+
+        plan_result = run_plan_command(
+            run_id=result["run_id"],
+            input_node_ids=[result["root_node_id"]],
+            action_type="analysis",
+            intent="append plan",
+            store_dir=td,
+            user_id="alice",
+            work_session_id="ws_agent_a",
+        )
+
+        store = resolve_store(td)
+        handle = store.load_run(result["run_id"])
+        it_id = plan_result["input_transition"]["input_transition_id"]
+        assert it_id in handle.run_graph.input_transitions
+        assert handle.run_graph.work_sessions["ws_agent_a"].user_id == "alice"
+        assert len(handle.run_graph.work_events) == 1
+        event = handle.run_graph.work_events[0]
+        assert event.seq == 1
+        assert event.event_type == "plan_created"
+        assert event.target_id == it_id
