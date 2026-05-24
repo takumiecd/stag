@@ -11,6 +11,7 @@ from stag.cli.context import (
     resolve_user_id_from_args,
     resolve_work_session_id_from_args,
 )
+from stag.cli.append_batch import graph_counts, maybe_append_or_save
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
@@ -40,6 +41,7 @@ def run_cut_command(
     if not store.run_path(run_id).exists():
         raise KeyError(f"unknown run_id: {run_id}")
     handle = store.load_run(run_id)
+    before = graph_counts(handle)
     cut = handle.cut(
         target_id,
         target_kind=target_kind,  # type: ignore[arg-type]
@@ -47,7 +49,13 @@ def run_cut_command(
         user_id=user_id,
         work_session_id=work_session_id,
     )
-    store.save_run(handle)
+    maybe_append_or_save(
+        store=store,
+        handle=handle,
+        user_id=user_id,
+        work_session_id=work_session_id,
+        before=before,
+    )
     return {"cut": cut.to_dict()}
 
 

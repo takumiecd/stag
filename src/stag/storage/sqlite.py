@@ -10,12 +10,24 @@ from typing import Any
 
 from stag.core import _json as _fast_json
 from stag.core.append import AppendBatch, AppendResult, GraphRecordEnvelope
-from stag.core.cuts import is_active_node
+from stag.core.cuts import (
+    cut_input_transition_ids,
+    cut_output_transition_ids,
+    is_active_node,
+    is_inactive_input_transition,
+    is_inactive_output_transition,
+)
 from stag.core.graph_view import GraphView
 from stag.core.run import RunHandle
 from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import InputTransition, Node, OutputTransition
-from stag.core.schema.payloads import payload_from_dict
+from stag.core.schema.payloads import (
+    CutPayload,
+    NotePayload,
+    PredictionPayload,
+    ResultPayload,
+    payload_from_dict,
+)
 from stag.core.schema.requirements import Requirement
 from stag.core.schema.work import WorkEvent, work_event_from_dict, work_session_from_dict
 from stag.storage._cache import load_cache, save_cache
@@ -213,7 +225,7 @@ class SqliteRunStore:
                 _insert_work_session_if_needed(con, batch)
                 for envelope in batch.records:
                     _insert_graph_record(con, envelope)
-                event_seq = _insert_work_event(con, batch.event)
+                event_seqs = tuple(_insert_work_event(con, event) for event in batch.events)
                 con.commit()
             except Exception:
                 con.rollback()
@@ -221,10 +233,13 @@ class SqliteRunStore:
         finally:
             con.close()
 
+        event_ids = tuple(event.event_id for event in batch.events)
         return AppendResult(
-            event_id=batch.event.event_id,
-            event_seq=event_seq,
+            event_id=event_ids[0],
+            event_seq=event_seqs[0],
             record_ids=tuple(envelope.record_id for envelope in batch.records),
+            event_ids=event_ids,
+            event_seqs=event_seqs,
         )
 
     # ------------------------------------------------------------------
@@ -553,9 +568,13 @@ def _load_graph_from_connection(con: sqlite3.Connection) -> RunGraph:
 def _validate_append_batch(graph: RunGraph, batch: AppendBatch) -> None:
     if batch.work_session.work_session_id != batch.work_session_id:
         raise ValueError("batch work_session_id does not match WorkSession")
-    if batch.event.work_session_id != batch.work_session_id:
+    if not batch.events:
+        raise ValueError("append batch requires at least one WorkEvent")
+    if any(event.work_session_id != batch.work_session_id for event in batch.events):
         raise ValueError("batch work_session_id does not match WorkEvent")
-    if batch.work_session.user_id != batch.user_id or batch.event.user_id != batch.user_id:
+    if batch.work_session.user_id != batch.user_id or any(
+        event.user_id != batch.user_id for event in batch.events
+    ):
         raise ValueError("batch user_id does not match work records")
 
     existing_session = graph.work_sessions.get(batch.work_session_id)
@@ -565,11 +584,23 @@ def _validate_append_batch(graph: RunGraph, batch: AppendBatch) -> None:
             f"user {existing_session.user_id!r}, not {batch.user_id!r}"
         )
 
-    if batch.event.event_type == "plan_created":
-        input_transition = _single_batch_record(batch, "input_transition")
-        if not isinstance(input_transition.record, InputTransition):
-            raise ValueError("plan_created batch must contain an InputTransition")
-        for node_id in input_transition.record.input_node_ids:
+    if any(event.event_type == "plan_created" for event in batch.events):
+        _validate_plan_append(graph, batch)
+    if any(event.event_type == "result_observed" for event in batch.events):
+        _validate_observe_append(graph, batch)
+    if any(event.event_type == "prediction_created" for event in batch.events):
+        _validate_predict_append(graph, batch)
+    if any(event.event_type == "note_added" for event in batch.events):
+        _validate_note_append(graph, batch)
+    if any(event.event_type == "cut_added" for event in batch.events):
+        _validate_cut_append(graph, batch)
+
+
+def _validate_plan_append(graph: RunGraph, batch: AppendBatch) -> None:
+    for envelope in _batch_records(batch, "input_transition"):
+        if not isinstance(envelope.record, InputTransition):
+            raise ValueError("plan_created batch must contain InputTransition records")
+        for node_id in envelope.record.input_node_ids:
             if node_id not in graph.nodes:
                 raise KeyError(f"unknown input node_id: {node_id}")
             if not is_active_node(graph, node_id):
@@ -579,14 +610,122 @@ def _validate_append_batch(graph: RunGraph, batch: AppendBatch) -> None:
                 )
 
 
-def _single_batch_record(
+def _validate_observe_append(graph: RunGraph, batch: AppendBatch) -> None:
+    result_payloads = [
+        envelope.record
+        for envelope in _batch_records(batch, "payload")
+        if isinstance(envelope.record, ResultPayload)
+    ]
+    if not result_payloads:
+        raise ValueError("result_observed batch must contain a ResultPayload")
+    for envelope in _batch_records(batch, "output_transition"):
+        if not isinstance(envelope.record, OutputTransition):
+            raise ValueError("result_observed batch must contain OutputTransition records")
+        _ensure_active_input_transition(graph, batch, envelope.record.input_transition_id)
+    for payload in result_payloads:
+        matched_id = payload.matched_prediction_output_id
+        if matched_id is not None:
+            if matched_id not in graph.output_transitions:
+                raise KeyError(f"unknown matched_prediction_output_id: {matched_id}")
+            if is_inactive_output_transition(graph, matched_id):
+                raise ValueError(f"matched_prediction_output_id is inactive: {matched_id}")
+            matched_ot = graph.output_transitions[matched_id]
+            matching_ots = [
+                envelope.record
+                for envelope in _batch_records(batch, "output_transition")
+                if isinstance(envelope.record, OutputTransition)
+                and envelope.record.output_transition_id == payload.target_id
+            ]
+            if matching_ots and matched_ot.input_transition_id != matching_ots[0].input_transition_id:
+                raise ValueError(
+                    f"matched_prediction_output_id belongs to a different "
+                    f"input_transition: {matched_id}"
+                )
+
+
+def _validate_predict_append(graph: RunGraph, batch: AppendBatch) -> None:
+    prediction_payloads = [
+        envelope.record
+        for envelope in _batch_records(batch, "payload")
+        if isinstance(envelope.record, PredictionPayload)
+    ]
+    if not prediction_payloads:
+        raise ValueError("prediction_created batch must contain PredictionPayload records")
+    for envelope in _batch_records(batch, "output_transition"):
+        if not isinstance(envelope.record, OutputTransition):
+            raise ValueError("prediction_created batch must contain OutputTransition records")
+        _ensure_active_input_transition(graph, batch, envelope.record.input_transition_id)
+
+
+def _validate_note_append(graph: RunGraph, batch: AppendBatch) -> None:
+    note_payloads = [
+        envelope.record
+        for envelope in _batch_records(batch, "payload")
+        if isinstance(envelope.record, NotePayload)
+    ]
+    if not note_payloads:
+        raise ValueError("note_added batch must contain a NotePayload")
+    for payload in note_payloads:
+        if payload.target_id not in graph.nodes:
+            raise KeyError(f"unknown node_id: {payload.target_id}")
+
+
+def _validate_cut_append(graph: RunGraph, batch: AppendBatch) -> None:
+    cut_payloads = [
+        envelope.record
+        for envelope in _batch_records(batch, "payload")
+        if isinstance(envelope.record, CutPayload)
+    ]
+    if not cut_payloads:
+        raise ValueError("cut_added batch must contain a CutPayload")
+    cut_its = cut_input_transition_ids(graph)
+    cut_ots = cut_output_transition_ids(graph)
+    for payload in cut_payloads:
+        if payload.target_kind == "input_transition":
+            if payload.target_id not in graph.input_transitions:
+                raise KeyError(f"unknown input_transition_id: {payload.target_id}")
+            if payload.target_id in cut_its:
+                raise ValueError(f"input_transition already cut: {payload.target_id}")
+        elif payload.target_kind == "output_transition":
+            if payload.target_id not in graph.output_transitions:
+                raise KeyError(f"unknown output_transition_id: {payload.target_id}")
+            if payload.target_id in cut_ots:
+                raise ValueError(f"output_transition already cut: {payload.target_id}")
+        else:
+            raise ValueError(f"invalid cut target_kind: {payload.target_kind!r}")
+
+
+def _ensure_active_input_transition(
+    graph: RunGraph,
     batch: AppendBatch,
-    record_kind: str,
-) -> GraphRecordEnvelope:
-    matches = [envelope for envelope in batch.records if envelope.record_kind == record_kind]
-    if len(matches) != 1:
-        raise ValueError(f"expected exactly one {record_kind} record, got {len(matches)}")
-    return matches[0]
+    input_transition_id: str,
+) -> None:
+    if input_transition_id not in graph.input_transitions:
+        matching_its = [
+            envelope.record
+            for envelope in _batch_records(batch, "input_transition")
+            if isinstance(envelope.record, InputTransition)
+            and envelope.record.input_transition_id == input_transition_id
+        ]
+        if not matching_its:
+            raise KeyError(f"unknown input_transition_id: {input_transition_id}")
+        for node_id in matching_its[0].input_node_ids:
+            if node_id not in graph.nodes:
+                raise KeyError(f"unknown input node_id: {node_id}")
+            if not is_active_node(graph, node_id):
+                raise ValueError(
+                    f"node is in a cut (inactive) branch: {node_id}; "
+                    "no new outputs can extend it"
+                )
+        return
+    if is_inactive_input_transition(graph, input_transition_id):
+        raise ValueError(
+            f"input_transition is inactive (cut or in cut subtree): {input_transition_id}"
+        )
+
+
+def _batch_records(batch: AppendBatch, record_kind: str) -> list[GraphRecordEnvelope]:
+    return [envelope for envelope in batch.records if envelope.record_kind == record_kind]
 
 
 def _insert_work_session_if_needed(con: sqlite3.Connection, batch: AppendBatch) -> None:

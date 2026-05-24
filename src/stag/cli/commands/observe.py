@@ -11,6 +11,7 @@ from stag.cli.context import (
     resolve_user_id_from_args,
     resolve_work_session_id_from_args,
 )
+from stag.cli.append_batch import graph_counts, maybe_append_or_save
 from stag.core.schema.payloads import ResultPayload
 
 
@@ -74,13 +75,20 @@ def run_observe_command(
         errors=tuple(errors or []),
         matched_prediction_output_id=matched_prediction_output_id,
     )
+    before = graph_counts(handle)
     ot = handle.observe(
         input_transition_id,
         result,
         user_id=user_id,
         work_session_id=work_session_id,
     )
-    store.save_run(handle)
+    maybe_append_or_save(
+        store=store,
+        handle=handle,
+        user_id=user_id,
+        work_session_id=work_session_id,
+        before=before,
+    )
     return {"output_transition": ot.to_dict()}
 
 

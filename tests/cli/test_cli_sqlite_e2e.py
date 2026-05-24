@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 
 from stag.cli.commands.init import run_init_command
+from stag.cli.commands.anchor import run_anchor_command
+from stag.cli.commands.cut import run_cut_command
+from stag.cli.commands.note import run_note_command
+from stag.cli.commands.observe import run_observe_command
 from stag.cli.commands.plan import run_plan_command
+from stag.cli.commands.predict import run_predict_command
 from stag.cli.context import resolve_store
 from stag.core.run.dump import DumpOptions, dump
 
@@ -81,3 +86,97 @@ def test_sqlite_plan_uses_append_batch_for_work_events(monkeypatch):
         assert event.seq == 1
         assert event.event_type == "plan_created"
         assert event.target_id == it_id
+
+
+def test_sqlite_mutating_commands_use_append_batches(monkeypatch):
+    monkeypatch.setenv("STAG_STORE", "sqlite")
+    with tempfile.TemporaryDirectory() as td:
+        result = run_init_command(
+            requirement_id="r1",
+            target_type="task",
+            target_id="t1",
+            run_id="run_all_append",
+            store_dir=td,
+        )
+        run_id = result["run_id"]
+        root = result["root_node_id"]
+
+        plan = run_plan_command(
+            run_id=run_id,
+            input_node_ids=[root],
+            action_type="analysis",
+            intent="append plan",
+            store_dir=td,
+            user_id="alice",
+            work_session_id="ws_agent_a",
+        )["input_transition"]
+        it_id = plan["input_transition_id"]
+
+        predictions = run_predict_command(
+            run_id=run_id,
+            input_transition_id=it_id,
+            max_outcomes=2,
+            store_dir=td,
+            user_id="alice",
+            work_session_id="ws_agent_a",
+        )["output_transitions"]
+
+        observed = run_observe_command(
+            run_id=run_id,
+            input_transition_id=it_id,
+            status="completed",
+            artifacts=None,
+            raw_outputs=None,
+            logs=None,
+            metrics=None,
+            errors=None,
+            matched_prediction_output_id=predictions[0]["output_transition_id"],
+            store_dir=td,
+            user_id="alice",
+            work_session_id="ws_agent_a",
+        )["output_transition"]
+
+        run_note_command(
+            run_id=run_id,
+            node_id=observed["to_node_id"],
+            text="keep this state",
+            tags=["review"],
+            store_dir=td,
+            user_id="alice",
+            work_session_id="ws_agent_a",
+        )
+
+        run_cut_command(
+            run_id=run_id,
+            target_id=predictions[1]["output_transition_id"],
+            target_kind="output_transition",
+            reason="not needed",
+            store_dir=td,
+            user_id="alice",
+            work_session_id="ws_agent_a",
+        )
+
+        anchor = run_anchor_command(
+            run_id=run_id,
+            from_node_id=observed["to_node_id"],
+            label="branch here",
+            store_dir=td,
+            user_id="alice",
+            work_session_id="ws_agent_a",
+        )["anchor"]
+
+        store = resolve_store(td)
+        handle = store.load_run(run_id)
+        event_types = [event.event_type for event in handle.run_graph.work_events]
+        assert event_types == [
+            "plan_created",
+            "prediction_created",
+            "result_observed",
+            "note_added",
+            "cut_added",
+            "plan_created",
+            "result_observed",
+        ]
+        assert [event.seq for event in handle.run_graph.work_events] == list(range(1, 8))
+        assert anchor["input_transition_id"] in handle.run_graph.input_transitions
+        assert anchor["output_transition_id"] in handle.run_graph.output_transitions

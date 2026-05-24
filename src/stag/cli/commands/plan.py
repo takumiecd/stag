@@ -11,7 +11,7 @@ from stag.cli.context import (
     resolve_user_id_from_args,
     resolve_work_session_id_from_args,
 )
-from stag.core.append import AppendBatch, GraphRecordEnvelope
+from stag.cli.append_batch import graph_counts, maybe_append_or_save
 from stag.core.schema.payloads import PlanPayload
 
 
@@ -68,57 +68,16 @@ def run_plan_command(
         inputs=dict(inputs or {}),
         assumptions=tuple(assumptions or []),
     )
-    before_input_transition_ids = set(handle.run_graph.input_transitions)
-    before_payload_ids = set(handle.run_graph.payloads)
-
+    before = graph_counts(handle)
     it = handle.plan(input_node_ids, payload, user_id=user_id, work_session_id=work_session_id)
-    if user_id is not None and work_session_id is not None and hasattr(store, "append_batch"):
-        batch = _build_plan_append_batch(
-            handle,
-            user_id=user_id,
-            work_session_id=work_session_id,
-            before_input_transition_ids=before_input_transition_ids,
-            before_payload_ids=before_payload_ids,
-        )
-        store.append_batch(batch)
-    else:
-        store.save_run(handle)
-    return {"input_transition": it.to_dict()}
-
-
-def _build_plan_append_batch(
-    handle,
-    *,
-    user_id: str,
-    work_session_id: str,
-    before_input_transition_ids: set[str],
-    before_payload_ids: set[str],
-) -> AppendBatch:
-    new_it_ids = set(handle.run_graph.input_transitions) - before_input_transition_ids
-    new_payload_ids = set(handle.run_graph.payloads) - before_payload_ids
-    if len(new_it_ids) != 1:
-        raise RuntimeError(f"expected one new input transition, got {len(new_it_ids)}")
-    if len(new_payload_ids) != 1:
-        raise RuntimeError(f"expected one new plan payload, got {len(new_payload_ids)}")
-    if not handle.run_graph.work_events:
-        raise RuntimeError("plan append batch requires a work event")
-    event = handle.run_graph.work_events[-1]
-    session = handle.run_graph.work_sessions[work_session_id]
-    it_id = next(iter(new_it_ids))
-    payload_id = next(iter(new_payload_ids))
-    it = handle.run_graph.input_transitions[it_id]
-    payload = handle.run_graph.payloads[payload_id]
-    return AppendBatch(
-        run_id=handle.run_id,
+    maybe_append_or_save(
+        store=store,
+        handle=handle,
         user_id=user_id,
         work_session_id=work_session_id,
-        work_session=session,
-        event=event,
-        records=(
-            GraphRecordEnvelope("input_transition", it.input_transition_id, it),
-            GraphRecordEnvelope("payload", payload.payload_id, payload),
-        ),
+        before=before,
     )
+    return {"input_transition": it.to_dict()}
 
 
 def cli_plan(args) -> int:

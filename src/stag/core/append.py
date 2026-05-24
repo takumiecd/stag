@@ -32,7 +32,7 @@ class AppendBatch:
     work_session_id: str
     records: tuple[GraphRecordEnvelope, ...]
     work_session: WorkSession
-    event: WorkEvent
+    events: tuple[WorkEvent, ...]
 
 
 @dataclass(frozen=True)
@@ -42,3 +42,5 @@ class AppendResult:
     event_id: str
     event_seq: int
     record_ids: tuple[str, ...]
+    event_ids: tuple[str, ...] = ()
+    event_seqs: tuple[int, ...] = ()
