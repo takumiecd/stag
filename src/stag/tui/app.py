@@ -31,6 +31,12 @@ class StagApp(App):
         Binding("+", "depth_increase", "+Depth"),
         Binding("-", "depth_decrease", "-Depth"),
         Binding("0", "recenter_flowchart", "Recenter"),
+        # Arrow keys scroll the flowchart unless the focused widget overrides
+        # them (e.g. ListView already binds up/down for cursor movement).
+        Binding("up", "flowchart_scroll('up')", show=False),
+        Binding("down", "flowchart_scroll('down')", show=False),
+        Binding("left", "flowchart_scroll('left')", show=False),
+        Binding("right", "flowchart_scroll('right')", show=False),
     ]
 
     def __init__(self, store, **kwargs):
@@ -192,6 +198,10 @@ class StagApp(App):
 
     def action_depth_decrease(self) -> None:
         self.query_one("#flowchart-view", FlowchartView).adjust_depth(-1)
+
+    def action_flowchart_scroll(self, direction: str) -> None:
+        fv = self.query_one("#flowchart-view", FlowchartView)
+        fv.scroll_arrow(direction)
 
     def action_recenter_flowchart(self) -> None:
         if self._current_handle is None:

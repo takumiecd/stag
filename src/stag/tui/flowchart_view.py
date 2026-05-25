@@ -173,18 +173,14 @@ class FlowchartView(ScrollableContainer, can_focus=True):
     # Keyboard scrolling
     # ------------------------------------------------------------------
 
-    def on_key(self, event: events.Key) -> None:
-        key = event.key
-        if key == "up":
+    def scroll_arrow(self, direction: str) -> None:
+        """Scroll one step in the given direction. Called from app-level bindings."""
+        if direction == "up":
             self.scroll_relative(y=-2, animate=False)
-            event.stop()
-        elif key == "down":
+        elif direction == "down":
             self.scroll_relative(y=2, animate=False)
-            event.stop()
-        elif key == "left":
+        elif direction == "left":
             self.scroll_relative(x=-4, animate=False)
-            event.stop()
-        elif key == "right":
+        elif direction == "right":
             self.scroll_relative(x=4, animate=False)
-            event.stop()
 
