@@ -10,7 +10,7 @@ STAG が構築しているのは、最適化プロセスのための append-only
 
 コード最適化、カーネル最適化、実験、調査では、最終的な成果物だけでなく、途中で何を試し、どうなると予測し、実際に何が起きたかが重要になります。STAG は、その試行錯誤を `RunGraph` と payload の形で保存します。
 
-CLI や Python API は、この履歴グラフを操作するための入口です。`init` で run を作り、`plan` で次の試行を記録し、`predict` で実行前の見込みを残し、`observe` で実測結果を保存します。`trace` や `show` は、保存された判断の過程を読み返すために使います。
+CLI や Python API は、この履歴グラフを操作するための入口です。`init` で run を作り、`transition create` で次の transition と output node を記録し、`payload add` で domain data を attach します。`graph trace` や `show` は、保存された判断の過程を読み返すために使います。
 
 STAG 自体は executor や code generator ではありません。人間、LLM、script、benchmark runner、executor が行った判断や結果を、あとから共有・検証できる構造として残すための基盤です。
 
@@ -24,8 +24,7 @@ RunHandle
 
 RunGraph
   ├── nodes
-  ├── input_transitions
-  ├── output_transitions
+  ├── transitions
   ├── payloads
   └── views
 
@@ -34,9 +33,7 @@ GraphView
   └── root_node_id
 ```
 
-`InputTransition` は複数 input node を受け取る入力側 transition です。`PlanPayload` はここに attach します。`OutputTransition` は 1 つの output node に到達する出力側 transition です。`PredictionPayload` / `ResultPayload` はここに attach します。
-
-node には軽いメモとして `NotePayload` を attach できます。
+`Transition` は複数 input node から必ず 1 つの output node へ接続します。domain-specific な意味は payload として attach します。汎用の `NodePayload` / `TransitionPayload` に加えて、`CutPayload` / `GitChangePayload` が組み込み payload としてあります。
 
 `RunGraph` は append-only です。一度追加した node / input transition / output transition / payload は削除せず、取り消しや無効化は `CutPayload` と read-time の計算で表します。
 
@@ -44,7 +41,7 @@ node には軽いメモとして `NotePayload` を attach できます。
 
 ```python
 import stag
-from stag import PlanPayload, Requirement, ResultPayload
+from stag import NodePayload, Requirement, TransitionPayload
 from stag.storage import JsonlRunStore
 
 requirement = Requirement(
@@ -55,30 +52,27 @@ requirement = Requirement(
 
 run = stag.init(requirement, run_id="demo")
 
-input_transition = run.plan(
+transition = run.transition(
     [run.root_node_id],
-    PlanPayload(
+    TransitionPayload(
         payload_id="pending",
         target_id="pending",
-        intent="run baseline benchmark",
+        type="experiment",
+        content={"intent": "run baseline benchmark"},
     ),
 )
 
-prediction = run.predict(input_transition.input_transition_id, max_outcomes=1)[0]
-
-observed = run.observe(
-    input_transition.input_transition_id,
-    ResultPayload(
+run.attach(
+    transition.output_node_id,
+    NodePayload(
         payload_id="pending",
         target_id="pending",
-        status="completed",
-        raw_outputs=("raw/profile.txt",),
-        metrics={"latency_ms": 1.5},
-        matched_prediction_output_id=prediction.output_transition_id,
+        type="result",
+        content={"latency_ms": 1.5, "status": "completed"},
     ),
 )
 
-history = run.trace(observed.to_node_id)
+history = run.trace(transition.output_node_id)
 
 store = JsonlRunStore("runs")
 run.save(store)
@@ -121,25 +115,21 @@ stag init req_kernel \
   --target-id csc_linear \
   --run-id demo
 
-stag plan \
+stag transition create \
   --run demo \
-  --input-node <root_node_id> \
-  --intent "run baseline benchmark"
+  --from <root_node_id> \
+  --payload-type transition_payload \
+  --field type=experiment \
+  --field intent="run baseline benchmark"
 
-stag predict \
+stag payload add \
   --run demo \
-  <input_transition_id> \
-  --max-outcomes 1
+  --node <output_node_id> \
+  --payload-type node_payload \
+  --field type=result \
+  --field latency_ms=1.5
 
-stag observe \
-  --run demo \
-  <input_transition_id> \
-  --matched-prediction <prediction_output_transition_id> \
-  --status completed \
-  --raw-output raw/profile.txt \
-  --metric latency_ms=1.5
-
-stag trace --run demo --from-node <observed_node_id>
+stag graph trace --run demo <output_node_id>
 stag show --run demo
 ```
 

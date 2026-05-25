@@ -13,19 +13,16 @@ def transition_impl(
     input_node_ids: list[str] | tuple[str, ...],
     payload: PayloadBase,
     *,
-    max_outcomes: int = 1,
     user_id: str | None = None,
     work_session_id: str | None = None,
-) -> list[Transition]:
-    """Create one or more sibling Transitions from the given input nodes.
+) -> Transition:
+    """Create one Transition from the given input nodes.
 
-    Each Transition gets:
+    The Transition gets:
     - A freshly minted output Node.
     - A copy of *payload* with a new payload_id and the transition's target_id.
 
     *payload* must be a transition-targeting payload (target_kind="transition").
-    *max_outcomes* controls how many sibling Transitions (and output Nodes) are
-    created. Default is 1.
     """
     if payload.target_kind != "transition":
         raise ValueError(
@@ -37,40 +34,31 @@ def transition_impl(
     for nid in inputs:
         self._ensure_active_node(nid)
 
-    count = max(1, max_outcomes)
-    created: list[Transition] = []
-    created_record_ids: list[str] = []
+    # Mint output node first (add_transition validates it exists).
+    output_node = Node(node_id=self._next_id("n"))
+    self.run_graph.add_node(output_node)
 
-    for _ in range(count):
-        # Mint output node first (add_transition validates it exists).
-        output_node = Node(node_id=self._next_id("n"))
-        self.run_graph.add_node(output_node)
+    transition_id = self._next_id("t")
+    transition = Transition(
+        transition_id=transition_id,
+        input_node_ids=inputs,
+        output_node_id=output_node.node_id,
+    )
+    self.run_graph.add_transition(transition)
 
-        transition_id = self._next_id("t")
-        transition = Transition(
-            transition_id=transition_id,
-            input_node_ids=inputs,
-            output_node_id=output_node.node_id,
-        )
-        self.run_graph.add_transition(transition)
-
-        # Clone payload with new IDs.
-        cloned = _clone_payload(payload, self._next_id("pl"), transition_id)
-        self.run_graph.attach_payload(cloned)
-
-        created.append(transition)
-        created_record_ids.extend([output_node.node_id, transition_id, cloned.payload_id])
+    cloned = _clone_payload(payload, self._next_id("pl"), transition_id)
+    self.run_graph.attach_payload(cloned)
 
     self.record_work_event(
         user_id=user_id,
         work_session_id=work_session_id,
         event_type="transition_created",
         target_kind="transition",
-        target_id=created[0].transition_id,
-        created_records=tuple(created_record_ids),
+        target_id=transition.transition_id,
+        created_records=(output_node.node_id, transition_id, cloned.payload_id),
         summary=_payload_summary(payload),
     )
-    return created
+    return transition
 
 
 def _clone_payload(payload: PayloadBase, new_payload_id: str, new_target_id: str) -> PayloadBase:

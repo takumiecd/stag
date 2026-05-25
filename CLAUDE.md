@@ -67,7 +67,7 @@ Old payload types `PlanPayload`, `PredictionPayload`, `ResultPayload`, `NotePayl
 
 Public verbs (each implemented in `src/stag/core/run/<verb>.py`):
 
-- `transition(input_node_ids, payload, *, max_outcomes=1, user_id=None, work_session_id=None) -> list[Transition]` — create N sibling Transitions from input nodes; `payload` must be transition-targeting
+- `transition(input_node_ids, payload, *, user_id=None, work_session_id=None) -> Transition` — create one Transition and one output Node from input nodes; `payload` must be transition-targeting
 - `attach(node_id, payload, *, user_id=None, work_session_id=None) -> PayloadBase` — attach a node-targeting payload to a node
 - `cut(target_id, *, target_kind, reason=None, user_id=None, work_session_id=None) -> CutPayload` — mark a Node or Transition inactive
 - `anchor(from_node_id, label, ...)` — create a lightweight scope anchor node
@@ -89,16 +89,19 @@ Current commands:
 
 - `current` / `use` — manage the active run pointer
 - `init` / `list` — create / list runs
-- `transition` — create a Transition (`--inputs NODE --type TYPE --content JSON [--max-outcomes N]`)
-- `cut` — cut a Node or Transition (`--node NODE_ID` or `--transition T_ID`)
+- `transition create` — create one Transition and one output Node (`--from NODE --payload-type TYPE --field key=value`)
+- `node` — inspect Nodes and their payloads
+- `payload` — list payload types/schemas and attach payloads to Nodes or Transitions
+- `cut` — cut a Node or Transition (`cut node NODE_ID` or `cut transition T_ID`)
+- `git` — attach/list/show commit hashes on Transitions via `GitChangePayload`
 - `show` — inspect a node / transition / payload as JSON
-- `trace` / `outcomes` / `reachable` — derived queries
+- `graph` — dump / trace / reachable graph queries
+- `trace` / `outcomes` / `reachable` — compatibility derived queries
 - `view` — manage `GraphView`s
 - `dump` — render the whole run as `outline` (LLM-friendly) or `mermaid` (visual)
 - `anchor` — create a scope anchor node
 - `guide` — print usage hints
 - `migrate` — convert a jsonl run dir to sqlite
-- `git` — git integration helpers
 - `sync` — sync helpers
 
 Deleted commands: `plan`, `predict`, `observe`, `note`.

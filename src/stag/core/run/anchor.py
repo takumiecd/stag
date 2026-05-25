@@ -31,12 +31,10 @@ def anchor_impl(
         content={"label": label},
         metadata=meta,
     )
-    transitions = self.transition(
+    transition = self.transition(
         [from_node_id],
         payload,
-        max_outcomes=1,
         user_id=user_id,
         work_session_id=work_session_id,
     )
-    t = transitions[0]
-    return self.run_graph.nodes[t.output_node_id]
+    return self.run_graph.nodes[transition.output_node_id]

@@ -4,31 +4,59 @@
 
 ```bash
 stag init req_demo --run-id demo
-stag transition --run demo --inputs <root_node_id> --type experiment --content '{"lr":0.01}'
-stag transition --run demo --inputs <n1_id> --type suggestion --max-outcomes 3
-stag cut --run demo --node <node_id> --reason "不採用"
-stag dump --run demo --format outline
-stag dump --run demo --format mermaid
+stag transition create --run demo --from <root_node_id> --payload-type transition_payload --field type=experiment --field lr=0.01
+stag payload add --run demo --node <node_id> --payload-type node_payload --field type=note --field text="observed result"
+stag cut node <node_id> --run demo --reason "不採用"
+stag graph dump --run demo --format outline
 ```
 
 ## コマンド一覧
 
 - `stag init <req_id>` — 新規 run 作成
 - `stag list` — run 一覧
-- `stag transition` — Transition を作成する（`--inputs`, `--type`, `--content`, `--max-outcomes`）
-- `stag cut --node NODE_ID` / `stag cut --transition T_ID` — CutPayload を append
-- `stag show --run R --node N_ID` — record を JSON で表示
-- `stag trace --run R --node N_ID` — 履歴を遡る
-- `stag outcomes --run R --transition T_ID` — output node を確認
-- `stag dump --run R [--format outline|mermaid]` — 全体を描画
-- `stag view` — GraphView 管理
-- `stag anchor` — scope anchor node を作成
-- `stag git start/finish` — Git セッション操作
-- `stag migrate` — jsonl → sqlite 変換
-- `stag tui` — TUI を起動
-- `stag current` / `stag use` — active run ポインタ管理
+- `stag use <run_id>` / `stag current` — active run ポインタ管理
+
+### Node
+
+- `stag node show <node_id>` — Node を表示
+- `stag node payloads <node_id>` — Node の payload を表示
+
+### Transition
+
+- `stag transition create --from NODE --payload-type TYPE --field key=value` — 1 Transition と 1 output Node を作成
+- `stag transition show <transition_id>` — Transition を表示
+- `stag transition output <transition_id>` — output Node を表示
+- `stag transition inputs <transition_id>` — input Node IDs を表示
+- `stag transition payloads <transition_id>` — Transition の payload を表示
+
+複数案を作る場合は、同じ input node から `transition create` を複数回実行します。
+
+### Payload
+
+- `stag payload types` — 登録済み `payload_type` を表示
+- `stag payload schema <payload_type>` — payload type の入力 field を表示
+- `stag payload add --node NODE --payload-type TYPE --field key=value` — Node に payload を追加
+- `stag payload add --transition TRANSITION --payload-type TYPE --field key=value` — Transition に payload を追加
+- `stag payload list --node NODE` / `stag payload list --transition TRANSITION` — payload 一覧
+- `stag payload show <payload_id>` — payload を表示
+
+### Cut / Git
+
+- `stag cut node <node_id>` / `stag cut transition <transition_id>` — CutPayload を追加
+- `stag git add --transition T --commit SHA` — Transition に commit hash を紐づける
+- `stag git list --transition T` — 紐づいた commit hash を表示
+- `stag git show --transition T` — GitChangePayload を表示
+
+### Graph
+
+- `stag graph dump [--format outline|mermaid]` — graph を描画
+- `stag graph trace <node_id>` — 履歴を遡る
+- `stag graph reachable <node_id>` — active subgraph を表示
+
+## 互換コマンド
+
+`stag show`, `stag dump`, `stag trace`, `stag reachable`, `stag outcomes` は残っていますが、新しい CLI では `node` / `transition` / `payload` / `graph` namespace を優先します。
 
 ## 廃止コマンド
 
 `stag plan`, `stag predict`, `stag observe`, `stag note` は削除済みです。
-`stag transition` に統一しました。

@@ -30,7 +30,7 @@ def test_cache_miss_on_empty_dir():
 
 def test_cache_roundtrip():
     run = init(_req(), run_id="cache_rt")
-    [t1] = run.transition([run.root_node_id], _tp())
+    t1 = run.transition([run.root_node_id], _tp())
     with tempfile.TemporaryDirectory() as td:
         store = JsonlRunStore(td)
         store.save_run(run)
@@ -58,7 +58,7 @@ def test_cache_miss_on_stale_counts():
 def test_cache_used_on_load():
     """JsonlRunStore.load_run should use the cache on second load."""
     run = init(_req(), run_id="cache_use")
-    [t1] = run.transition([run.root_node_id], _tp())
+    t1 = run.transition([run.root_node_id], _tp())
     with tempfile.TemporaryDirectory() as td:
         store = JsonlRunStore(td)
         store.save_run(run)

@@ -46,11 +46,9 @@ def test_init_creates_root_node_and_main_view():
 # ---------------------------------------------------------------------------
 
 
-def test_transition_max_outcomes_1():
+def test_transition_creates_single_output():
     run = init(_req())
-    transitions = run.transition([run.root_node_id], _tp("suggestion"))
-    assert len(transitions) == 1
-    t = transitions[0]
+    t = run.transition([run.root_node_id], _tp("suggestion"))
     assert isinstance(t, Transition)
     assert t.output_node_id in run.run_graph.nodes
     assert t.input_node_ids == (run.root_node_id,)
@@ -58,34 +56,14 @@ def test_transition_max_outcomes_1():
     assert any(isinstance(p, TransitionPayload) for p in payloads)
 
 
-def test_transition_max_outcomes_3():
-    run = init(_req())
-    transitions = run.transition([run.root_node_id], _tp(), max_outcomes=3)
-    assert len(transitions) == 3
-    output_nodes = {t.output_node_id for t in transitions}
-    assert len(output_nodes) == 3  # all distinct
-    for t in transitions:
-        assert t.input_node_ids == (run.root_node_id,)
-
-
-def test_transition_payload_cloned_per_outcome():
-    run = init(_req())
-    transitions = run.transition([run.root_node_id], _tp("exp"), max_outcomes=2)
-    ids = [
-        run.run_graph.payloads_for_transition(t.transition_id)[0].payload_id
-        for t in transitions
-    ]
-    assert ids[0] != ids[1]  # distinct payload_ids
-
-
 def test_transition_multi_input():
     run = init(_req())
-    [t1] = run.transition([run.root_node_id], _tp())
+    t1 = run.transition([run.root_node_id], _tp())
     n1 = t1.output_node_id
-    [t2] = run.transition([run.root_node_id], _tp())
+    t2 = run.transition([run.root_node_id], _tp())
     n2 = t2.output_node_id
 
-    [join] = run.transition([n1, n2], _tp("join"))
+    join = run.transition([n1, n2], _tp("join"))
     assert set(join.input_node_ids) == {n1, n2}
 
 
@@ -104,7 +82,7 @@ def test_transition_rejects_unknown_node():
 
 def test_transition_rejects_cut_node():
     run = init(_req())
-    [t1] = run.transition([run.root_node_id], _tp())
+    t1 = run.transition([run.root_node_id], _tp())
     n1 = t1.output_node_id
     run.cut(n1, target_kind="node")
     with pytest.raises(ValueError, match="cut"):
@@ -144,7 +122,7 @@ def test_attach_rejects_unknown_node():
 
 def test_cut_node():
     run = init(_req())
-    [t1] = run.transition([run.root_node_id], _tp())
+    t1 = run.transition([run.root_node_id], _tp())
     n1 = t1.output_node_id
     cut = run.cut(n1, target_kind="node", reason="stale")
     assert isinstance(cut, CutPayload)
@@ -153,7 +131,7 @@ def test_cut_node():
 
 def test_cut_transition():
     run = init(_req())
-    [t1] = run.transition([run.root_node_id], _tp())
+    t1 = run.transition([run.root_node_id], _tp())
     cut = run.cut(t1.transition_id, target_kind="transition")
     assert isinstance(cut, CutPayload)
 
@@ -165,8 +143,7 @@ def test_cut_transition():
 
 def test_git_change_payload_on_transition():
     run = init(_req())
-    transitions = run.transition([run.root_node_id], _tp())
-    t = transitions[0]
+    t = run.transition([run.root_node_id], _tp())
     diff = DiffSummary(files_changed=1, insertions=5, deletions=2)
     git_p = GitChangePayload(
         payload_id="_",
@@ -195,7 +172,7 @@ def test_git_change_payload_on_transition():
 
 def test_trace_returns_history():
     run = init(_req())
-    [t1] = run.transition([run.root_node_id], _tp())
+    t1 = run.transition([run.root_node_id], _tp())
     n1 = t1.output_node_id
     ctx = run.trace(n1)
     # Should include the transition that produced n1.
@@ -209,6 +186,6 @@ def test_trace_returns_history():
 
 def test_outcomes_returns_output_node():
     run = init(_req())
-    [t1] = run.transition([run.root_node_id], _tp())
+    t1 = run.transition([run.root_node_id], _tp())
     result = run.outcomes(t1.transition_id)
     assert result["output_node_ids"] == [t1.output_node_id]

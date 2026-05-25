@@ -25,10 +25,10 @@ def _np(text: str = "hello") -> NodePayload:
 
 def _make_handle():
     run = init(_req(), run_id="tui_test")
-    [t1] = run.transition([run.root_node_id], _tp("suggestion"))
+    t1 = run.transition([run.root_node_id], _tp("suggestion"))
     n1 = t1.output_node_id
     run.attach(run.root_node_id, _np("root note"))
-    [t2] = run.transition([n1], _tp("implementation"))
+    t2 = run.transition([n1], _tp("implementation"))
     return run
 
 
@@ -265,8 +265,8 @@ def _make_branching_handle():
     tp = lambda t: TransitionPayload(payload_id="_", target_id="_", type=t)
 
     # Two separate transitions from root produce two children at the same layer.
-    [t1] = run.transition([run.root_node_id], tp("left"))
-    [t2] = run.transition([run.root_node_id], tp("right"))
+    t1 = run.transition([run.root_node_id], tp("left"))
+    t2 = run.transition([run.root_node_id], tp("right"))
     return run
 
 

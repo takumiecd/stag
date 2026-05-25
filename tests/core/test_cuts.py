@@ -26,9 +26,9 @@ def _tp(t_type: str = "experiment") -> TransitionPayload:
 def _make_run_with_chain():
     """root -t1-> n1 -t2-> n2"""
     run = init(_req())
-    [t1] = run.transition([run.root_node_id], _tp())
+    t1 = run.transition([run.root_node_id], _tp())
     n1 = t1.output_node_id
-    [t2] = run.transition([n1], _tp())
+    t2 = run.transition([n1], _tp())
     n2 = t2.output_node_id
     return run, t1, n1, t2, n2
 

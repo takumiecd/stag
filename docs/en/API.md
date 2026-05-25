@@ -3,18 +3,37 @@
 Core API shape:
 
 ```python
-transition = run.plan([node_id], PlanPayload("pending", "pending", "try"))
-predicted_nodes = run.predict(transition.transition_id, max_outcomes=2)
-observed_node = run.observe(
-    transition.transition_id,
-    ResultPayload("pending", "pending", "completed"),
+from stag import Requirement, TransitionPayload, NodePayload, init
+
+run = init(Requirement("req_1", "task", "my_task"), run_id="my-run")
+
+transition = run.transition(
+    [run.root_node_id],
+    TransitionPayload(
+        payload_id="_",
+        target_id="_",
+        type="experiment",
+        content={"lr": 0.01},
+    ),
+)
+node_id = transition.output_node_id
+
+run.attach(
+    node_id,
+    NodePayload(
+        payload_id="_",
+        target_id="_",
+        type="note",
+        content={"text": "accuracy=87.2%"},
+    ),
 )
 ```
 
-`plan` creates a `Transition`, `node -> transition` edges, and a `PlanPayload`.
-`predict` creates predicted output `Node` records, `transition -> node` edges,
-and `PredictionPayload` records on the transition. `observe` creates an observed
-output `Node`, a `transition -> node` edge, and a `ResultPayload` on the
-transition.
+`run.transition(...)` creates exactly one `Transition` and one output `Node`.
+Create sibling alternatives by calling `run.transition(...)` multiple times with
+the same input node IDs.
 
 `cut(target_kind="node" | "transition")` appends a `CutPayload`.
+
+The removed APIs `plan`, `predict`, `observe`, and `note` are represented by
+`transition(...)` and `attach(...)`.

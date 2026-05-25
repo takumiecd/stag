@@ -27,9 +27,9 @@ def _np() -> NodePayload:
 
 def _make_populated_run(run_id: str = "test_run"):
     run = init(_req(), run_id=run_id)
-    [t1] = run.transition([run.root_node_id], _tp("suggestion"))
+    t1 = run.transition([run.root_node_id], _tp("suggestion"))
     n1 = t1.output_node_id
-    [t2] = run.transition([n1], _tp("implementation"))
+    t2 = run.transition([n1], _tp("implementation"))
     run.attach(run.root_node_id, _np())
     return run
 
@@ -136,7 +136,7 @@ def test_incremental_save():
         store.save_run(run)
 
         # Add more data.
-        [t1] = run.transition([run.root_node_id], _tp())
+        t1 = run.transition([run.root_node_id], _tp())
         store.save_run(run)
 
         loaded = store.load_run("rt_incr")

@@ -9,31 +9,39 @@ from stag import Requirement, TransitionPayload, NodePayload
 req = Requirement("req_1", "task", "my_task")
 run = stag.init(req, run_id="my-run")
 
-# Transition を作る（1 つの output node）
-[t1] = run.transition(
+# Transition を作る。常に 1 つの output node も作られる。
+t1 = run.transition(
     [run.root_node_id],
-    TransitionPayload(payload_id="_", target_id="_", type="experiment",
-                      content={"lr": 0.01}),
+    TransitionPayload(
+        payload_id="_",
+        target_id="_",
+        type="experiment",
+        content={"lr": 0.01},
+    ),
 )
 n1 = t1.output_node_id
 
-# Node にメモを貼る
-run.attach(n1, NodePayload(payload_id="_", target_id="_", type="note",
-                            content={"text": "accuracy=87.2%"}))
-
-# 複数の sibling（fan-out）
-variants = run.transition(
-    [n1],
-    TransitionPayload(payload_id="_", target_id="_", type="suggestion"),
-    max_outcomes=3,
+# Node に payload を貼る。
+run.attach(
+    n1,
+    NodePayload(
+        payload_id="_",
+        target_id="_",
+        type="note",
+        content={"text": "accuracy=87.2%"},
+    ),
 )
 
+# 複数の sibling を作る場合は transition を複数回作る。
+v1 = run.transition([n1], TransitionPayload(payload_id="_", target_id="_", type="suggestion"))
+v2 = run.transition([n1], TransitionPayload(payload_id="_", target_id="_", type="suggestion"))
+
 # cut（append-only な無効化）
-run.cut(variants[0].output_node_id, target_kind="node", reason="不採用")
+run.cut(v1.output_node_id, target_kind="node", reason="不採用")
 
 # multi-input join
-[join] = run.transition(
-    [variants[1].output_node_id, variants[2].output_node_id],
+join = run.transition(
+    [v1.output_node_id, v2.output_node_id],
     TransitionPayload(payload_id="_", target_id="_", type="synthesis"),
 )
 ```
@@ -41,9 +49,10 @@ run.cut(variants[0].output_node_id, target_kind="node", reason="不採用")
 ## 廃止 API
 
 `run.plan()`, `run.predict()`, `run.observe()`, `run.note()` は削除済みです。
-- plan/observe → `run.transition(..., max_outcomes=1, ...)`
-- predict → `run.transition(..., max_outcomes=N, ...)`
-- note → `run.attach(node_id, NodePayload(type="note", content={"text": "..."}))`
+
+- plan / observe / predict は `run.transition(...)` で表現します。
+- 複数案は同じ input node から `run.transition(...)` を複数回呼びます。
+- note は `run.attach(node_id, NodePayload(type="note", content={"text": "..."}))` で表現します。
 
 ## Payload 登録
 

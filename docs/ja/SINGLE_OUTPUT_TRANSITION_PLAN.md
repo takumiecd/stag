@@ -163,14 +163,13 @@ run.transition(
     input_node_ids: list[str],
     payload: PayloadBase,                  # TransitionPayload subclass instance
     *,
-    max_outcomes: int = 1,
     user_id, work_session_id,
-) -> list[Transition]
+) -> Transition
 ```
 
-- N 個の sibling Transition を生成、各 Transition に payload の **コピーを attach**（payload_id だけ振り直し）
-- 戻り値は Transition のリスト
-- max_outcomes=1 が普通（observation）。複数 sibling が欲しい時（予測の枝分かれ等）は ≥2
+- 1 個の Transition と 1 個の output Node を生成し、Transition に payload の **コピーを attach**（payload_id だけ振り直し）
+- 戻り値は Transition
+- 複数 sibling が欲しい時は、同じ input node から `run.transition(...)` を複数回呼ぶ
 
 ```python
 run.attach(
@@ -192,16 +191,16 @@ run.cut(target_id: str, *, target_kind: Literal["node", "transition"], reason=No
 ### 廃止
 
 - `run.plan()` — `run.transition()` で代替
-- `run.predict()` — `run.transition(..., max_outcomes=N)` で代替
-- `run.observe()` — `run.transition(..., max_outcomes=1)` で代替
+- `run.predict()` — 同じ input node から `run.transition(...)` を複数回呼んで代替
+- `run.observe()` — `run.transition(...)` で代替
 - `run.note()` — `run.attach(node_id, NodePayload(type="note", content={"text": ...}))` で代替（CLI には残してもいい convenience）
 
 ## CLI
 
 破壊的変更。alpha なので互換性なし。
 
-- `stag transition --inputs S0 --type suggestion --content '{"proposal": "..."}' [--max-outcomes N]` — generic do
-- `stag attach <node> --type note --content '{"text": "..."}'` — node payload
+- `stag transition create --from S0 --payload-type transition_payload --field type=suggestion --field proposal="..."` — generic do
+- `stag payload add --node <node> --payload-type node_payload --field type=note --field text="..."` — node payload
 - `stag cut <target>` — convenience
 - `stag show` / `stag trace` / `stag outcomes` / `stag dump` — 新スキーマに追従
 - `stag tui` — 新スキーマに追従
@@ -283,7 +282,7 @@ MVP 案: **(a)** を採用。ユーザーが custom payload class を import せ
 
 ## 未決の論点（実装時に決める）
 
-- `run.transition()` のシグネチャ詳細: `max_outcomes=1` で sibling 1 個か、`max_outcomes=N` で payload を N 個分受け取るか
+- `run.transition()` は 1 Transition / 1 output Node に固定。複数 sibling は複数回呼び出しで表す
 - `run.attach()` という名前が良いか別の動詞か（`add_payload` 等）
 - CLI で convenience verb (`stag note` 等) を完全削除するか、type="note" 用の shortcut として残すか
 - `payload_from_dict` の fallback (a) を本当に許すか、registry 必須にするか

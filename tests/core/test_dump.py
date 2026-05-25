@@ -20,9 +20,9 @@ def _tp(t_type: str = "experiment") -> TransitionPayload:
 
 def _make_run():
     run = init(_req(), run_id="dump_test")
-    [t1] = run.transition([run.root_node_id], _tp("suggestion"))
+    t1 = run.transition([run.root_node_id], _tp("suggestion"))
     n1 = t1.output_node_id
-    [t2] = run.transition([n1], _tp("implementation"))
+    t2 = run.transition([n1], _tp("implementation"))
     return run, t1, n1, t2
 
 

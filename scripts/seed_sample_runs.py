@@ -49,26 +49,29 @@ def _scheduling_run(store: JsonlRunStore) -> None:
     run = stag.init(req, run_id="scheduling-demo")
 
     # Baseline experiment.
-    [t_baseline] = run.transition(
+    t_baseline = run.transition(
         [run.root_node_id],
         _tp("experiment", algorithm="FIFO", max_queue_size=100),
     )
     n_baseline = t_baseline.output_node_id
     run.attach(n_baseline, _np("makespan=142.0  wait_p95=38.0"))
 
-    # Two sibling variants from baseline (max_outcomes=2).
-    variants = run.transition(
+    # Two sibling variants from baseline.
+    t_sjf_opt = run.transition(
         [n_baseline],
         _tp("experiment", algorithm="SJF", max_queue_size=100),
-        max_outcomes=2,
     )
-    n_sjf_opt = variants[0].output_node_id
-    n_sjf_pess = variants[1].output_node_id
+    t_sjf_pess = run.transition(
+        [n_baseline],
+        _tp("experiment", algorithm="SJF", max_queue_size=100, variant="pathological"),
+    )
+    n_sjf_opt = t_sjf_opt.output_node_id
+    n_sjf_pess = t_sjf_pess.output_node_id
     run.attach(n_sjf_opt, _np("makespan=118.0  wait_p95=27.0 (optimistic)"))
     run.attach(n_sjf_pess, _np("makespan=135.0  wait_p95=33.0 (pathological)"))
 
     # Observe one of them.
-    [t_observe] = run.transition(
+    t_observe = run.transition(
         [n_sjf_opt],
         _tp("implementation", notes="deploy SJF to staging"),
     )
@@ -88,7 +91,7 @@ def _kernel_run(store: JsonlRunStore) -> None:
     run = stag.init(req, run_id="kernel-opt-demo")
 
     # First suggestion.
-    [t1] = run.transition(
+    t1 = run.transition(
         [run.root_node_id],
         _tp("suggestion", param="sparse_threshold", value=0.5),
     )
@@ -117,7 +120,7 @@ def _kernel_run(store: JsonlRunStore) -> None:
     )
 
     # Second iteration from result.
-    [t2] = run.transition(
+    t2 = run.transition(
         [n1],
         _tp("suggestion", param="sparse_threshold", value=0.3),
     )
@@ -141,7 +144,7 @@ def _synthesis_run(store: JsonlRunStore) -> None:
     run = stag.init(req, run_id="synthesis-demo")
 
     # Branch A: performance analysis.
-    [ta] = run.transition(
+    ta = run.transition(
         [run.root_node_id],
         _tp("analysis", domain="performance"),
     )
@@ -149,7 +152,7 @@ def _synthesis_run(store: JsonlRunStore) -> None:
     run.attach(na, _np("hot path: matrix multiply bottleneck"))
 
     # Branch B: correctness analysis.
-    [tb] = run.transition(
+    tb = run.transition(
         [run.root_node_id],
         _tp("analysis", domain="correctness"),
     )
@@ -157,7 +160,7 @@ def _synthesis_run(store: JsonlRunStore) -> None:
     run.attach(nb, _np("edge case: empty input not handled"))
 
     # Join both analyses into a synthesis (multi-input transition).
-    [t_join] = run.transition(
+    t_join = run.transition(
         [na, nb],
         _tp("synthesis", strategy="combined fix"),
     )

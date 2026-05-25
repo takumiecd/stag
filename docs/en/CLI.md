@@ -4,17 +4,53 @@ Basic flow:
 
 ```bash
 stag init req_demo --run-id demo
-stag plan --run demo --input-node <node_id> --intent "try baseline"
-stag predict --run demo <transition_id> --max-outcomes 2
-stag observe --run demo <transition_id> --status completed --metric score=1.0
-stag show --run demo --transition <transition_id> --with-payloads --outputs
-stag dump --run demo --fmt mermaid
+stag transition create --run demo --from <root_node_id> --payload-type transition_payload --field type=experiment --field lr=0.01
+stag payload add --run demo --node <node_id> --payload-type node_payload --field type=note --field text="observed result"
+stag cut node <node_id> --run demo --reason "discarded"
+stag graph dump --run demo --format outline
 ```
 
-- `stag plan`: append a Transition with incoming node edges and a PlanPayload.
-- `stag predict`: append predicted output nodes and PredictionPayload records.
-- `stag observe`: append an observed output node and a ResultPayload.
-- `stag cut --node` / `stag cut --transition`: append a CutPayload.
-- `stag outcomes <transition_id>`: list output nodes for a transition.
-- `stag git start <transition_id>`: start Git tracking for a transition.
-- `stag git finish <session_id>`: attach Result/Git payloads to the transition.
+Core commands:
+
+- `stag init <req_id>`: create a run
+- `stag list`: list runs
+- `stag use <run_id>` / `stag current`: manage the active run pointer
+
+Node:
+
+- `stag node show <node_id>`
+- `stag node payloads <node_id>`
+
+Transition:
+
+- `stag transition create --from NODE --payload-type TYPE --field key=value`
+- `stag transition show <transition_id>`
+- `stag transition output <transition_id>`
+- `stag transition inputs <transition_id>`
+- `stag transition payloads <transition_id>`
+
+Each transition has exactly one output node. Create multiple sibling transitions by running `transition create` multiple times from the same input node.
+
+Payload:
+
+- `stag payload types`
+- `stag payload schema <payload_type>`
+- `stag payload add --node NODE --payload-type TYPE --field key=value`
+- `stag payload add --transition TRANSITION --payload-type TYPE --field key=value`
+- `stag payload list --node NODE` / `stag payload list --transition TRANSITION`
+- `stag payload show <payload_id>`
+
+Cut / Git:
+
+- `stag cut node <node_id>` / `stag cut transition <transition_id>`
+- `stag git add --transition T --commit SHA`
+- `stag git list --transition T`
+- `stag git show --transition T`
+
+Graph:
+
+- `stag graph dump [--format outline|mermaid]`
+- `stag graph trace <node_id>`
+- `stag graph reachable <node_id>`
+
+Compatibility commands such as `stag show`, `stag dump`, `stag trace`, `stag reachable`, and `stag outcomes` still exist. Prefer the `node`, `transition`, `payload`, and `graph` namespaces for new usage.

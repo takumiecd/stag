@@ -10,6 +10,7 @@ import pytest
 
 from stag.cli.commands.init import run_init_command
 from stag.cli.commands.list import run_list_command
+from stag.cli.commands.payload import run_payload_add_command, run_payload_list_command
 from stag.cli.commands.transition import run_transition_command
 from stag.cli.commands.cut import run_cut_command
 from stag.cli.commands.dump import run_dump_command
@@ -84,16 +85,14 @@ def test_transition_creates_transition():
             input_node_ids=[root_id],
             payload_type="suggestion",
             content={"proposal": "try lr=0.01"},
-            max_outcomes=1,
             store_dir=_store_dir(td),
         )
-        assert len(tr_result["transitions"]) == 1
-        t = tr_result["transitions"][0]
+        t = tr_result["transition"]
         assert t["transition_id"].startswith("t_")
         assert t["output_node_id"].startswith("n_")
 
 
-def test_transition_max_outcomes():
+def test_transition_always_creates_one_output_node():
     with tempfile.TemporaryDirectory() as td:
         result = _init(td)
         root_id = result["root_node_id"]
@@ -102,10 +101,9 @@ def test_transition_max_outcomes():
             input_node_ids=[root_id],
             payload_type="suggestion",
             content={},
-            max_outcomes=3,
             store_dir=_store_dir(td),
         )
-        assert len(tr_result["transitions"]) == 3
+        assert tr_result["transition"]["output_node_id"].startswith("n_")
 
 
 def test_transition_unknown_run_raises():
@@ -136,7 +134,7 @@ def test_cut_node():
             content={},
             store_dir=_store_dir(td),
         )
-        output_node_id = tr_result["transitions"][0]["output_node_id"]
+        output_node_id = tr_result["transition"]["output_node_id"]
         cut_result = run_cut_command(
             run_id="test_run",
             target_id=output_node_id,
@@ -146,6 +144,29 @@ def test_cut_node():
         )
         assert cut_result["cut"]["target_kind"] == "node"
         assert cut_result["cut"]["target_id"] == output_node_id
+
+
+def test_payload_add_and_list_node_payload():
+    with tempfile.TemporaryDirectory() as td:
+        result = _init(td)
+        root_id = result["root_node_id"]
+        add_result = run_payload_add_command(
+            run_id="test_run",
+            target_kind="node",
+            target_id=root_id,
+            payload_type="node_payload",
+            field_data={"type": "note", "text": "hello"},
+            json_data={},
+            store_dir=_store_dir(td),
+        )
+        assert add_result["payload"]["payload_type"] == "node_payload"
+        listed = run_payload_list_command(
+            run_id="test_run",
+            target_kind="node",
+            target_id=root_id,
+            store_dir=_store_dir(td),
+        )
+        assert listed["payloads"][0]["content"]["text"] == "hello"
 
 
 # ---------------------------------------------------------------------------
