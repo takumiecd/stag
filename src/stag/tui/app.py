@@ -141,10 +141,13 @@ class StagApp(App):
         )
         self._set_markdown(md)
 
-        # If a node was clicked, recenter the flowchart on that node.
+        fv = self.query_one("#flowchart-view", FlowchartView)
         if event.kind == "node":
-            fv = self.query_one("#flowchart-view", FlowchartView)
+            # Clicking a node recenters the flowchart on it and clears any prior selection.
             fv.show(self._current_handle, event.raw_id)
+        else:
+            # Transition click: keep current center, just highlight the transition.
+            fv.set_selected(event.kind, event.raw_id)
 
     # ------------------------------------------------------------------
     # Detail pane helpers

@@ -25,7 +25,7 @@ from stag.core.cuts import inactive_node_ids, inactive_transition_ids
 from stag.core.run.handle import RunHandle
 
 
-CELL_W = 14
+CELL_W = 18
 BAND_H = 5   # rows per content band
 GAP_H = 2    # rows between bands (used for connectors)
 
@@ -69,6 +69,7 @@ def render_flowchart(
     handle: RunHandle,
     center_node_id: str,
     depth: int = 2,
+    selected: tuple[str, str] | None = None,
 ) -> tuple[list[str], list[ClickRegion]]:
     """Return (lines, click_regions) representing a flowchart subgraph.
 
@@ -137,9 +138,13 @@ def render_flowchart(
     for layer_idx in range(min_layer, max_layer + 1):
         items = by_layer.get(layer_idx, [])
         n_items = len(items)
-        spacing = total_cols // (n_items + 1) if n_items else total_cols // 2
+        if n_items == 0:
+            continue
+        # Each item gets a CELL_W-wide slot. Layer items are centered within total_cols.
+        layer_width = n_items * CELL_W
+        layer_left = (total_cols - layer_width) // 2
         for pos, item in enumerate(items):
-            col_centers[item] = spacing * (pos + 1)
+            col_centers[item] = layer_left + pos * CELL_W + CELL_W // 2
 
     markup_lines, regions = _build_markup_lines(
         handle,
@@ -150,6 +155,7 @@ def render_flowchart(
         inactive_nodes,
         inactive_trans,
         center_node_id,
+        selected,
         min_layer,
         max_layer,
         total_cols,
@@ -192,6 +198,7 @@ def _build_markup_lines(
     inactive_nodes,
     inactive_trans,
     center_node_id,
+    selected,
     min_layer,
     max_layer,
     total_cols,
@@ -278,10 +285,18 @@ def _build_markup_lines(
             if kind == "node":
                 sl = state_labels.get(rid, "?")
                 is_cut = rid in inactive_nodes
-                is_center = rid == center_node_id
+                is_selected = selected == ("node", rid)
+                is_center = rid == center_node_id and not is_selected
                 color = "red" if is_cut else "white"
-                wrap_open = "[reverse]" if is_center else f"[{color}]"
-                wrap_close = "[/reverse]" if is_center else f"[/{color}]"
+                if is_selected:
+                    wrap_open = "[bold yellow reverse]"
+                    wrap_close = "[/bold yellow reverse]"
+                elif is_center:
+                    wrap_open = "[reverse]"
+                    wrap_close = "[/reverse]"
+                else:
+                    wrap_open = f"[{color}]"
+                    wrap_close = f"[/{color}]"
                 label = f"✂{sl}" if is_cut else sl
                 label = label[:6]
                 half = max(len(label) // 2 + 1, 3)
@@ -314,24 +329,30 @@ def _build_markup_lines(
                 pl = plan_labels.get(rid, "?")
                 t_type = _transition_type(handle, rid)
                 is_cut = rid in inactive_trans
+                is_selected = selected == ("transition", rid)
                 color = "red" if is_cut else "cyan"
-                # Show: ◇ P1 experiment (truncated to fit cell width)
                 label_full = f"◇ {pl}"
                 if t_type:
                     label_full = f"◇ {pl} {t_type}"
-                # Truncate to CELL_W - 1
-                if len(label_full) > CELL_W - 1:
-                    label_full = label_full[:CELL_W - 2] + "…"
-                text = label_full
-                visible_len = len(text)
+                # Constrain label width to CELL_W - 2 to guarantee a 2-col gap between siblings.
+                max_label = CELL_W - 2
+                if len(label_full) > max_label:
+                    label_full = label_full[:max_label - 1] + "…"
+                visible_len = len(label_full)
+                if is_selected:
+                    markup = f"[bold yellow reverse]{label_full}[/bold yellow reverse]"
+                else:
+                    markup = f"[{color}]{label_full}[/{color}]"
+                # Center label on col_center.
+                left = col_center - visible_len // 2
                 abs_row = band_start + 2
                 row_markup.setdefault(abs_row, []).append(
-                    (col_center, f"[{color}]{text}[/{color}]", visible_len, "transition", rid)
+                    (left, markup, visible_len, "transition", rid)
                 )
                 regions.append(ClickRegion(
                     row=abs_row,
-                    col_start=max(0, col_center - 1),
-                    col_end=col_center + visible_len,
+                    col_start=max(0, left - 1),
+                    col_end=left + visible_len,
                     kind="transition",
                     raw_id=rid,
                 ))

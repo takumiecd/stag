@@ -18,11 +18,16 @@ class FlowchartItemClicked(Message):
         self.raw_id = raw_id
 
 
-class FlowchartView(Widget):
-    """Scrollable, clickable widget that renders the flowchart for a given center node.
+# Mouse-movement threshold (in chars) below which a press-release is treated as a click.
+_DRAG_THRESHOLD = 2
 
-    Renders Rich-markup lines via a scrollable Widget.
-    Posts FlowchartItemClicked messages when the user clicks a node or transition.
+
+class FlowchartView(Widget, can_focus=True):
+    """Scrollable, clickable, drag-pannable flowchart widget.
+
+    - mouse wheel / arrow keys: scroll
+    - left-button drag: pan
+    - left-button click (no drag): post FlowchartItemClicked on the hit region
     """
 
     DEFAULT_CSS = """
@@ -32,25 +37,45 @@ class FlowchartView(Widget):
     }
     """
 
+    BINDINGS = [
+        ("up", "scroll_up", "Scroll up"),
+        ("down", "scroll_down", "Scroll down"),
+        ("left", "scroll_left", "Scroll left"),
+        ("right", "scroll_right", "Scroll right"),
+        ("pageup", "page_up", "Page up"),
+        ("pagedown", "page_down", "Page down"),
+        ("home", "scroll_home", "Top"),
+        ("end", "scroll_end", "Bottom"),
+    ]
+
     _depth: int = 2
     _handle = None
     _center_node_id: str | None = None
-    _drag_start: tuple[int, int] | None = None
-    _drag_scroll_start: tuple[int, int] | None = None
+    _selected: tuple[str, str] | None = None
+    _drag_origin: tuple[int, int] | None = None
+    _drag_scroll_start: tuple[float, float] | None = None
+    _drag_moved: bool = False
     _lines: list[str] = []
     _click_map: list[ClickRegion] = []
 
     def show(self, handle, center_node_id: str, depth: int | None = None) -> None:
         self._handle = handle
         self._center_node_id = center_node_id
+        self._selected = None
         if depth is not None:
             self._depth = depth
         else:
             self._depth = self._auto_depth()
         self._refresh_lines()
 
+    def set_selected(self, kind: str | None, raw_id: str | None) -> None:
+        if kind is None or raw_id is None:
+            self._selected = None
+        else:
+            self._selected = (kind, raw_id)
+        self._refresh_lines()
+
     def _auto_depth(self) -> int:
-        """Estimate depth based on widget size. Cap at 4."""
         h = self.size.height or 24
         from stag.tui.flowchart import BAND_H
         return max(1, min(4, (h // BAND_H) - 1))
@@ -58,7 +83,9 @@ class FlowchartView(Widget):
     def _refresh_lines(self) -> None:
         if self._handle is None or self._center_node_id is None:
             return
-        lines, regions = render_flowchart(self._handle, self._center_node_id, self._depth)
+        lines, regions = render_flowchart(
+            self._handle, self._center_node_id, self._depth, selected=self._selected
+        )
         self._lines = lines
         self._click_map = regions
         self.refresh()
@@ -74,17 +101,43 @@ class FlowchartView(Widget):
         self.scroll_home(animate=False)
 
     # ------------------------------------------------------------------
-    # Click handling
+    # Mouse: drag-pan + click (mutually exclusive based on movement)
     # ------------------------------------------------------------------
 
+    def on_mouse_down(self, event: MouseDown) -> None:
+        if event.button != 1:
+            return
+        self._drag_origin = (event.screen_x, event.screen_y)
+        self._drag_scroll_start = (self.scroll_x, self.scroll_y)
+        self._drag_moved = False
+        self.capture_mouse()
+        self.focus()
+
+    def on_mouse_move(self, event: MouseMove) -> None:
+        if self._drag_origin is None:
+            return
+        dx = self._drag_origin[0] - event.screen_x
+        dy = self._drag_origin[1] - event.screen_y
+        if not self._drag_moved and abs(dx) + abs(dy) < _DRAG_THRESHOLD:
+            return
+        self._drag_moved = True
+        sx, sy = self._drag_scroll_start or (0, 0)
+        self.scroll_to(sx + dx, sy + dy, animate=False)
+
+    def on_mouse_up(self, _event: MouseUp) -> None:
+        self.release_mouse()
+        self._drag_origin = None
+        self._drag_scroll_start = None
+        # _drag_moved cleared on next mouse_down; on_click checks it.
+
     def on_click(self, event: Click) -> None:
-        """Translate click coords to content coords and look up click map."""
-        # event.x / event.y are relative to the widget's content origin
-        # (already adjusted for scroll by Textual for content-area events).
-        # We use scroll_offset to translate screen-relative → content-relative.
+        # If the user dragged, suppress the click so we don't navigate accidentally.
+        if self._drag_moved:
+            self._drag_moved = False
+            event.stop()
+            return
         content_x = event.x + int(self.scroll_x)
         content_y = event.y + int(self.scroll_y)
-
         for region in self._click_map:
             if region.row == content_y and region.col_start <= content_x <= region.col_end:
                 self.post_message(FlowchartItemClicked(region.kind, region.raw_id))
@@ -92,24 +145,29 @@ class FlowchartView(Widget):
                 return
 
     # ------------------------------------------------------------------
-    # Drag-to-pan (preserved from original)
+    # Keyboard scrolling
     # ------------------------------------------------------------------
 
-    def on_mouse_down(self, event: MouseDown) -> None:
-        if event.button == 1:
-            self._drag_start = (event.screen_x, event.screen_y)
-            self._drag_scroll_start = (self.scroll_x, self.scroll_y)
-            self.capture_mouse()
+    def action_scroll_up(self) -> None:
+        self.scroll_relative(y=-2, animate=False)
 
-    def on_mouse_move(self, event: MouseMove) -> None:
-        if self._drag_start is None:
-            return
-        dx = self._drag_start[0] - event.screen_x
-        dy = self._drag_start[1] - event.screen_y
-        sx, sy = self._drag_scroll_start or (0, 0)
-        self.scroll_to(sx + dx, sy + dy, animate=False)
+    def action_scroll_down(self) -> None:
+        self.scroll_relative(y=2, animate=False)
 
-    def on_mouse_up(self, _event: MouseUp) -> None:
-        self._drag_start = None
-        self._drag_scroll_start = None
-        self.release_mouse()
+    def action_scroll_left(self) -> None:
+        self.scroll_relative(x=-4, animate=False)
+
+    def action_scroll_right(self) -> None:
+        self.scroll_relative(x=4, animate=False)
+
+    def action_page_up(self) -> None:
+        self.scroll_relative(y=-(self.size.height or 10), animate=False)
+
+    def action_page_down(self) -> None:
+        self.scroll_relative(y=(self.size.height or 10), animate=False)
+
+    def action_scroll_home(self) -> None:
+        self.scroll_home(animate=False)
+
+    def action_scroll_end(self) -> None:
+        self.scroll_end(animate=False)
