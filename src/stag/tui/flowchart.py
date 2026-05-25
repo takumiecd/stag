@@ -181,9 +181,9 @@ def _build_markup_lines(
                     if 0 <= c < total_cols:
                         band_rows[row_idx][c] = s
 
-                place(1, left, wrap_open + top_str)
-                place(2, left, mid_str)
-                place(3, left, bot_str + wrap_close)
+                place(1, left, f"{wrap_open}{top_str}{wrap_close}")
+                place(2, left, f"{wrap_open}{mid_str}{wrap_close}")
+                place(3, left, f"{wrap_open}{bot_str}{wrap_close}")
 
             else:  # transition
                 pl = plan_labels.get(rid, "?")
