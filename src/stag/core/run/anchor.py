@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from stag.core.schema.graph import OutputTransition
+from stag.core.schema.graph import Node
 from stag.core.schema.payloads import PlanPayload, ResultPayload
 
 
@@ -14,7 +14,7 @@ def anchor_impl(
     metadata: dict | None = None,
     user_id: str | None = None,
     work_session_id: str | None = None,
-) -> OutputTransition:
+) -> Node:
     """Create a lightweight scope anchor node from an existing node.
 
     An anchor is represented using the existing graph model:
@@ -33,7 +33,7 @@ def anchor_impl(
         action_type="scope_refinement",
         metadata={"kind": "anchor", "label": label},
     )
-    it = self.plan([from_node_id], plan, user_id=user_id, work_session_id=work_session_id)
+    transition = self.plan([from_node_id], plan, user_id=user_id, work_session_id=work_session_id)
 
     result = ResultPayload(
         payload_id="pending",
@@ -42,7 +42,7 @@ def anchor_impl(
         metadata=meta,
     )
     return self.observe(
-        it.input_transition_id,
+        transition.transition_id,
         result,
         user_id=user_id,
         work_session_id=work_session_id,

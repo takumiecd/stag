@@ -16,13 +16,15 @@ from stag.core.schema.payloads import PlanPayload
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
-    parser = subparsers.add_parser(
-        "plan", help="Create an InputTransition from one or more nodes"
-    )
+    parser = subparsers.add_parser("plan", help="Create a Transition from one or more nodes")
     parser.add_argument("--run", default=None)
     parser.add_argument(
-        "--input-node", action="append", required=True, dest="input_nodes",
-        metavar="NODE_ID", help="Input node (repeatable for multi-node plans)"
+        "--input-node",
+        action="append",
+        required=True,
+        dest="input_nodes",
+        metavar="NODE_ID",
+        help="Input node (repeatable for multi-node plans)",
     )
     parser.add_argument("--action-type", default="analysis")
     parser.add_argument("--intent", default="inspect state and propose next action")
@@ -69,7 +71,9 @@ def run_plan_command(
         assumptions=tuple(assumptions or []),
     )
     before = graph_counts(handle)
-    it = handle.plan(input_node_ids, payload, user_id=user_id, work_session_id=work_session_id)
+    transition = handle.plan(
+        input_node_ids, payload, user_id=user_id, work_session_id=work_session_id
+    )
     maybe_append_or_save(
         store=store,
         handle=handle,
@@ -77,7 +81,7 @@ def run_plan_command(
         work_session_id=work_session_id,
         before=before,
     )
-    return {"input_transition": it.to_dict()}
+    return {"transition": transition.to_dict()}
 
 
 def cli_plan(args) -> int:
@@ -93,5 +97,5 @@ def cli_plan(args) -> int:
         user_id=resolve_user_id_from_args(args),
         work_session_id=resolve_work_session_id_from_args(args),
     )
-    print(json.dumps(result["input_transition"], ensure_ascii=False, indent=2))
+    print(json.dumps(result["transition"], ensure_ascii=False, indent=2))
     return 0

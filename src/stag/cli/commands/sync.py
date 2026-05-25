@@ -8,14 +8,12 @@ import os
 from pathlib import Path
 
 from stag.cli.context import resolve_run_id_from_args, resolve_store, resolve_user_id_from_args
-from stag.core.sync.local import (
-    default_remote_dir,
-    load_sync_config,
-    sync_init,
-    sync_pull,
-    sync_push,
-    sync_status,
-)
+
+
+def _sync_local():
+    from stag.core.sync import local
+
+    return local
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
@@ -69,12 +67,13 @@ def run_sync_init_command(
     if not store.run_path(run_id).exists():
         raise KeyError(f"unknown run_id: {run_id}")
     handle = store.load_run(run_id)
-    return sync_init(
+    sync = _sync_local()
+    return sync.sync_init(
         handle=handle,
         run_path=store.run_path(run_id),
         remote=remote,
         shared_run_id=shared_run_id,
-        remote_dir=remote_dir or str(default_remote_dir(store_dir)),
+        remote_dir=remote_dir or str(sync.default_remote_dir(store_dir)),
         workspace_id=workspace_id or _default_workspace_id(),
         actor_id=actor_id,
     )
@@ -99,7 +98,8 @@ def run_sync_status_command(
         remote_dir=remote_dir,
         store_dir=store_dir,
     )
-    return sync_status(
+    sync = _sync_local()
+    return sync.sync_status(
         handle=handle,
         remote=cfg["remote"],
         shared_run_id=cfg["shared_run_id"],
@@ -128,7 +128,8 @@ def run_sync_push_command(
         remote_dir=remote_dir,
         store_dir=store_dir,
     )
-    return sync_push(
+    sync = _sync_local()
+    return sync.sync_push(
         handle=handle,
         remote=cfg["remote"],
         shared_run_id=cfg["shared_run_id"],
@@ -157,7 +158,8 @@ def run_sync_pull_command(
         remote_dir=remote_dir,
         store_dir=store_dir,
     )
-    result = sync_pull(
+    sync = _sync_local()
+    result = sync.sync_pull(
         handle=handle,
         remote=cfg["remote"],
         shared_run_id=cfg["shared_run_id"],
@@ -221,7 +223,7 @@ def _resolve_sync_config(
 ) -> dict[str, str]:
     if shared_run_id is None or remote is None or remote_dir is None:
         try:
-            cfg = load_sync_config(run_path)
+            cfg = _sync_local().load_sync_config(run_path)
         except RuntimeError:
             if shared_run_id is None:
                 raise
@@ -231,7 +233,8 @@ def _resolve_sync_config(
     return {
         "shared_run_id": shared_run_id or cfg["shared_run_id"],
         "remote": remote or cfg.get("remote", "local-shared"),
-        "remote_dir": remote_dir or cfg.get("remote_dir", str(default_remote_dir(store_dir))),
+        "remote_dir": remote_dir
+        or cfg.get("remote_dir", str(_sync_local().default_remote_dir(store_dir))),
         "workspace_id": cfg.get("workspace_id", _default_workspace_id()),
         "actor_id": cfg.get("actor_id", "user"),
     }

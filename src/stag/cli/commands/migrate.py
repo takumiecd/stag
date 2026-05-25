@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 
 from stag.storage.jsonl import JsonlRunStore
-from stag.storage.sqlite import SqliteRunStore
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
@@ -70,6 +69,8 @@ def run_migrate_command(
         raise ValueError(f"unsupported target format: {to!r}")
 
     src_store = JsonlRunStore(store_dir)
+    from stag.storage.sqlite import SqliteRunStore
+
     dst_store = SqliteRunStore(store_dir)
 
     if all_runs:

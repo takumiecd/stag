@@ -30,7 +30,7 @@ def _parse_metrics(metric_list: list[str] | None) -> dict[str, float]:
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("observe", help="Record an observed execution result")
-    parser.add_argument("input_transition_id", help="InputTransition to attach result to")
+    parser.add_argument("transition_id", help="Transition to attach result to")
     parser.add_argument("--run", default=None)
     parser.add_argument("--status", default="completed")
     parser.add_argument("--artifact", action="append")
@@ -38,7 +38,9 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument("--log", action="append")
     parser.add_argument("--metric", action="append")
     parser.add_argument("--error", action="append")
-    parser.add_argument("--matched-prediction", default=None, dest="matched_prediction_output_id")
+    parser.add_argument(
+        "--matched-prediction", default=None, dest="matched_prediction_transition_id"
+    )
     parser.add_argument("--store-dir", default=".stag/runs")
     parser.add_argument("--user", default=None)
     parser.add_argument("--work-session", default=None)
@@ -48,14 +50,14 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
 def run_observe_command(
     *,
     run_id: str,
-    input_transition_id: str,
+    transition_id: str,
     status: str,
     artifacts: list[str] | None,
     raw_outputs: list[str] | None,
     logs: list[str] | None,
     metrics: dict[str, float] | None,
     errors: list[str] | None,
-    matched_prediction_output_id: str | None = None,
+    matched_prediction_transition_id: str | None = None,
     store_dir: str,
     user_id: str | None = None,
     work_session_id: str | None = None,
@@ -73,11 +75,11 @@ def run_observe_command(
         logs=tuple(logs or []),
         metrics=dict(metrics or {}),
         errors=tuple(errors or []),
-        matched_prediction_output_id=matched_prediction_output_id,
+        matched_prediction_transition_id=matched_prediction_transition_id,
     )
     before = graph_counts(handle)
-    ot = handle.observe(
-        input_transition_id,
+    node = handle.observe(
+        transition_id,
         result,
         user_id=user_id,
         work_session_id=work_session_id,
@@ -89,23 +91,23 @@ def run_observe_command(
         work_session_id=work_session_id,
         before=before,
     )
-    return {"output_transition": ot.to_dict()}
+    return {"node": node.to_dict()}
 
 
 def cli_observe(args) -> int:
     result = run_observe_command(
         run_id=resolve_run_id_from_args(args),
-        input_transition_id=args.input_transition_id,
+        transition_id=args.transition_id,
         status=args.status,
         artifacts=getattr(args, "artifact", None),
         raw_outputs=getattr(args, "raw_output", None),
         logs=getattr(args, "log", None),
         metrics=_parse_metrics(getattr(args, "metric", None)),
         errors=getattr(args, "error", None),
-        matched_prediction_output_id=args.matched_prediction_output_id,
+        matched_prediction_transition_id=args.matched_prediction_transition_id,
         store_dir=args.store_dir,
         user_id=resolve_user_id_from_args(args),
         work_session_id=resolve_work_session_id_from_args(args),
     )
-    print(json.dumps(result["output_transition"], ensure_ascii=False, indent=2))
+    print(json.dumps(result["node"], ensure_ascii=False, indent=2))
     return 0

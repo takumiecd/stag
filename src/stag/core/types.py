@@ -6,7 +6,6 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-
 JSONValue = Any
 
 ActionType = Literal[
@@ -19,12 +18,14 @@ ActionType = Literal[
 
 ResultStatus = Literal["completed", "failed", "timeout", "skipped"]
 
-TargetKind = Literal["node", "input_transition", "output_transition"]
+TargetKind = Literal["node", "transition"]
 PayloadType = Literal["note", "plan_payload", "prediction", "result", "cut", "git_change"]
 
 NODE_PREFIX = "n"
 INPUT_TRANSITION_PREFIX = "it"
 OUTPUT_TRANSITION_PREFIX = "ot"
+TRANSITION_PREFIX = "t"
+EDGE_PREFIX = "e"
 PAYLOAD_PREFIX = "pl"
 
 

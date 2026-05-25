@@ -2,67 +2,51 @@
 
 from __future__ import annotations
 
-from stag.core.cuts import is_inactive_input_transition, is_inactive_output_transition
-from stag.core.schema.graph import Node, OutputTransition
+from stag.core.cuts import is_inactive_transition
+from stag.core.schema.graph import Edge, Node
 from stag.core.schema.payloads import PredictionPayload, ResultPayload
 
 
 def observe_impl(
     self,
-    input_transition_id: str,
+    transition_id: str,
     result: ResultPayload,
     *,
     user_id: str | None = None,
     work_session_id: str | None = None,
-) -> OutputTransition:
-    """Record an observed OutputTransition for an InputTransition.
+) -> Node:
+    """Attach an observed result payload and output node to a Transition."""
+    if transition_id not in self.run_graph.transitions:
+        raise KeyError(f"unknown transition_id: {transition_id}")
+    if is_inactive_transition(self.run_graph, transition_id):
+        raise ValueError(f"transition is inactive: {transition_id}")
 
-    Creates a new output node and attaches the ResultPayload to the
-    new OutputTransition. The payload marks this OT as an observed result.
-    """
-    if input_transition_id not in self.run_graph.input_transitions:
-        raise KeyError(f"unknown input_transition_id: {input_transition_id}")
-    if is_inactive_input_transition(self.run_graph, input_transition_id):
-        raise ValueError(
-            f"input_transition is inactive (cut or in cut subtree): {input_transition_id}"
-        )
-
-    if result.matched_prediction_output_id is not None:
-        mpid = result.matched_prediction_output_id
-        if mpid not in self.run_graph.output_transitions:
-            raise KeyError(f"unknown matched_prediction_output_id: {mpid}")
-        pred_payloads = self.run_graph.payloads_for_output_transition(mpid)
+    if result.matched_prediction_transition_id is not None:
+        mpid = result.matched_prediction_transition_id
+        if mpid not in self.run_graph.transitions:
+            raise KeyError(f"unknown matched_prediction_transition_id: {mpid}")
+        pred_payloads = self.run_graph.payloads_for_transition(mpid)
         if not any(isinstance(p, PredictionPayload) for p in pred_payloads):
             raise ValueError(
-                f"matched_prediction_output_id does not point to a prediction: {mpid}"
+                f"matched_prediction_transition_id does not point to a prediction: {mpid}"
             )
-        matched_ot = self.run_graph.output_transitions[mpid]
-        if matched_ot.input_transition_id != input_transition_id:
-            raise ValueError(
-                f"matched_prediction_output_id belongs to a different input_transition: {mpid}"
-            )
-        if is_inactive_output_transition(self.run_graph, mpid):
-            raise ValueError(f"matched_prediction_output_id is inactive: {mpid}")
+        if is_inactive_transition(self.run_graph, mpid):
+            raise ValueError(f"matched_prediction_transition_id is inactive: {mpid}")
 
-    new_node = Node(node_id=self._next_id("n"))
-    self.run_graph.add_node(new_node)
-
-    metadata = {}
-    if user_id is not None:
-        metadata["user_id"] = user_id
-    if work_session_id is not None:
-        metadata["work_session_id"] = work_session_id
-    ot = OutputTransition(
-        output_transition_id=self._next_id("ot"),
-        input_transition_id=input_transition_id,
-        to_node_id=new_node.node_id,
-        metadata=metadata,
+    node = Node(node_id=self._next_id("n"))
+    self.run_graph.add_node(node)
+    edge = Edge(
+        edge_id=self._next_id("e"),
+        from_kind="transition",
+        from_id=transition_id,
+        to_kind="node",
+        to_id=node.node_id,
     )
-    self.run_graph.add_output_transition(ot)
+    self.run_graph.add_edge(edge)
 
     result_payload = ResultPayload(
         payload_id=self._next_id("pl"),
-        target_id=ot.output_transition_id,
+        target_id=transition_id,
         status=result.status,
         artifacts=result.artifacts,
         raw_outputs=result.raw_outputs,
@@ -70,17 +54,17 @@ def observe_impl(
         metrics=dict(result.metrics),
         errors=result.errors,
         actual_cost=dict(result.actual_cost),
-        matched_prediction_output_id=result.matched_prediction_output_id,
-        metadata=dict(result.metadata),
+        matched_prediction_transition_id=result.matched_prediction_transition_id,
+        metadata={**dict(result.metadata), "node_id": node.node_id},
     )
     self.run_graph.attach_payload(result_payload)
     self.record_work_event(
         user_id=user_id,
         work_session_id=work_session_id,
         event_type="result_observed",
-        target_kind="output_transition",
-        target_id=ot.output_transition_id,
-        created_records=(new_node.node_id, ot.output_transition_id, result_payload.payload_id),
+        target_kind="transition",
+        target_id=transition_id,
+        created_records=(node.node_id, edge.edge_id, result_payload.payload_id),
         summary=result.status,
     )
-    return ot
+    return node

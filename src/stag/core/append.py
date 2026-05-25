@@ -6,12 +6,12 @@ from dataclasses import dataclass
 from typing import Literal
 
 from stag.core.graph_view import GraphView
-from stag.core.schema.graph import InputTransition, Node, OutputTransition
+from stag.core.schema.graph import Edge, Node, Transition
 from stag.core.schema.payloads import Payload
 from stag.core.schema.work import WorkEvent, WorkSession
 
-GraphRecordKind = Literal["node", "input_transition", "output_transition", "payload", "view"]
-GraphRecord = Node | InputTransition | OutputTransition | Payload | GraphView
+GraphRecordKind = Literal["node", "transition", "edge", "payload", "view"]
+GraphRecord = Node | Transition | Edge | Payload | GraphView
 
 
 @dataclass(frozen=True)

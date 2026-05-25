@@ -63,7 +63,7 @@ class NotePayload(PayloadBase):
 
 @dataclass(frozen=True)
 class PlanPayload(PayloadBase):
-    """Operation intent attached to an InputTransition."""
+    """Operation intent attached to a Transition."""
 
     payload_id: str
     target_id: str
@@ -75,7 +75,7 @@ class PlanPayload(PayloadBase):
     safety_policy: dict[str, JSONValue] = field(default_factory=dict)
     metadata: dict[str, JSONValue] = field(default_factory=dict)
 
-    target_kind: TargetKind = field(default="input_transition", init=False)
+    target_kind: TargetKind = field(default="transition", init=False)
     payload_type: PayloadType = field(default="plan_payload", init=False)
 
     def to_dict(self) -> dict[str, JSONValue]:
@@ -84,7 +84,7 @@ class PlanPayload(PayloadBase):
 
 @dataclass(frozen=True)
 class PredictionPayload(PayloadBase):
-    """Predicted outcome attached to an OutputTransition."""
+    """Predicted outcome attached to a Transition."""
 
     payload_id: str
     target_id: str
@@ -96,7 +96,7 @@ class PredictionPayload(PayloadBase):
     predictor: str | None = None
     metadata: dict[str, JSONValue] = field(default_factory=dict)
 
-    target_kind: TargetKind = field(default="output_transition", init=False)
+    target_kind: TargetKind = field(default="transition", init=False)
     payload_type: PayloadType = field(default="prediction", init=False)
 
     def __post_init__(self) -> None:
@@ -109,7 +109,7 @@ class PredictionPayload(PayloadBase):
 
 @dataclass(frozen=True)
 class ResultPayload(PayloadBase):
-    """Actual execution result attached to an OutputTransition."""
+    """Actual execution result attached to a Transition."""
 
     payload_id: str
     target_id: str
@@ -120,10 +120,10 @@ class ResultPayload(PayloadBase):
     metrics: dict[str, float] = field(default_factory=dict)
     errors: tuple[str, ...] = ()
     actual_cost: dict[str, JSONValue] = field(default_factory=dict)
-    matched_prediction_output_id: str | None = None
+    matched_prediction_transition_id: str | None = None
     metadata: dict[str, JSONValue] = field(default_factory=dict)
 
-    target_kind: TargetKind = field(default="output_transition", init=False)
+    target_kind: TargetKind = field(default="transition", init=False)
     payload_type: PayloadType = field(default="result", init=False)
 
     def to_dict(self) -> dict[str, JSONValue]:
@@ -161,7 +161,7 @@ class DiffSummary:
 
 @dataclass(frozen=True)
 class GitChangePayload(PayloadBase):
-    """Git repository change information attached to an OutputTransition.
+    """Git repository change information attached to a Transition.
 
     Captures the diff between base_commit..HEAD at the time stag git finish
     was executed. Co-exists with ResultPayload on the same OutputTransition.
@@ -182,7 +182,7 @@ class GitChangePayload(PayloadBase):
     patch_artifact: str | None = None
     metadata: dict[str, JSONValue] = field(default_factory=dict)
 
-    target_kind: TargetKind = field(default="output_transition", init=False)
+    target_kind: TargetKind = field(default="transition", init=False)
     payload_type: PayloadType = field(default="git_change", init=False)
 
     def to_dict(self) -> dict[str, JSONValue]:
@@ -206,10 +206,7 @@ class GitChangePayload(PayloadBase):
 
 @dataclass(frozen=True)
 class CutPayload(PayloadBase):
-    """Append-only cut marker on an InputTransition or OutputTransition.
-
-    - On an InputTransition: the entire plan and all its outputs become inactive.
-    - On an OutputTransition: only that output becomes inactive.
+    """Append-only cut marker on a Node or Transition.
     Inactivity is computed at read time; graph records are never deleted.
     """
 
@@ -285,7 +282,9 @@ def _prediction_from_dict(data: dict[str, JSONValue]) -> PredictionPayload:
         payload_id=str(data["payload_id"]),
         target_id=str(data["target_id"]),
         predicted_artifacts=tuple(str(a) for a in (data.get("predicted_artifacts") or [])),
-        predicted_metrics={str(k): float(v) for k, v in (data.get("predicted_metrics") or {}).items()},
+        predicted_metrics={
+            str(k): float(v) for k, v in (data.get("predicted_metrics") or {}).items()
+        },
         rationale=data.get("rationale"),
         probability=_opt_float(data.get("probability")),
         confidence=_opt_float(data.get("confidence")),
@@ -305,7 +304,9 @@ def _result_from_dict(data: dict[str, JSONValue]) -> ResultPayload:
         metrics={str(k): float(v) for k, v in (data.get("metrics") or {}).items()},
         errors=tuple(str(e) for e in (data.get("errors") or [])),
         actual_cost=dict(data.get("actual_cost") or {}),
-        matched_prediction_output_id=data.get("matched_prediction_output_id"),
+        matched_prediction_transition_id=(
+            data.get("matched_prediction_transition_id") or data.get("matched_prediction_output_id")
+        ),
         metadata=dict(data.get("metadata") or {}),
     )
 

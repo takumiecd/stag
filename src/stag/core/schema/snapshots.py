@@ -13,10 +13,9 @@ class TraceContext:
 
     current_node_id: str
     past_node_ids: tuple[str, ...] = ()
-    output_transition_ids: tuple[str, ...] = ()
-    input_transition_ids: tuple[str, ...] = ()
+    transition_ids: tuple[str, ...] = ()
     result_payload_ids: tuple[str, ...] = ()
-    prediction_output_transition_ids: tuple[str, ...] = ()
+    prediction_payload_ids: tuple[str, ...] = ()
     note_payload_ids: tuple[str, ...] = ()
     artifact_refs: tuple[str, ...] = ()
     metadata: dict[str, JSONValue] = field(default_factory=dict)

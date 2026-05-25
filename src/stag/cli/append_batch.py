@@ -9,8 +9,8 @@ def graph_counts(handle) -> dict[str, set[str]]:
     """Capture graph record IDs before a mutation."""
     return {
         "nodes": set(handle.run_graph.nodes),
-        "input_transitions": set(handle.run_graph.input_transitions),
-        "output_transitions": set(handle.run_graph.output_transitions),
+        "transitions": set(handle.run_graph.transitions),
+        "edges": set(handle.run_graph.edges),
         "payloads": set(handle.run_graph.payloads),
         "views": {view.view_id for view in handle.run_graph.views.values()},
         "work_events": {event.event_id for event in handle.run_graph.work_events},
@@ -53,13 +53,13 @@ def build_append_batch(
         node = handle.run_graph.nodes[node_id]
         records.append(GraphRecordEnvelope("node", node.node_id, node))
 
-    for it_id in _new_ids(handle.run_graph.input_transitions, before, "input_transitions"):
-        it = handle.run_graph.input_transitions[it_id]
-        records.append(GraphRecordEnvelope("input_transition", it.input_transition_id, it))
+    for transition_id in _new_ids(handle.run_graph.transitions, before, "transitions"):
+        transition = handle.run_graph.transitions[transition_id]
+        records.append(GraphRecordEnvelope("transition", transition.transition_id, transition))
 
-    for ot_id in _new_ids(handle.run_graph.output_transitions, before, "output_transitions"):
-        ot = handle.run_graph.output_transitions[ot_id]
-        records.append(GraphRecordEnvelope("output_transition", ot.output_transition_id, ot))
+    for edge_id in _new_ids(handle.run_graph.edges, before, "edges"):
+        edge = handle.run_graph.edges[edge_id]
+        records.append(GraphRecordEnvelope("edge", edge.edge_id, edge))
 
     for payload_id in _new_ids(handle.run_graph.payloads, before, "payloads"):
         payload = handle.run_graph.payloads[payload_id]
@@ -67,9 +67,7 @@ def build_append_batch(
 
     before_view_ids = before.get("views", set())
     new_views = [
-        view
-        for view in handle.run_graph.views.values()
-        if view.view_id not in before_view_ids
+        view for view in handle.run_graph.views.values() if view.view_id not in before_view_ids
     ]
     for view in new_views:
         records.append(GraphRecordEnvelope("view", view.view_id, view))

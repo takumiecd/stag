@@ -6,10 +6,11 @@ from stag.core.run import RunHandle, init
 from stag.core.run_graph import RunGraph
 from stag.core.schema import (
     CutPayload,
-    InputTransition,
+    Edge,
+    GraphRecordKind,
+    GraphRef,
     NotePayload,
     Node,
-    OutputTransition,
     Payload,
     PayloadBase,
     PlanPayload,
@@ -17,6 +18,7 @@ from stag.core.schema import (
     Requirement,
     ResultPayload,
     TraceContext,
+    Transition,
 )
 from stag.core.types import (
     ActionType,
@@ -28,11 +30,12 @@ from stag.core.types import (
 __all__ = [
     "ActionType",
     "CutPayload",
+    "Edge",
     "GraphView",
-    "InputTransition",
+    "GraphRecordKind",
+    "GraphRef",
     "NotePayload",
     "Node",
-    "OutputTransition",
     "Payload",
     "PayloadBase",
     "PayloadType",
@@ -45,6 +48,7 @@ __all__ = [
     "RunHandle",
     "TargetKind",
     "TraceContext",
+    "Transition",
     "init",
     "opaque_id",
     "sequential_id",

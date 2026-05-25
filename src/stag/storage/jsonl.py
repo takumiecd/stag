@@ -11,7 +11,7 @@ from stag.core import _json as _fast_json
 from stag.core.graph_view import GraphView
 from stag.core.run import RunHandle
 from stag.core.run_graph import RunGraph
-from stag.core.schema.graph import InputTransition, Node, OutputTransition
+from stag.core.schema.graph import Edge, Node, Transition
 from stag.core.schema.payloads import payload_from_dict
 from stag.core.schema.requirements import Requirement
 from stag.core.schema.work import work_event_from_dict, work_session_from_dict
@@ -56,8 +56,8 @@ class JsonlRunStore:
         counts = []
         for name in (
             "nodes",
-            "input_transitions",
-            "output_transitions",
+            "transitions",
+            "edges",
             "payloads",
             "views",
             "work_sessions",
@@ -93,14 +93,14 @@ class JsonlRunStore:
             lambda node: node.to_dict(),
         )
         self._append_jsonl(
-            run_path / "input_transitions.jsonl",
-            list(run.run_graph.input_transitions.values()),
-            lambda it: it.to_dict(),
+            run_path / "transitions.jsonl",
+            list(run.run_graph.transitions.values()),
+            lambda transition: transition.to_dict(),
         )
         self._append_jsonl(
-            run_path / "output_transitions.jsonl",
-            list(run.run_graph.output_transitions.values()),
-            lambda ot: ot.to_dict(),
+            run_path / "edges.jsonl",
+            list(run.run_graph.edges.values()),
+            lambda edge: edge.to_dict(),
         )
         self._append_jsonl(
             run_path / "payloads.jsonl",
@@ -126,8 +126,8 @@ class JsonlRunStore:
         # Update cache with the final row counts now on disk.
         row_counts = (
             len(run.run_graph.nodes),
-            len(run.run_graph.input_transitions),
-            len(run.run_graph.output_transitions),
+            len(run.run_graph.transitions),
+            len(run.run_graph.edges),
             len(run.run_graph.payloads),
             len(run.run_graph.views),
             len(run.run_graph.work_sessions),
@@ -165,46 +165,31 @@ class JsonlRunStore:
                 metadata=dict(row.get("metadata") or {}),
             )
 
-        for row in self._read_jsonl(run_path / "input_transitions.jsonl"):
-            it = InputTransition(
-                input_transition_id=row["input_transition_id"],
-                input_node_ids=tuple(row.get("input_node_ids") or []),
+        for row in self._read_jsonl(run_path / "transitions.jsonl"):
+            transition = Transition(
+                transition_id=row["transition_id"],
                 metadata=dict(row.get("metadata") or {}),
             )
-            graph.input_transitions[it.input_transition_id] = it
-            for nid in it.input_node_ids:
-                graph.input_transitions_from_node.setdefault(nid, []).append(
-                    it.input_transition_id
-                )
+            graph.add_transition(transition)
 
-        for row in self._read_jsonl(run_path / "output_transitions.jsonl"):
-            ot = OutputTransition(
-                output_transition_id=row["output_transition_id"],
-                input_transition_id=row["input_transition_id"],
-                to_node_id=row["to_node_id"],
+        for row in self._read_jsonl(run_path / "edges.jsonl"):
+            edge = Edge(
+                edge_id=row["edge_id"],
+                from_kind=row["from_kind"],
+                from_id=row["from_id"],
+                to_kind=row["to_kind"],
+                to_id=row["to_id"],
                 metadata=dict(row.get("metadata") or {}),
             )
-            graph.output_transitions[ot.output_transition_id] = ot
-            graph.output_transitions_from_it.setdefault(ot.input_transition_id, []).append(
-                ot.output_transition_id
-            )
-            graph.output_transitions_to_node.setdefault(ot.to_node_id, []).append(
-                ot.output_transition_id
-            )
+            graph.add_edge(edge)
 
         for row in self._read_jsonl(run_path / "payloads.jsonl"):
             payload = payload_from_dict(row)
             graph.payloads[payload.payload_id] = payload
             if payload.target_kind == "node":
-                graph.payloads_by_node.setdefault(payload.target_id, []).append(
-                    payload.payload_id
-                )
-            elif payload.target_kind == "input_transition":
-                graph.payloads_by_input_transition.setdefault(payload.target_id, []).append(
-                    payload.payload_id
-                )
-            elif payload.target_kind == "output_transition":
-                graph.payloads_by_output_transition.setdefault(payload.target_id, []).append(
+                graph.payloads_by_node.setdefault(payload.target_id, []).append(payload.payload_id)
+            elif payload.target_kind == "transition":
+                graph.payloads_by_transition.setdefault(payload.target_id, []).append(
                     payload.payload_id
                 )
 

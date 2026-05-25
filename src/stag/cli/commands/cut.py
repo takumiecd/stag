@@ -15,10 +15,10 @@ from stag.cli.append_batch import graph_counts, maybe_append_or_save
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
-    parser = subparsers.add_parser("cut", help="Cut an InputTransition or OutputTransition")
+    parser = subparsers.add_parser("cut", help="Cut a Node or Transition")
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--input-transition", dest="input_transition_id", metavar="IT_ID")
-    group.add_argument("--output-transition", dest="output_transition_id", metavar="OT_ID")
+    group.add_argument("--node", dest="node_id", metavar="NODE_ID")
+    group.add_argument("--transition", dest="transition_id", metavar="TRANSITION_ID")
     parser.add_argument("--run", default=None)
     parser.add_argument("--reason", default=None)
     parser.add_argument("--store-dir", default=".stag/runs")
@@ -60,12 +60,12 @@ def run_cut_command(
 
 
 def cli_cut(args) -> int:
-    if args.input_transition_id is not None:
-        target_id = args.input_transition_id
-        target_kind = "input_transition"
+    if args.node_id is not None:
+        target_id = args.node_id
+        target_kind = "node"
     else:
-        target_id = args.output_transition_id
-        target_kind = "output_transition"
+        target_id = args.transition_id
+        target_kind = "transition"
 
     result = run_cut_command(
         run_id=resolve_run_id_from_args(args),

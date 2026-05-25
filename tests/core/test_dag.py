@@ -4,184 +4,112 @@ from __future__ import annotations
 
 import pytest
 
+from stag.core.cuts import inactive_node_ids, inactive_transition_ids, is_inactive_transition
 from stag.core.run_graph import RunGraph
-from stag.core.schema.graph import InputTransition, Node, OutputTransition
+from stag.core.schema.graph import Edge, Node, Transition
 from stag.core.schema.payloads import CutPayload, NotePayload, PredictionPayload, ResultPayload
 
 
 def _base_graph() -> RunGraph:
-    g = RunGraph()
-    g.add_node(Node(node_id="n_a"))
-    g.add_node(Node(node_id="n_b"))
-    return g
+    graph = RunGraph()
+    graph.add_node(Node(node_id="n_a"))
+    graph.add_node(Node(node_id="n_b"))
+    graph.add_transition(Transition(transition_id="t_1"))
+    return graph
 
 
 def test_add_node_duplicate_rejected():
-    g = _base_graph()
+    graph = _base_graph()
     with pytest.raises(ValueError):
-        g.add_node(Node(node_id="n_a"))
+        graph.add_node(Node(node_id="n_a"))
 
 
-def test_add_input_transition_indexes():
-    g = _base_graph()
-    it = InputTransition(input_transition_id="it_1", input_node_ids=("n_a",))
-    g.add_input_transition(it)
-    assert "it_1" in g.input_transitions_from_node["n_a"]
+def test_add_transition_duplicate_rejected():
+    graph = _base_graph()
+    with pytest.raises(ValueError):
+        graph.add_transition(Transition(transition_id="t_1"))
 
 
-def test_add_input_transition_unknown_node_rejected():
-    g = _base_graph()
-    with pytest.raises(KeyError):
-        g.add_input_transition(
-            InputTransition(input_transition_id="it_1", input_node_ids=("n_missing",))
-        )
-
-
-def test_add_output_transition_indexes():
-    g = _base_graph()
-    it = InputTransition(input_transition_id="it_1", input_node_ids=("n_a",))
-    g.add_input_transition(it)
-    ot = OutputTransition(output_transition_id="ot_1", input_transition_id="it_1", to_node_id="n_b")
-    g.add_output_transition(ot)
-    assert "ot_1" in g.output_transitions_from_it["it_1"]
-    assert "ot_1" in g.output_transitions_to_node["n_b"]
-
-
-def test_add_output_transition_unknown_it_rejected():
-    g = _base_graph()
-    with pytest.raises(KeyError):
-        g.add_output_transition(
-            OutputTransition(output_transition_id="ot_1", input_transition_id="it_missing", to_node_id="n_b")
-        )
-
-
-def test_attach_payload_to_node():
-    g = _base_graph()
-    g.attach_payload(NotePayload(payload_id="pl_1", target_id="n_a", text="hi"))
-    payloads = g.payloads_for_node("n_a")
-    assert len(payloads) == 1
-    assert payloads[0].payload_id == "pl_1"
-
-
-def test_attach_payload_unknown_target_rejected():
-    g = _base_graph()
-    with pytest.raises(KeyError):
-        g.attach_payload(NotePayload(payload_id="pl_x", target_id="n_missing", text="x"))
-
-
-def test_payloads_for_output_transition():
-    g = _base_graph()
-    it = InputTransition(input_transition_id="it_1", input_node_ids=("n_a",))
-    g.add_input_transition(it)
-    ot = OutputTransition(output_transition_id="ot_1", input_transition_id="it_1", to_node_id="n_b")
-    g.add_output_transition(ot)
-    g.attach_payload(ResultPayload(payload_id="rp_1", target_id="ot_1", status="completed"))
-    payloads = g.payloads_for_output_transition("ot_1")
-    assert len(payloads) == 1
-    assert isinstance(payloads[0], ResultPayload)
-
-
-def test_roots():
-    g = _base_graph()
-    it = InputTransition(input_transition_id="it_1", input_node_ids=("n_a",))
-    g.add_input_transition(it)
-    ot = OutputTransition(output_transition_id="ot_1", input_transition_id="it_1", to_node_id="n_b")
-    g.add_output_transition(ot)
-    roots = g.roots()
-    assert "n_a" in roots
-    assert "n_b" not in roots
-
-
-def test_multi_input_node_transition():
-    g = _base_graph()
-    g.add_node(Node(node_id="n_c"))
-    it = InputTransition(input_transition_id="it_1", input_node_ids=("n_a", "n_b"))
-    g.add_input_transition(it)
-    ot = OutputTransition(output_transition_id="ot_1", input_transition_id="it_1", to_node_id="n_c")
-    g.add_output_transition(ot)
-    assert "it_1" in g.input_transitions_from_node["n_a"]
-    assert "it_1" in g.input_transitions_from_node["n_b"]
-
-
-def _graph_with_it_and_ots() -> tuple:
-    """n_a → it_1 → [ot_pred → n_b, ot_result → n_c]"""
-    g = RunGraph()
-    for nid in ("n_a", "n_b", "n_c"):
-        g.add_node(Node(node_id=nid))
-    it = InputTransition(input_transition_id="it_1", input_node_ids=("n_a",))
-    g.add_input_transition(it)
-    ot_pred = OutputTransition(output_transition_id="ot_pred", input_transition_id="it_1", to_node_id="n_b")
-    g.add_output_transition(ot_pred)
-    g.attach_payload(PredictionPayload(payload_id="pl_pred", target_id="ot_pred"))
-    ot_result = OutputTransition(output_transition_id="ot_result", input_transition_id="it_1", to_node_id="n_c")
-    g.add_output_transition(ot_result)
-    g.attach_payload(ResultPayload(payload_id="pl_result", target_id="ot_result", status="completed"))
-    return g, it, ot_pred, ot_result
-
-
-def test_output_kind_classifies_payloads():
-    g, _, ot_pred, ot_result = _graph_with_it_and_ots()
-    assert g.output_kind(ot_pred.output_transition_id) == "prediction"
-    assert g.output_kind(ot_result.output_transition_id) == "result"
-
-    # no payloads → unknown
-    g2 = RunGraph()
-    g2.add_node(Node(node_id="n_x"))
-    g2.add_node(Node(node_id="n_y"))
-    it2 = InputTransition(input_transition_id="it_x", input_node_ids=("n_x",))
-    g2.add_input_transition(it2)
-    ot_empty = OutputTransition(output_transition_id="ot_empty", input_transition_id="it_x", to_node_id="n_y")
-    g2.add_output_transition(ot_empty)
-    assert g2.output_kind("ot_empty") == "unknown"
-
-
-def test_attach_result_to_prediction_ot_raises():
-    g, _, ot_pred, _ = _graph_with_it_and_ots()
-    g.add_node(Node(node_id="n_extra"))
-    with pytest.raises(ValueError, match="already has a PredictionPayload"):
-        g.attach_payload(
-            ResultPayload(payload_id="rp_bad", target_id=ot_pred.output_transition_id, status="completed")
-        )
-
-
-def test_attach_prediction_to_result_ot_raises():
-    g, _, _, ot_result = _graph_with_it_and_ots()
-    with pytest.raises(ValueError, match="already has a ResultPayload"):
-        g.attach_payload(
-            PredictionPayload(payload_id="pl_bad", target_id=ot_result.output_transition_id)
-        )
-
-
-def test_output_kind_no_longer_returns_mixed():
-    g, _, ot_pred, ot_result = _graph_with_it_and_ots()
-    assert g.output_kind(ot_pred.output_transition_id) == "prediction"
-    assert g.output_kind(ot_result.output_transition_id) == "result"
-    assert g.output_kind(ot_pred.output_transition_id) != "mixed"
-    assert g.output_kind(ot_result.output_transition_id) != "mixed"
-
-
-def test_output_ids_for_input_filters_by_kind_and_activity():
-    g, it, ot_pred, ot_result = _graph_with_it_and_ots()
-
-    all_ids = g.output_ids_for_input(it.input_transition_id, active_only=False)
-    assert set(all_ids) == {"ot_pred", "ot_result"}
-
-    pred_ids = g.output_ids_for_input(it.input_transition_id, kind="prediction", active_only=False)
-    assert pred_ids == ["ot_pred"]
-
-    result_ids = g.output_ids_for_input(it.input_transition_id, kind="result", active_only=False)
-    assert result_ids == ["ot_result"]
-
-    # cut ot_result and check active_only filtering
-    g.attach_payload(
-        CutPayload(
-            payload_id="cp_cut",
-            target_id="ot_result",
-            target_kind="output_transition",
-            cut_at="2026-01-01T00:00:00Z",
+def test_add_edge_indexes_both_directions():
+    graph = _base_graph()
+    graph.add_edge(
+        Edge(
+            edge_id="e_1",
+            from_kind="node",
+            from_id="n_a",
+            to_kind="transition",
+            to_id="t_1",
         )
     )
-    active_result_ids = g.output_ids_for_input(it.input_transition_id, kind="result", active_only=True)
-    assert active_result_ids == []
-    inactive_result_ids = g.output_ids_for_input(it.input_transition_id, kind="result", active_only=False)
-    assert "ot_result" in inactive_result_ids
+    assert graph.successors("node", "n_a")[0].id == "t_1"
+    assert graph.predecessors("transition", "t_1")[0].id == "n_a"
+
+
+def test_add_edge_unknown_ref_rejected():
+    graph = _base_graph()
+    with pytest.raises(KeyError):
+        graph.add_edge(
+            Edge(
+                edge_id="e_bad",
+                from_kind="node",
+                from_id="n_missing",
+                to_kind="transition",
+                to_id="t_1",
+            )
+        )
+
+
+def test_payloads_for_node_and_transition():
+    graph = _base_graph()
+    graph.attach_payload(NotePayload(payload_id="pl_n", target_id="n_a", text="hi"))
+    graph.attach_payload(ResultPayload(payload_id="pl_t", target_id="t_1", status="completed"))
+    assert isinstance(graph.payloads_for_node("n_a")[0], NotePayload)
+    assert isinstance(graph.payloads_for_transition("t_1")[0], ResultPayload)
+
+
+def test_transition_kind_classifies_payloads():
+    graph = _base_graph()
+    graph.attach_payload(PredictionPayload(payload_id="pl_p", target_id="t_1"))
+    assert graph.transition_kind("t_1") == "prediction"
+
+    graph.add_transition(Transition(transition_id="t_2"))
+    graph.attach_payload(ResultPayload(payload_id="pl_r", target_id="t_2", status="completed"))
+    assert graph.transition_kind("t_2") == "result"
+
+
+def test_transition_inputs_and_outputs():
+    graph = _base_graph()
+    graph.add_edge(Edge("e_in", "node", "n_a", "transition", "t_1"))
+    graph.add_edge(Edge("e_out", "transition", "t_1", "node", "n_b"))
+    assert graph.transition_inputs("t_1") == ["n_a"]
+    assert graph.transition_outputs("t_1") == ["n_b"]
+    assert graph.transitions_from_node("n_a") == ["t_1"]
+    assert graph.transitions_to_node("n_b") == ["t_1"]
+
+
+def test_reachable_from_node_returns_nodes_transitions_payloads():
+    graph = _base_graph()
+    graph.add_edge(Edge("e_in", "node", "n_a", "transition", "t_1"))
+    graph.add_edge(Edge("e_out", "transition", "t_1", "node", "n_b"))
+    graph.attach_payload(ResultPayload(payload_id="pl_r", target_id="t_1", status="completed"))
+    reachable = graph.reachable_from("n_a")
+    assert reachable["node_ids"] == ["n_a", "n_b"]
+    assert reachable["transition_ids"] == ["t_1"]
+    assert reachable["payload_ids"] == ["pl_r"]
+
+
+def test_cut_transition_cascades_to_output_node():
+    graph = _base_graph()
+    graph.add_edge(Edge("e_in", "node", "n_a", "transition", "t_1"))
+    graph.add_edge(Edge("e_out", "transition", "t_1", "node", "n_b"))
+    graph.attach_payload(
+        CutPayload(
+            payload_id="pl_cut",
+            target_kind="transition",
+            target_id="t_1",
+            cut_at="now",
+        )
+    )
+    assert inactive_transition_ids(graph) == {"t_1"}
+    assert inactive_node_ids(graph) == {"n_b"}
+    assert is_inactive_transition(graph, "t_1")

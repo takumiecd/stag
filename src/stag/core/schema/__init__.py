@@ -1,6 +1,6 @@
 """Schema package — pure graph primitives and attached payloads."""
 
-from stag.core.schema.graph import InputTransition, Node, OutputTransition
+from stag.core.schema.graph import Edge, GraphRecordKind, GraphRef, Node, Transition
 from stag.core.schema.payloads import (
     CommitEntry,
     CutPayload,
@@ -21,11 +21,12 @@ __all__ = [
     "CommitEntry",
     "CutPayload",
     "DiffSummary",
+    "Edge",
     "GitChangePayload",
-    "InputTransition",
+    "GraphRecordKind",
+    "GraphRef",
     "NotePayload",
     "Node",
-    "OutputTransition",
     "Payload",
     "PayloadBase",
     "PlanPayload",
@@ -33,5 +34,6 @@ __all__ = [
     "Requirement",
     "ResultPayload",
     "TraceContext",
+    "Transition",
     "payload_from_dict",
 ]
