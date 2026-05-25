@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from textual import events
 from textual.containers import ScrollableContainer
 from textual.widgets import Static
 from textual.message import Message
@@ -47,16 +48,9 @@ class FlowchartView(ScrollableContainer, can_focus=True):
     }
     """
 
-    BINDINGS = [
-        ("up", "scroll_up", "Scroll up"),
-        ("down", "scroll_down", "Scroll down"),
-        ("left", "scroll_left", "Scroll left"),
-        ("right", "scroll_right", "Scroll right"),
-        ("pageup", "page_up", "Page up"),
-        ("pagedown", "page_down", "Page down"),
-        ("home", "scroll_home", "Top"),
-        ("end", "scroll_end", "Bottom"),
-    ]
+    # Arrow key scrolling handled in on_key for reliability (BINDINGS dispatch
+    # was not firing in practice — likely because ScrollableContainer or the
+    # focused Static child intercepts the keys before the action runs).
 
     def __init__(self, **kw) -> None:
         super().__init__(**kw)
@@ -176,30 +170,21 @@ class FlowchartView(ScrollableContainer, can_focus=True):
                 return
 
     # ------------------------------------------------------------------
-    # Keyboard scrolling (ScrollableContainer has built-ins but these
-    # override to give fine-grained control consistent with the old widget).
+    # Keyboard scrolling
     # ------------------------------------------------------------------
 
-    def action_scroll_up(self) -> None:
-        self.scroll_relative(y=-2, animate=False)
+    def on_key(self, event: events.Key) -> None:
+        key = event.key
+        if key == "up":
+            self.scroll_relative(y=-2, animate=False)
+            event.stop()
+        elif key == "down":
+            self.scroll_relative(y=2, animate=False)
+            event.stop()
+        elif key == "left":
+            self.scroll_relative(x=-4, animate=False)
+            event.stop()
+        elif key == "right":
+            self.scroll_relative(x=4, animate=False)
+            event.stop()
 
-    def action_scroll_down(self) -> None:
-        self.scroll_relative(y=2, animate=False)
-
-    def action_scroll_left(self) -> None:
-        self.scroll_relative(x=-4, animate=False)
-
-    def action_scroll_right(self) -> None:
-        self.scroll_relative(x=4, animate=False)
-
-    def action_page_up(self) -> None:
-        self.scroll_relative(y=-(self.size.height or 10), animate=False)
-
-    def action_page_down(self) -> None:
-        self.scroll_relative(y=(self.size.height or 10), animate=False)
-
-    def action_scroll_home(self) -> None:
-        self.scroll_home(animate=False)
-
-    def action_scroll_end(self) -> None:
-        self.scroll_end(animate=False)
