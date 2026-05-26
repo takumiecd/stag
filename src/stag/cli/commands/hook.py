@@ -24,6 +24,13 @@ _POST_REWRITE_HOOK = """\
 exec stag hook post-rewrite "$1"
 """
 
+_POST_COMMIT_HOOK = """\
+#!/usr/bin/env bash
+# .git/hooks/post-commit — stag revert/cherry-pick fallback tracking
+# Detects bare git revert / cherry-pick and records a stag transition.
+exec stag hook post-commit
+"""
+
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
     """Register the ``hook`` subcommand parser."""
@@ -58,6 +65,19 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     post_rewrite_parser.add_argument("--run", default=None)
     post_rewrite_parser.add_argument("--store-dir", default=None)
 
+    # post-commit subcommand (called by the hook script)
+    post_commit_parser = hook_sub.add_parser(
+        "post-commit",
+        help="Process a post-commit hook invocation (revert/cherry-pick fallback)",
+    )
+    post_commit_parser.add_argument("--run", default=None)
+    post_commit_parser.add_argument("--store-dir", default=None)
+    post_commit_parser.add_argument(
+        "--repo-path",
+        default=None,
+        help="Path to git repo root (default: cwd)",
+    )
+
     return parser
 
 
@@ -71,21 +91,21 @@ def run_hook_install(
     repo_path: Path | None = None,
     force: bool = False,
 ) -> dict:
-    """Install .git/hooks/post-rewrite in the git repo.
+    """Install .git/hooks/post-rewrite and .git/hooks/post-commit in the git repo.
 
     Parameters
     ----------
     repo_path:
         Path to the git repository root. Defaults to cwd.
     force:
-        If True, overwrite an existing hook. If False and the hook already
-        exists, skip and return status="skipped".
+        If True, overwrite existing hooks. If False and hooks already exist,
+        skip them and return status="skipped".
 
     Returns
     -------
     dict with keys:
         - status: "installed", "skipped", or "error"
-        - hook_path: absolute path to the hook file
+        - hook_path: absolute path to the post-rewrite hook file
         - message: human-readable description
     """
     from stag.cli.paths import find_repo_root  # noqa: PLC0415
@@ -111,25 +131,33 @@ def run_hook_install(
             "message": f".git/hooks directory not found at {hooks_dir}",
         }
 
-    hook_path = hooks_dir / "post-rewrite"
+    post_rewrite_path = hooks_dir / "post-rewrite"
+    post_commit_path = hooks_dir / "post-commit"
 
-    if hook_path.exists() and not force:
+    # Backward-compatible: if post-rewrite already exists and force=False, skip all.
+    if post_rewrite_path.exists() and not force:
         return {
             "status": "skipped",
-            "hook_path": str(hook_path),
+            "hook_path": str(post_rewrite_path),
             "message": (
-                f"hook already exists at {hook_path}; "
+                f"hook already exists at {post_rewrite_path}; "
                 "use --force to overwrite"
             ),
         }
 
-    hook_path.write_text(_POST_REWRITE_HOOK, encoding="utf-8")
-    hook_path.chmod(0o755)
+    # Install post-rewrite.
+    post_rewrite_path.write_text(_POST_REWRITE_HOOK, encoding="utf-8")
+    post_rewrite_path.chmod(0o755)
+
+    # Install post-commit (best-effort; skip silently if it already exists and not force).
+    if not post_commit_path.exists() or force:
+        post_commit_path.write_text(_POST_COMMIT_HOOK, encoding="utf-8")
+        post_commit_path.chmod(0o755)
 
     return {
         "status": "installed",
-        "hook_path": str(hook_path),
-        "message": f"installed post-rewrite hook at {hook_path}",
+        "hook_path": str(post_rewrite_path),
+        "message": f"installed post-rewrite and post-commit hooks under {hooks_dir}",
     }
 
 
@@ -220,6 +248,205 @@ def run_hook_post_rewrite(
 
 
 # ---------------------------------------------------------------------------
+# post-commit
+# ---------------------------------------------------------------------------
+
+# Regex patterns for detecting revert / cherry-pick from commit subject/body.
+import re as _re
+
+_REVERT_SUBJECT_RE = _re.compile(r'^Revert "(.+)"$')
+_REVERT_SHA_RE = _re.compile(r"This reverts commit ([0-9a-f]{7,40})")
+_CHERRY_PICK_RE = _re.compile(r"cherry picked from commit ([0-9a-f]{7,40})", _re.IGNORECASE)
+
+
+def run_hook_post_commit(
+    *,
+    run_id: str,
+    store_dir: str | None,
+    repo_path: Path | None = None,
+    user_id: str | None = None,
+    work_session_id: str | None = None,
+    # Test injection: override HEAD info instead of running git.
+    head_sha: str | None = None,
+    head_subject: str | None = None,
+    head_body: str | None = None,
+) -> dict:
+    """Process a post-commit hook invocation.
+
+    Detects whether the newest commit is a bare ``git revert`` or
+    ``git cherry-pick`` (i.e. not driven by ``stag revert`` / ``stag
+    cherry-pick``) and records the appropriate stag transition if so.
+
+    Detection logic
+    ---------------
+    1. Read HEAD: sha, subject, full body via ``git log -1``.
+    2. Check whether HEAD sha is already known to stag
+       (``transition_by_sha``).  If it is, stag already recorded it —
+       return early.
+    3. Match subject/body against revert / cherry-pick patterns.
+    4. If matched, call ``handle.revert`` / ``handle.cherry_pick`` with
+       ``head_commit`` injected so git is not called a second time.
+
+    For revert, the reverted sha is extracted from the body line
+    ``This reverts commit <sha>.``
+
+    For cherry-pick, the source sha is extracted from the trailer
+    ``cherry picked from commit <sha>`` (added by ``git cherry-pick -x``).
+    If the trailer is absent, detection is skipped (best-effort only).
+
+    Returns
+    -------
+    dict with keys:
+        - action: "revert", "cherry_pick", "skip", or "warn"
+        - transition_id: the new stag transition ID (or None)
+        - message: human-readable description
+    """
+    import subprocess as _sp  # noqa: PLC0415
+    import os  # noqa: PLC0415
+    from stag.cli.context import resolve_store  # noqa: PLC0415
+
+    resolved_repo_path: Path = repo_path or Path.cwd()
+
+    # Resolve user / session from env if not provided.
+    if user_id is None:
+        user_id = os.environ.get("STAG_USER_ID", "user")
+    if work_session_id is None:
+        work_session_id = os.environ.get("STAG_WORK_SESSION_ID", "session_hook")
+
+    # ------------------------------------------------------------------
+    # 1. Read HEAD info (or use injected values for testing).
+    # ------------------------------------------------------------------
+    if head_sha is None or head_subject is None or head_body is None:
+        try:
+            log_result = _sp.run(
+                ["git", "log", "-1", "--format=%H%n%s%n%B"],
+                cwd=str(resolved_repo_path),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            lines = log_result.stdout.splitlines()
+            head_sha = lines[0].strip() if lines else ""
+            head_subject = lines[1].strip() if len(lines) > 1 else ""
+            head_body = "\n".join(lines[2:]) if len(lines) > 2 else ""
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "action": "warn",
+                "transition_id": None,
+                "message": f"could not read git HEAD: {exc}",
+            }
+
+    if not head_sha:
+        return {
+            "action": "skip",
+            "transition_id": None,
+            "message": "no HEAD sha found",
+        }
+
+    # ------------------------------------------------------------------
+    # 2. Check if stag already knows this sha.
+    # ------------------------------------------------------------------
+    store = resolve_store(store_dir)
+    try:
+        handle = store.load_run(run_id)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "action": "warn",
+            "transition_id": None,
+            "message": f"could not load run: {exc}",
+        }
+
+    if handle.run_graph.transition_by_sha(head_sha) is not None:
+        # Already recorded by stag revert/cherry-pick/commit — skip.
+        return {
+            "action": "skip",
+            "transition_id": None,
+            "message": "HEAD sha already recorded by stag",
+        }
+
+    # ------------------------------------------------------------------
+    # 3. Detect revert.
+    # ------------------------------------------------------------------
+    revert_match = _REVERT_SUBJECT_RE.match(head_subject)
+    if revert_match:
+        sha_match = _REVERT_SHA_RE.search(head_body)
+        if sha_match:
+            reverted_sha = sha_match.group(1)
+            # Look up the reverted transition.
+            reverted_t = handle.run_graph.transition_by_sha(reverted_sha)
+            if reverted_t is None:
+                # We don't know the original commit — skip; can't link properly.
+                return {
+                    "action": "warn",
+                    "transition_id": None,
+                    "message": (
+                        f"post-commit: revert of {reverted_sha[:12]} detected but "
+                        "original commit not in stag graph; skipping"
+                    ),
+                }
+            try:
+                transition = handle.revert(
+                    target_transition=reverted_t,
+                    user_id=user_id,
+                    work_session_id=work_session_id,
+                    head_commit=head_sha,
+                    dry_run=True,  # git already ran; just record
+                )
+                store.save_run(handle)
+                return {
+                    "action": "revert",
+                    "transition_id": transition.transition_id,
+                    "message": (
+                        f"post-commit: recorded revert of {reverted_sha[:12]} "
+                        f"as {transition.transition_id}"
+                    ),
+                }
+            except Exception as exc:  # noqa: BLE001
+                return {
+                    "action": "warn",
+                    "transition_id": None,
+                    "message": f"post-commit: failed to record revert: {exc}",
+                }
+
+    # ------------------------------------------------------------------
+    # 4. Detect cherry-pick (best-effort; requires -x trailer).
+    # ------------------------------------------------------------------
+    cp_match = _CHERRY_PICK_RE.search(head_body)
+    if cp_match:
+        source_sha = cp_match.group(1)
+        try:
+            transition = handle.cherry_pick(
+                source_sha=source_sha,
+                user_id=user_id,
+                work_session_id=work_session_id,
+                head_commit=head_sha,
+                dry_run=True,  # git already ran; just record
+            )
+            store.save_run(handle)
+            return {
+                "action": "cherry_pick",
+                "transition_id": transition.transition_id,
+                "message": (
+                    f"post-commit: recorded cherry-pick of {source_sha[:12]} "
+                    f"as {transition.transition_id}"
+                ),
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "action": "warn",
+                "transition_id": None,
+                "message": f"post-commit: failed to record cherry-pick: {exc}",
+            }
+
+    # Not a revert or detectable cherry-pick — nothing to do.
+    return {
+        "action": "skip",
+        "transition_id": None,
+        "message": "post-commit: not a revert or cherry-pick (no pattern matched)",
+    }
+
+
+# ---------------------------------------------------------------------------
 # CLI dispatcher
 # ---------------------------------------------------------------------------
 
@@ -261,6 +488,30 @@ def cli_hook(args) -> int:
         print(
             f"stag: post-rewrite ({args.mode}): "
             f"{n_affected} transition(s) updated, {n_skipped} sha(s) skipped",
+            file=sys.stderr,
+        )
+        return 0
+
+    if args.hook_command == "post-commit":
+        from stag.cli.context import resolve_run_id_from_args  # noqa: PLC0415
+        import os  # noqa: PLC0415
+
+        try:
+            run_id = resolve_run_id_from_args(args)
+        except Exception as exc:
+            print(f"stag hook post-commit: could not resolve run: {exc}", file=sys.stderr)
+            return 0
+
+        repo_path = Path(args.repo_path) if getattr(args, "repo_path", None) else None
+        result = run_hook_post_commit(
+            run_id=run_id,
+            store_dir=args.store_dir,
+            repo_path=repo_path,
+            user_id=os.environ.get("STAG_USER_ID"),
+            work_session_id=os.environ.get("STAG_WORK_SESSION_ID"),
+        )
+        print(
+            f"stag: post-commit: {result['action']}: {result['message']}",
             file=sys.stderr,
         )
         return 0

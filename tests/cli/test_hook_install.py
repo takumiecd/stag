@@ -72,3 +72,22 @@ class TestHookInstall:
         result = run_hook_install(repo_path=non_repo, force=False)
 
         assert result["status"] == "error"
+
+    def test_install_also_creates_post_commit_hook(self, tmp_path):
+        """Installing hooks should create both post-rewrite and post-commit."""
+        repo = _init_git_repo(tmp_path / "repo")
+        result = run_hook_install(repo_path=repo, force=False)
+
+        assert result["status"] == "installed"
+        post_commit_path = repo / ".git" / "hooks" / "post-commit"
+        assert post_commit_path.exists()
+        content = post_commit_path.read_text(encoding="utf-8")
+        assert "stag hook post-commit" in content
+
+    def test_post_commit_hook_is_executable(self, tmp_path):
+        repo = _init_git_repo(tmp_path / "repo")
+        run_hook_install(repo_path=repo, force=False)
+
+        post_commit_path = repo / ".git" / "hooks" / "post-commit"
+        file_stat = post_commit_path.stat()
+        assert file_stat.st_mode & stat.S_IXUSR

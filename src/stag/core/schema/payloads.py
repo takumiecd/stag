@@ -186,11 +186,73 @@ class GitChangePayload(PayloadBase):
         }
 
 
+@dataclass(frozen=True)
+class RevertPayload(PayloadBase):
+    """Marks a transition as a revert of another transition.
+
+    Attached to the *new* (forward) transition that undoes the original commit.
+    The reverted transition is NOT touched; no CutPayload is appended to it.
+    """
+
+    payload_id: str
+    target_id: str
+    reverted_transition: str  # original t_id whose effect is undone
+    reverted_commit: str      # original sha that was reverted
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    target_kind: Literal["transition"] = field(default="transition", init=False)
+    payload_type: str = field(default="revert", init=False)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return {
+            "payload_id": self.payload_id,
+            "payload_type": self.payload_type,
+            "target_kind": self.target_kind,
+            "target_id": self.target_id,
+            "reverted_transition": self.reverted_transition,
+            "reverted_commit": self.reverted_commit,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class CherryPickPayload(PayloadBase):
+    """Marks a transition as a cherry-pick of another transition / commit."""
+
+    payload_id: str
+    target_id: str
+    source_transition: str | None  # may be None if cross-repo or not found
+    source_commit: str
+    metadata: dict[str, JSONValue] = field(default_factory=dict)
+
+    target_kind: Literal["transition"] = field(default="transition", init=False)
+    payload_type: str = field(default="cherry_pick", init=False)
+
+    def to_dict(self) -> dict[str, JSONValue]:
+        return {
+            "payload_id": self.payload_id,
+            "payload_type": self.payload_type,
+            "target_kind": self.target_kind,
+            "target_id": self.target_id,
+            "source_transition": self.source_transition,
+            "source_commit": self.source_commit,
+            "metadata": dict(self.metadata),
+        }
+
+
 # ---------------------------------------------------------------------------
 # Payload union type (for type annotations)
 # ---------------------------------------------------------------------------
 
-Payload = Union[NodePayload, TransitionPayload, CutPayload, GitChangePayload, BranchPayload]
+Payload = Union[
+    NodePayload,
+    TransitionPayload,
+    CutPayload,
+    GitChangePayload,
+    BranchPayload,
+    RevertPayload,
+    CherryPickPayload,
+]
 
 
 # ---------------------------------------------------------------------------
@@ -228,6 +290,8 @@ register_payload_class(TransitionPayload)
 register_payload_class(CutPayload)
 register_payload_class(GitChangePayload)
 register_payload_class(BranchPayload)
+register_payload_class(RevertPayload)
+register_payload_class(CherryPickPayload)
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +319,10 @@ def payload_from_dict(data: dict[str, JSONValue]) -> PayloadBase:
         return _git_change_from_dict(data)
     if cls is BranchPayload:
         return _branch_payload_from_dict(data)
+    if cls is RevertPayload:
+        return _revert_from_dict(data)
+    if cls is CherryPickPayload:
+        return _cherry_pick_from_dict(data)
     if cls is not None:
         # Custom registered class — try constructor with all fields.
         return _generic_custom_from_dict(cls, data)
@@ -341,6 +409,28 @@ def _branch_payload_from_dict(data: dict[str, JSONValue]) -> BranchPayload:
         payload_id=str(data["payload_id"]),
         target_id=str(data["target_id"]),
         branch=str(data.get("branch", "")),
+        metadata=dict(data.get("metadata") or {}),
+    )
+
+
+def _revert_from_dict(data: dict[str, JSONValue]) -> RevertPayload:
+    return RevertPayload(
+        payload_id=str(data["payload_id"]),
+        target_id=str(data["target_id"]),
+        reverted_transition=str(data.get("reverted_transition", "")),
+        reverted_commit=str(data.get("reverted_commit", "")),
+        metadata=dict(data.get("metadata") or {}),
+    )
+
+
+def _cherry_pick_from_dict(data: dict[str, JSONValue]) -> CherryPickPayload:
+    raw_source_transition = data.get("source_transition")
+    source_transition = str(raw_source_transition) if raw_source_transition is not None else None
+    return CherryPickPayload(
+        payload_id=str(data["payload_id"]),
+        target_id=str(data["target_id"]),
+        source_transition=source_transition,
+        source_commit=str(data.get("source_commit", "")),
         metadata=dict(data.get("metadata") or {}),
     )
 

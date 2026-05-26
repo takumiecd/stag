@@ -154,6 +154,8 @@ from stag.core.run.view import (  # noqa: E402
 )
 from stag.core.run.commit import commit_impl as _commit_impl  # noqa: E402
 from stag.core.run.rewrite import adopt_rewrite_impl as _adopt_rewrite_impl  # noqa: E402
+from stag.core.run.revert import revert_impl as _revert_impl  # noqa: E402
+from stag.core.run.cherry_pick import cherry_pick_impl as _cherry_pick_impl  # noqa: E402
 
 RunHandle.transition = _transition_impl
 RunHandle.attach = _attach_impl
@@ -167,3 +169,5 @@ RunHandle.view_list = _view_list_impl
 RunHandle.view_show = _view_show_impl
 RunHandle.commit = _commit_impl
 RunHandle.adopt_rewrite = _adopt_rewrite_impl
+RunHandle.revert = _revert_impl
+RunHandle.cherry_pick = _cherry_pick_impl
