@@ -33,7 +33,7 @@ GraphView
   └── root_node_id
 ```
 
-`Transition` は複数 input node から必ず 1 つの output node へ接続します。domain-specific な意味は payload として attach します。汎用の `NodePayload` / `TransitionPayload` に加えて、`CutPayload` / `GitChangePayload` が組み込み payload としてあります。
+`Transition` は複数 input node から必ず 1 つの output node へ接続します。domain-specific な意味は payload として attach します。汎用の `NodePayload` / `TransitionPayload` に加えて、core の無効化意味論は `CutPayload` で表します。`GitChangePayload` などの git 固有 payload は標準 `git` extension 側にあります。
 
 `RunGraph` は append-only です。一度追加した node / input transition / output transition / payload は削除せず、取り消しや無効化は `CutPayload` と read-time の計算で表します。
 
@@ -121,6 +121,7 @@ stag transition create \
   --payload-type transition_payload \
   --field type=experiment \
   --field intent="run baseline benchmark"
+```
 
 並列ターミナルや子プロセスでは、work session で履歴を分けます。毎回明示モードでは、
 各 mutating command に `--run` と `--work-session` を渡します。
@@ -143,6 +144,7 @@ stag transition create --from <root_node_id> --payload-type transition_payload
 stag work-session spawn --run demo -- codex
 ```
 
+```bash
 stag payload add \
   --run demo \
   --node <output_node_id> \
@@ -154,6 +156,17 @@ stag graph trace --run demo <output_node_id>
 stag show --run demo
 ```
 
+git 連携は標準 extension です。正式な CLI namespace は `stag git ...` で、
+`stag commit` や `stag verify` はそれぞれ `stag git commit` / `stag git verify`
+への default alias として動きます。
+
+```bash
+stag init req_kernel --extension git --run-id demo
+stag git commit -m "run baseline benchmark"
+stag commit -m "try tiled kernel"
+stag git verify
+```
+
 未インストールで同じ操作をする場合は、各 command を `PYTHONPATH=src python3 -m stag.cli.main ...` に置き換えます。
 
 ## 主な用語
@@ -162,13 +175,11 @@ stag show --run demo
 - `RunGraph`: run 全体の DAG と global records。
 - `GraphView`: `RunGraph` の部分集合。
 - `Node`: pure graph node。
-- `InputTransition`: 複数 input node を受け取る入力側 transition。
-- `OutputTransition`: 1 つの output node に到達する出力側 transition。
-- `NotePayload`: node に attach される軽いメモ。
-- `PlanPayload`: `InputTransition` に attach される plan 情報。
-- `PredictionPayload`: prediction output に attach される予測情報。
-- `ResultPayload`: observed output に attach される実行結果。
+- `Transition`: 複数 input node を受け取り、1 つの output node を作る pure graph transition。
+- `NodePayload`: node に attach される汎用 payload。
+- `TransitionPayload`: transition に attach される汎用 payload。
 - `CutPayload`: input / output transition の無効化を append-only に表す payload。
+- `GitChangePayload`: git extension が transition に attach する payload。
 
 ## 保存形式
 

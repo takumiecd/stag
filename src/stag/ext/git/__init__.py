@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 class GitNamespace:
     """Python API namespace for git extension verbs.
 
-    E4 keeps the existing top-level ``handle.commit`` style for compatibility.
-    E5 will move callers to this namespace and remove the old top-level binds.
+    Core ``RunHandle`` stays git-agnostic; git verbs are exposed as
+    ``handle.git.<verb>``.
     """
 
     handle: "RunHandle"
@@ -77,8 +77,7 @@ class GitExtension(ExtensionBase):
         setattr(handle, self.name, GitNamespace(handle))
 
     def register_cli(self, subparsers: "argparse._SubParsersAction") -> None:
-        # Canonical ``stag git ...`` is still registered by core CLI in E4.
-        # E6 will route extension CLI registration through this method.
+        # Canonical ``stag git ...`` is registered by the core CLI dispatcher.
         del subparsers
 
     def default_aliases(self) -> dict[str, str]:

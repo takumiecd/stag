@@ -54,6 +54,22 @@ join = run.transition(
 - 複数案は同じ input node から `run.transition(...)` を複数回呼びます。
 - note は `run.attach(node_id, NodePayload(type="note", content={"text": "..."}))` で表現します。
 
+## Git Extension API
+
+git 連携の verb は標準 `git` extension の namespace にあります。
+
+```python
+transition = run.git.commit(message="run baseline benchmark")
+run.git.revert(target_sha="<sha>")
+run.git.cherry_pick(source_sha="<sha>")
+run.git.reset(to_node_id="<node_id>", mode="hard")
+violations = run.git.verify()
+```
+
+旧 `run.commit(...)`, `run.revert(...)`, `run.verify(...)` のような top-level
+method は削除済みです。core の `RunHandle` は git を知らず、git payload / event /
+verb は `stag.ext.git` が提供します。
+
 ## Payload 登録
 
 ```python

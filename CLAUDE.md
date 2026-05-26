@@ -27,7 +27,7 @@ This project is `0.1.0` alpha. Breaking changes are acceptable and expected. Do 
 
 STAG records the process of optimization/problem-solving. It is not a planner, executor, benchmark runner, or general agent framework.
 
-The current core model is **a single RunGraph plus attached payloads**. Pure graph records carry no domain data; everything domain-specific is on Payload records.
+The current core model is **a single RunGraph plus attached payloads**. Pure graph records carry no domain data; everything domain-specific is on Payload records. Core is standalone; git integration is the standard extension in `src/stag/ext/git/`.
 
 Pure graph records (`src/stag/core/schema/graph.py`):
 
@@ -45,15 +45,18 @@ Avoid reintroducing `Dag`, `StateNode`, `ExecutionPlan`, `PredictionPlan`, `Obse
 
 ## Payloads
 
-Two-tier design. All payloads live under `src/stag/core/schema/payloads.py`.
+Two-tier design. Core payloads live under `src/stag/core/schema/payloads.py`; extension payloads live with their extension.
 
 **Generic payloads** (use `type` string to distinguish purpose):
 - `NodePayload(payload_id, target_id, type, content={}, metadata={})` — any node annotation
 - `TransitionPayload(payload_id, target_id, type, content={}, metadata={})` — any transition annotation
 
-**Built-in typed payloads** (special semantics known to core):
+**Core typed payloads**:
 - `CutPayload(payload_id, target_id, target_kind, reason=None)` — append-only cut marker
+
+**Git extension payloads** (`src/stag/ext/git/payloads.py`):
 - `GitChangePayload(payload_id, target_id, branch, head_commit, diff_summary, commit_log=())` — git record on a Transition
+- `BranchPayload`, `MergePayload`, `RevertPayload`, `CherryPickPayload`
 
 **User subclasses**: inherit `PayloadBase`, set `payload_type` as a class-level `field(default="...", init=False)`, register with `register_payload_class(MyClass)`.
 
@@ -79,6 +82,11 @@ Public verbs (each implemented in `src/stag/core/run/<verb>.py`):
 
 Deleted verbs: `plan`, `predict`, `observe`, `note`.
 
+Git verbs are extension verbs under `handle.git`: `handle.git.commit(...)`,
+`handle.git.revert(...)`, `handle.git.cherry_pick(...)`,
+`handle.git.reset(...)`, `handle.git.merge(...)`, and `handle.git.verify(...)`.
+Do not add top-level `handle.commit` / `handle.verify` compatibility shims.
+
 When adding a new RunHandle method, implement it in a focused `src/stag/core/run/<verb>.py` module and bind it in `handle.py`.
 
 ## CLI
@@ -93,7 +101,7 @@ Current commands:
 - `node` — inspect Nodes and their payloads
 - `payload` — list payload types/schemas and attach payloads to Nodes or Transitions
 - `cut` — cut a Node or Transition (`cut node NODE_ID` or `cut transition T_ID`)
-- `git` — attach/list/show commit hashes on Transitions via `GitChangePayload`
+- `git` — canonical namespace for git extension commands (`git commit`, `git verify`, `git branch`, plus `git add/list/show`)
 - `show` — inspect a node / transition / payload as JSON
 - `graph` — dump / trace / reachable graph queries
 - `trace` / `outcomes` / `reachable` — compatibility derived queries
@@ -106,17 +114,22 @@ Current commands:
 
 Deleted commands: `plan`, `predict`, `observe`, `note`.
 
+Git shortcut commands such as `stag commit`, `stag verify`, `stag branch`,
+`stag reset`, and `stag hook` are alias-layer shortcuts that resolve to
+`stag git ...`. Register new git CLI surface under the canonical `git`
+namespace first.
+
 Commands resolve the target run in this order:
 
 1. `--run`
 2. `STAG_RUN_ID`
-3. `<store-dir>/../current.json`
+3. nearest git repo `.stag-id`
 
 Mutating commands resolve user attribution in this order:
 
 1. `--user`
 2. `STAG_USER_ID`
-3. `<store-dir>/../config.json` `user.id`
+3. `<STAG_HOME>/config.json` `user.id`
 4. `"user"`
 
 The `workflows/`, `domains/`, `execution/`, and `search/` packages are scaffolding unless the task explicitly wires them.

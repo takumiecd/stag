@@ -3,6 +3,10 @@
 `REDESIGN_GIT_NATIVE.md` を実装に落とすための作業計画。
 各スライスは end-to-end で動く単位に切る。完了条件を満たしたら次へ。
 
+> 現在の実装では git-native 機能は標準 `git` extension にある。この文書内の
+> `stag commit` / `stag verify` / `stag branch` などは shortcut alias と読み、
+> 正式 CLI は `stag git commit` / `stag git verify` / `stag git branch`。
+
 ## 戦略
 
 - **vertical slice**: 1 スライスごとに schema + run handle + CLI + test を揃え、動く状態を保つ。
@@ -137,14 +141,14 @@
 ### S10 — クリーンアップ
 
 **含むもの**:
-- 旧 `stag git ...` コマンド廃止 (`stag commit` / `stag adopt` に統合)
+- git-native 再設計前の旧コマンド前提を削除。`stag git ...` は extension の正式 namespace として維持し、`stag commit` 等は alias として扱う
 - `.stag/` 前提コード全削除
 - `current.json` 全削除
 - `DIRECTION.md`, `STATE_MODEL.md`, `API.md`, `CLI.md`, `AGENT_LOOP.md`, `GIT_INTEGRATION.md` 更新
 
 **完了条件**:
 - リポ全体で `.stag/` への参照 0
-- 旧 `stag git attach/list/show` への参照 0
+- 旧 git-native 前提への参照 0
 - 主要ドキュメントが新仕様と整合
 
 ## 進行管理

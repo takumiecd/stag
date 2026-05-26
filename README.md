@@ -35,7 +35,7 @@ GraphView
   └── root_node_id
 ```
 
-`Transition` connects many input nodes to exactly one output node. Domain meaning is attached separately through payloads. Generic `NodePayload` and `TransitionPayload` are flexible; special payloads such as `CutPayload` and `GitChangePayload` carry built-in semantics.
+`Transition` connects many input nodes to exactly one output node. Domain meaning is attached separately through payloads. Generic `NodePayload` and `TransitionPayload` are flexible; `CutPayload` carries core invalidation semantics. Git-specific payloads such as `GitChangePayload` live in the standard `git` extension.
 
 `RunGraph` is append-only. Once added, nodes / input transitions / output transitions / payloads are never deleted. Cancellation and invalidation are expressed through `CutPayload` and read-time computation.
 
@@ -127,6 +127,7 @@ stag transition create \
   --payload-type transition_payload \
   --field type=experiment \
   --field intent="run baseline benchmark"
+```
 
 For parallel terminals or child processes, split history by work session. Use
 explicit mode when you want every command to be self-contained:
@@ -150,6 +151,7 @@ stag transition create --from <root_node_id> --payload-type transition_payload
 stag work-session spawn --run demo -- codex
 ```
 
+```bash
 stag payload add \
   --run demo \
   --node <output_node_id> \
@@ -161,6 +163,17 @@ stag graph trace --run demo <output_node_id>
 stag show --run demo
 ```
 
+Git integration is a standard extension. Its canonical CLI namespace is
+`stag git ...`, while shortcuts such as `stag commit` and `stag verify` are
+default aliases for `stag git commit` and `stag git verify`:
+
+```bash
+stag init req_kernel --extension git --run-id demo
+stag git commit -m "run baseline benchmark"
+stag commit -m "try tiled kernel"
+stag git verify
+```
+
 If not installed, replace each command with `PYTHONPATH=src python3 -m stag.cli.main ...`.
 
 ## Key Terms
@@ -169,13 +182,11 @@ If not installed, replace each command with `PYTHONPATH=src python3 -m stag.cli.
 - `RunGraph`: the overall DAG and global records for a run.
 - `GraphView`: a subset of `RunGraph`.
 - `Node`: a pure graph node.
-- `InputTransition`: an input-side transition accepting multiple input nodes.
-- `OutputTransition`: an output-side transition that reaches a single output node.
-- `NotePayload`: a lightweight memo attached to a node.
-- `PlanPayload`: plan information attached to an `InputTransition`.
-- `PredictionPayload`: prediction information attached to a prediction output.
-- `ResultPayload`: execution result attached to an observed output.
+- `Transition`: a pure graph transition accepting multiple input nodes and producing one output node.
+- `NodePayload`: a generic payload attached to a node.
+- `TransitionPayload`: a generic payload attached to a transition.
 - `CutPayload`: an append-only payload that marks an input/output transition as inactive.
+- `GitChangePayload`: a git-extension payload attached to a transition.
 
 ## Storage Format
 

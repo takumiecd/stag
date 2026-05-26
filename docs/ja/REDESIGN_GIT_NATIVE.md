@@ -1,5 +1,10 @@
 # STAG Git-Native 再設計 (実装仕様)
 
+> 現在の実装では、この git-native 機能群は core ではなく標準 extension
+> `stag.ext.git` に置かれている。CLI の正式形は `stag git <verb>`、
+> `stag commit` などは default alias。extension 化の層構造は
+> [EXTENSION_FRAMEWORK.md](EXTENSION_FRAMEWORK.md) を参照。
+
 このドキュメントは「stag を git の上に立つ wrapper として再定義する」一連の変更の仕様書。
 合意済みの設計を集約し、実装の準拠先とする。
 
@@ -362,28 +367,29 @@ interactive rebase の各操作別:
 - `.git/hooks/post-rewrite`: rebase / amend の追従 (sha_map を取得して新 GitChangePayload を append)
 - `.git/hooks/post-checkout`: branch 切替を session 側に反映 (stag を経由しない `git checkout` を吸収)
 
-すでに hook がある場合は追記モード。`stag init --no-hooks` で skip 可能。
-hook 再インストール: `stag hook install [--force]`。
+すでに hook がある場合は追記モード。`stag init --extension git --git-no-hooks`
+で skip 可能。hook 再インストール: `stag git hook install [--force]`
+（shortcut: `stag hook install [--force]`）。
 
 ## 12. CLI 変更まとめ
 
 ### 新規
 
-- `stag init [--no-hooks] [--no-stag-id-commit]` — 仕様変更 (storage 外出し、hook install、`.stag-id` 生成)
-- `stag commit -m "..."` — git commit を駆動
-- `stag revert <sha|transition>` — revert を駆動、RevertPayload を付与
-- `stag reset <sha|node> [--hard|--mixed|--soft]` — reset を駆動、ResetEvent + SessionPointerEvent + (hard なら) 自動 Cut。**Transition は作らない**
-- `stag cherry-pick <sha|transition>` — cherry-pick を駆動、CherryPickPayload を付与
-- `stag verify` — Descendant 制約を全 Transition について git に問い合わせて検証。違反 (orphan / 追従漏れ / amend 不整合) を報告
+- `stag init --extension git [--git-no-hooks]` — git extension を有効化し、hook install と `.stag-id` 生成を行う
+- `stag git commit -m "..."` (`stag commit`) — git commit を駆動
+- `stag git revert --sha <sha>` / `--transition <t>` (`stag revert`) — revert を駆動、RevertPayload を付与
+- `stag git reset --sha <sha>` / `--node <node>` (`stag reset`) — reset を駆動、ResetEvent + SessionPointerEvent + (hard なら) 自動 Cut。**Transition は作らない**
+- `stag git cherry-pick --sha <sha>` (`stag cherry-pick`) — cherry-pick を駆動、CherryPickPayload を付与
+- `stag git verify` (`stag verify`) — Descendant 制約を全 Transition について git に問い合わせて検証。違反 (orphan / 追従漏れ / amend 不整合) を報告
 - `stag adopt <sha>...` — 既存 commit を transition 化
 - `stag checkout <branch>` — branch 切替
-- `stag branch list | show <name>`
-- `stag hook install [--force]`
+- `stag git branch list | show <name>` (`stag branch ...`)
+- `stag git hook install [--force]` (`stag hook install [--force]`)
 - `stag use --add <node>`, `stag use --drop <node>` — current 集合操作
 
 ### 変更
 
-- `stag git ...` 系は廃止または `stag commit` / `stag adopt` 等に統合
+- `stag git ...` は正式 namespace。`stag commit` / `stag verify` 等は alias 層の shortcut。
 - reachable / graph / dump 系に `--branch <name>` フィルタ追加
 - `stag show transition <t>` は **最新 GitChangePayload** を default で表示。`--history` で過去 GitChangePayload 一覧。
 

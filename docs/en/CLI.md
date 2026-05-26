@@ -43,6 +43,20 @@ Payload:
 Cut / Git:
 
 - `stag cut node <node_id>` / `stag cut transition <transition_id>`
+
+Git integration is a standard extension. The canonical command namespace is
+`stag git ...`; shortcut aliases such as `stag commit` are kept for daily use.
+
+- `stag init <req_id> --extension git`: enable the git extension for a run
+- `stag git commit -m "message"` / `stag commit -m "message"`
+- `stag git branch list` / `stag branch list`
+- `stag git branch show <name>` / `stag branch show <name>`
+- `stag git revert --sha SHA` / `stag revert --sha SHA`
+- `stag git cherry-pick --sha SHA` / `stag cherry-pick --sha SHA`
+- `stag git merge --other branch:<name>` / `stag merge --other branch:<name>`
+- `stag git reset --node NODE --mode hard` / `stag reset --node NODE --mode hard`
+- `stag git verify` / `stag verify`
+- `stag git hook install` / `stag hook install`
 - `stag git add --transition T --commit SHA`
 - `stag git list --transition T`
 - `stag git show --transition T`

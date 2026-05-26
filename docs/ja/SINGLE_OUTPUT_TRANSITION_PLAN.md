@@ -1,11 +1,15 @@
 # Single-Output Transition + Generic Payload リファクタ計画
 
+> この計画は single-output/generic payload 化の履歴メモ。現在の実装では
+> `GitChangePayload` は core built-in ではなく標準 `git` extension 側の payload。
+> core の特殊 payload は `CutPayload` のみ。
+
 ## 設計哲学
 
 1. **関数的 Transition**: 複数 input → 1 つの action → **1 つの output Node**。`inputs → action → output` で 1:1 に追えること
 2. **拡張は Python で**: ユーザーが新しい記録種別を増やしたければ `PayloadBase` を継承して自作する。これが基本路線
 3. **デフォルトの逃げ道**: Python 書きたくないユーザー向けに、`type` + `content` を持つ generic な `NodePayload` / `TransitionPayload` を同梱。文字列 type で何でも記録できる
-4. **必要最小限の built-in 特殊 Payload**: `CutPayload`（cascade 意味論があるので必須）、`GitChangePayload`（用途が普遍的なので便利）。それ以外（旧 Plan / Prediction / Result / Note）は廃止
+4. **必要最小限の core 特殊 Payload**: `CutPayload`（cascade 意味論があるので必須）。git 記録は標準 `git` extension の `GitChangePayload` で扱う。それ以外（旧 Plan / Prediction / Result / Note）は廃止
 
 ## スキーマ
 
@@ -249,12 +253,12 @@ MVP 案: **(a)** を採用。ユーザーが custom payload class を import せ
 - Tree: Transition の output が 1 つに固定されるので、Transition → 単一 output Node の直線関係に。fan-out は **複数 sibling Transition** として表現
 - Flowchart: 各 Transition は 1:N input + 1 output の標準形。layout が単純化
 - Payload 表示: type ごとの特別 rendering は MVP では持たない。`type` / `content` を JSON dump で表示。Cut / GitChange は subclass なので typed access で綺麗に表示できる
-- TUI が認識する built-in payload は `CutPayload` と `GitChangePayload` の 2 つ + 汎用の `NodePayload` / `TransitionPayload`
+- TUI が認識する payload は core の `CutPayload`、git extension の `GitChangePayload`、汎用の `NodePayload` / `TransitionPayload`
 
 ## 影響を受けるファイル（ざっくり）
 
 - `src/stag/core/schema/graph.py` — `Edge`/`GraphRef`/`GraphRecordKind` 削除、`Transition` に `input_node_ids` / `output_node_id` 追加
-- `src/stag/core/schema/payloads.py` — 全面書き直し。`PlanPayload` / `PredictionPayload` / `ResultPayload` / `NotePayload` 削除、`NodePayload` / `TransitionPayload` 新設、`CutPayload` / `GitChangePayload` 残す（API は調整）、`register_payload_class` API 新設
+- `src/stag/core/schema/payloads.py` — 全面書き直し。`PlanPayload` / `PredictionPayload` / `ResultPayload` / `NotePayload` 削除、`NodePayload` / `TransitionPayload` 新設、`CutPayload` 残す（API は調整）、`register_payload_class` API 新設。`GitChangePayload` は git extension に置く
 - `src/stag/core/run_graph.py` — Edge 関連 API 削除、逆引きインデックス
 - `src/stag/core/run/plan.py` — **削除**
 - `src/stag/core/run/predict.py` — **削除**（または rename）

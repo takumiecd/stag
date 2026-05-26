@@ -43,6 +43,20 @@ stag graph dump --run demo --format outline
 ### Cut / Git
 
 - `stag cut node <node_id>` / `stag cut transition <transition_id>` — CutPayload を追加
+
+git 連携は標準 extension です。正式な command namespace は `stag git ...` で、
+日常用の `stag commit` などは default alias として残ります。
+
+- `stag init <req_id> --extension git` — run で git extension を有効化
+- `stag git commit -m "message"` / `stag commit -m "message"` — git commit を駆動して Transition を記録
+- `stag git branch list` / `stag branch list` — 記録済み branch 一覧
+- `stag git branch show <name>` / `stag branch show <name>` — branch tip と member を表示
+- `stag git revert --sha SHA` / `stag revert --sha SHA` — revert を駆動して記録
+- `stag git cherry-pick --sha SHA` / `stag cherry-pick --sha SHA` — cherry-pick を駆動して記録
+- `stag git merge --other branch:<name>` / `stag merge --other branch:<name>` — merge を駆動して記録
+- `stag git reset --node NODE --mode hard` / `stag reset --node NODE --mode hard` — reset と current 移動を記録
+- `stag git verify` / `stag verify` — git descendant 制約を検証
+- `stag git hook install` / `stag hook install` — git hooks を install
 - `stag git add --transition T --commit SHA` — Transition に commit hash を紐づける
 - `stag git list --transition T` — 紐づいた commit hash を表示
 - `stag git show --transition T` — GitChangePayload を表示

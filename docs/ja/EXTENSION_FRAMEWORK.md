@@ -106,15 +106,16 @@ run を load すると enabled extension が auto-load される。
 ### 4.1 Alias 解決の優先順
 
 ```
-1. user config (~/.config/stag/aliases.toml)
-2. run-local config (<STAG_HOME>/runs/<uuid>/aliases.toml)
-3. enabled extension の default_aliases (load 順で merge)
-4. core CLI verb (init, list, current, use, …)
-5. 解決失敗 → error
+1. standard extension の default_aliases (git など)
+2. enabled extension の default_aliases (load 順で merge、standard extension は重複除外)
+3. user config (~/.config/stag/aliases.toml)
+4. run-local config (<STAG_HOME>/runs/<uuid>/aliases.toml)
+5. core CLI verb (init, list, current, use, …)
+6. 解決失敗 → error
 ```
 
-複数 ext が同じ alias 名を主張したら register 時に warning、先勝ち。ユーザは
-`aliases.toml` で明示的に override。
+複数 ext が同じ alias 名を主張したら extension default tier では先勝ち。ユーザは
+`aliases.toml` で明示的に override でき、run-local alias が最優先。
 
 ### 4.2 alias 設定ファイル
 
@@ -168,8 +169,8 @@ commit = "git commit"   # default の override
 | **E4** | git ext を Protocol に適合: `register_schema`, `register_verbs`, `register_cli`, `default_aliases`, `register_init_options`, `on_init`, `validate` を実装 | git ext load → 既存 CLI が以前通り動く |
 | **E5** | `RunHandle.git.commit(...)` namespace 化。旧 `handle.commit` は alpha なので即廃止。テストも更新 | テスト全 pass |
 | **E6** | dispatcher で canonical `stag git commit` と shortcut `stag commit` の両方が動く | 両形式の CLI テスト pass |
-| **E7** | doc 更新: `DIRECTION.md`, `STATE_MODEL.md`, `API.md`, `CLI.md`, `CLAUDE.md` を ext モデルに合わせる。`REDESIGN_GIT_NATIVE.md` は ext doc にリンクするだけに縮退 | doc 整合 |
-| **S10** (旧) | 旧 `stag git ...` 廃止、`.stag/` 残骸削除、cleanup | リポ内に旧前提残らない |
+| **E7** | doc 更新: `DIRECTION.md`, `STATE_MODEL.md`, `API.md`, `CLI.md`, `CLAUDE.md` を ext モデルに合わせる。`REDESIGN_GIT_NATIVE.md` には extension framework への注記を置く | doc 整合 |
+| **S10** (旧) | `.stag/` 残骸など、git-native 再設計前提の cleanup | リポ内に旧前提残らない |
 
 ## 7. 未決事項
 

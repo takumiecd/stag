@@ -37,3 +37,19 @@ the same input node IDs.
 
 The removed APIs `plan`, `predict`, `observe`, and `note` are represented by
 `transition(...)` and `attach(...)`.
+
+## Git Extension API
+
+Git verbs live under the standard `git` extension namespace:
+
+```python
+transition = run.git.commit(message="run baseline benchmark")
+run.git.revert(target_sha="<sha>")
+run.git.cherry_pick(source_sha="<sha>")
+run.git.reset(to_node_id="<node_id>", mode="hard")
+violations = run.git.verify()
+```
+
+The old top-level methods such as `run.commit(...)`, `run.revert(...)`, and
+`run.verify(...)` are removed. Core `RunHandle` stays git-agnostic; git payloads,
+events, and verbs are provided by `stag.ext.git`.
