@@ -27,20 +27,20 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     sp_list = git_sub.add_parser("list", help="List git_change payloads for a Transition")
     sp_list.add_argument("--transition", required=True, dest="transition_id")
     sp_list.add_argument("--run", default=None)
-    sp_list.add_argument("--store-dir", default=".stag/runs")
+    sp_list.add_argument("--store-dir", default=None)
 
     sp_add = git_sub.add_parser("add", help="Attach explicit Git commits to a Transition")
     sp_add.add_argument("--transition", required=True, dest="transition_id")
     sp_add.add_argument("--commit", action="append", required=True, dest="commits")
     sp_add.add_argument("--run", default=None)
-    sp_add.add_argument("--store-dir", default=".stag/runs")
+    sp_add.add_argument("--store-dir", default=None)
     sp_add.add_argument("--user", default=None)
     sp_add.add_argument("--work-session", default=None)
 
     sp_show = git_sub.add_parser("show", help="Show git_change payloads for a Transition")
     sp_show.add_argument("--transition", required=True, dest="transition_id")
     sp_show.add_argument("--run", default=None)
-    sp_show.add_argument("--store-dir", default=".stag/runs")
+    sp_show.add_argument("--store-dir", default=None)
 
     return git_parser
 

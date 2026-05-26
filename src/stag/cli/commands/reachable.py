@@ -17,7 +17,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     group.add_argument("--from-node", dest="from_node", default=None)
     group.add_argument("--view", dest="view_name", default=None)
     parser.add_argument("--include-records", action="store_true")
-    parser.add_argument("--store-dir", default=".stag/runs")
+    parser.add_argument("--store-dir", default=None)
     return parser
 
 

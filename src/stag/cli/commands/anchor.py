@@ -26,7 +26,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument("--run", default=None)
     parser.add_argument("--from", required=True, dest="from_node_id", metavar="NODE_ID")
     parser.add_argument("--label", required=True)
-    parser.add_argument("--store-dir", default=".stag/runs")
+    parser.add_argument("--store-dir", default=None)
     parser.add_argument("--user", default=None)
     parser.add_argument("--work-session", default=None)
     return parser

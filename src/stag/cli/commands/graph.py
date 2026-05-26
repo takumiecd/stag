@@ -21,19 +21,19 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     sp_dump.add_argument("--depth", type=int, default=None)
     sp_dump.add_argument("--full-payloads", action="store_true")
     sp_dump.add_argument("--run", default=None)
-    sp_dump.add_argument("--store-dir", default=".stag/runs")
+    sp_dump.add_argument("--store-dir", default=None)
 
     sp_trace = graph_sub.add_parser("trace", help="Trace history from a node")
     sp_trace.add_argument("node_id")
     sp_trace.add_argument("--depth", type=int, default=None)
     sp_trace.add_argument("--run", default=None)
-    sp_trace.add_argument("--store-dir", default=".stag/runs")
+    sp_trace.add_argument("--store-dir", default=None)
 
     sp_reachable = graph_sub.add_parser("reachable", help="Show active graph forward from a node")
     sp_reachable.add_argument("node_id")
     sp_reachable.add_argument("--include-records", action="store_true")
     sp_reachable.add_argument("--run", default=None)
-    sp_reachable.add_argument("--store-dir", default=".stag/runs")
+    sp_reachable.add_argument("--store-dir", default=None)
 
     return parser
 

@@ -18,7 +18,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument(
         "--outputs", action="store_true", help="(with --transition) include output nodes"
     )
-    parser.add_argument("--store-dir", default=".stag/runs")
+    parser.add_argument("--store-dir", default=None)
     return parser
 
 

@@ -24,7 +24,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--store-dir",
-        default=".stag/runs",
+        default=None,
         help="Directory where runs are stored (default: .stag/runs)",
     )
     target = parser.add_mutually_exclusive_group(required=True)

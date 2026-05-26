@@ -42,7 +42,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     sp_create.add_argument("--payload-type", default="transition_payload")
     sp_create.add_argument("--field", action="append", default=None, help="Payload field as key=value")
     sp_create.add_argument("--json", default=None, help="Payload fields as a JSON object")
-    sp_create.add_argument("--store-dir", default=".stag/runs")
+    sp_create.add_argument("--store-dir", default=None)
     sp_create.add_argument("--user", default=None)
     sp_create.add_argument("--work-session", default=None)
 
@@ -50,22 +50,22 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     sp_show.add_argument("transition_id")
     sp_show.add_argument("--with-payloads", action="store_true")
     sp_show.add_argument("--run", default=None)
-    sp_show.add_argument("--store-dir", default=".stag/runs")
+    sp_show.add_argument("--store-dir", default=None)
 
     sp_output = transition_sub.add_parser("output", help="Show a transition output node")
     sp_output.add_argument("transition_id")
     sp_output.add_argument("--run", default=None)
-    sp_output.add_argument("--store-dir", default=".stag/runs")
+    sp_output.add_argument("--store-dir", default=None)
 
     sp_inputs = transition_sub.add_parser("inputs", help="Show transition input nodes")
     sp_inputs.add_argument("transition_id")
     sp_inputs.add_argument("--run", default=None)
-    sp_inputs.add_argument("--store-dir", default=".stag/runs")
+    sp_inputs.add_argument("--store-dir", default=None)
 
     sp_payloads = transition_sub.add_parser("payloads", help="Show transition payloads")
     sp_payloads.add_argument("transition_id")
     sp_payloads.add_argument("--run", default=None)
-    sp_payloads.add_argument("--store-dir", default=".stag/runs")
+    sp_payloads.add_argument("--store-dir", default=None)
     return parser
 
 

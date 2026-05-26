@@ -6,39 +6,7 @@ import json
 import os
 from pathlib import Path
 
-
-_CURRENT_FILENAME = "current.json"
-
-
-def current_path(store_dir: str) -> Path:
-    """Return the path to the current-run marker file."""
-    return Path(store_dir).parent / _CURRENT_FILENAME
-
-
-def save_current_run(run_id: str, store_dir: str) -> Path:
-    """Persist *run_id* as the current run for the store directory."""
-    path = current_path(store_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps({"run_id": run_id, "store_dir": store_dir}, indent=2),
-        encoding="utf-8",
-    )
-    return path
-
-
-def load_current_run(store_dir: str) -> str:
-    """Load the current run_id from the marker file.
-
-    Raises
-    ------
-    RuntimeError
-        If no current run is set.
-    """
-    path = current_path(store_dir)
-    if not path.exists():
-        raise RuntimeError("no current run set. Use 'stag use <run_id>'")
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return data["run_id"]
+from stag.cli.paths import find_repo_root, read_stag_id, resolve_stag_home
 
 
 def resolve_run_id(
@@ -49,7 +17,7 @@ def resolve_run_id(
 
     1. Explicit *run_id* if provided.
     2. ``STAG_RUN_ID`` environment variable.
-    3. ``.stag/current.json`` marker file.
+    3. ``.stag-id`` file in the nearest git repo root.
 
     Raises
     ------
@@ -61,16 +29,33 @@ def resolve_run_id(
     env = os.environ.get("STAG_RUN_ID")
     if env:
         return env
-    return load_current_run(store_dir)
+    # Walk up from cwd to find .stag-id
+    try:
+        repo_root = find_repo_root()
+        stag_id = read_stag_id(repo_root)
+        if stag_id:
+            return stag_id
+    except RuntimeError:
+        pass
+    raise RuntimeError(
+        "no current run set. "
+        "Run 'stag init' to create a run, or set STAG_RUN_ID, "
+        "or pass --run."
+    )
 
 
 def resolve_run_id_from_args(args) -> str:
     """Resolve a run_id from a parsed argparse namespace.
 
     Reads the ``--run`` flag and falls back to the env var and
-    current.json marker.
+    ``.stag-id`` file.
     """
     return resolve_run_id(getattr(args, "run", None), args.store_dir)
+
+
+def _config_path() -> Path:
+    """Return ``<STAG_HOME>/config.json``."""
+    return resolve_stag_home() / "config.json"
 
 
 def resolve_user_id(user_id: str | None, store_dir: str) -> str:
@@ -80,7 +65,7 @@ def resolve_user_id(user_id: str | None, store_dir: str) -> str:
     env = os.environ.get("STAG_USER_ID")
     if env:
         return env
-    config_path = Path(store_dir).parent / "config.json"
+    config_path = _config_path()
     if config_path.exists():
         data = json.loads(config_path.read_text(encoding="utf-8"))
         configured = data.get("user", {}).get("id")
@@ -101,7 +86,7 @@ def resolve_work_session_id(work_session_id: str | None, store_dir: str) -> str:
     env = os.environ.get("STAG_WORK_SESSION_ID")
     if env:
         return env
-    config_path = Path(store_dir).parent / "config.json"
+    config_path = _config_path()
     if config_path.exists():
         data = json.loads(config_path.read_text(encoding="utf-8"))
         configured = data.get("work_session", {}).get("id")
@@ -115,22 +100,28 @@ def resolve_work_session_id_from_args(args) -> str:
     return resolve_work_session_id(getattr(args, "work_session", None), args.store_dir)
 
 
-def resolve_store(store_dir: str):
+def resolve_store(store_dir: str | None):
     """Pick a RunStore implementation.
 
     Resolution chain:
     1. STAG_STORE env var ("jsonl" | "sqlite")
-    2. <store-dir>/../config.json ``storage.backend``
+    2. <STAG_HOME>/config.json ``storage.backend``
     3. default: "jsonl"
+
+    If *store_dir* is None, ``<STAG_HOME>/runs`` is used.
 
     Raises
     ------
     RuntimeError
         If the resolved backend name is not "jsonl" or "sqlite".
     """
+    if store_dir is None:
+        from stag.cli.paths import resolve_store_dir  # noqa: PLC0415
+        store_dir = resolve_store_dir()
+
     backend: str | None = os.environ.get("STAG_STORE")
     if not backend:
-        config_path = Path(store_dir).parent / "config.json"
+        config_path = _config_path()
         if config_path.exists():
             data = json.loads(config_path.read_text(encoding="utf-8"))
             backend = data.get("storage", {}).get("backend")

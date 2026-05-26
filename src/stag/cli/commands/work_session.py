@@ -26,7 +26,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
             "Create and use work sessions. Use explicit mode with --work-session on "
             "mutating commands, or fixed mode via `eval \"$(stag work-session env "
             "--run RUN --new)\"`. Fixed mode writes only shell environment variables, "
-            "so parallel terminals and child processes do not share current.json state."
+            "so parallel terminals and child processes do not share .stag-id state."
         ),
     )
     work_sub = parser.add_subparsers(dest="work_session_command", required=True)
@@ -43,7 +43,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     start.add_argument("--run", default=None)
     start.add_argument("--work-session", default=None)
     start.add_argument("--user", default=None)
-    start.add_argument("--store-dir", default=".stag/runs")
+    start.add_argument("--store-dir", default=None)
     start.add_argument("--json", action="store_true", dest="as_json")
 
     env = work_sub.add_parser(
@@ -59,7 +59,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     env.add_argument("--run", default=None)
     env.add_argument("--new", action="store_true", dest="create_new")
     env.add_argument("--user", default=None)
-    env.add_argument("--store-dir", default=".stag/runs")
+    env.add_argument("--store-dir", default=None)
     env.add_argument("--json", action="store_true", dest="as_json")
 
     spawn = work_sub.add_parser(
@@ -74,17 +74,17 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     spawn.add_argument("--run", default=None)
     spawn.add_argument("--work-session", default=None)
     spawn.add_argument("--user", default=None)
-    spawn.add_argument("--store-dir", default=".stag/runs")
+    spawn.add_argument("--store-dir", default=None)
     spawn.add_argument("command", nargs=argparse.REMAINDER)
 
     list_cmd = work_sub.add_parser("list", help="List work sessions in a run")
     list_cmd.add_argument("--run", default=None)
-    list_cmd.add_argument("--store-dir", default=".stag/runs")
+    list_cmd.add_argument("--store-dir", default=None)
 
     show = work_sub.add_parser("show", help="Show one work session")
     show.add_argument("work_session_id")
     show.add_argument("--run", default=None)
-    show.add_argument("--store-dir", default=".stag/runs")
+    show.add_argument("--store-dir", default=None)
 
     return parser
 

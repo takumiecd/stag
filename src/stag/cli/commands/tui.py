@@ -11,7 +11,7 @@ from stag.cli.context import resolve_store
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("tui", help="Launch the Textual UI")
-    parser.add_argument("--store-dir", default=".stag/runs")
+    parser.add_argument("--store-dir", default=None)
     parser.add_argument(
         "--watch-interval",
         type=float,

@@ -4,17 +4,18 @@ from __future__ import annotations
 
 import argparse
 
-from stag.cli.context import resolve_store, save_current_run
+from stag.cli.context import resolve_store
+from stag.cli.paths import find_repo_root, resolve_store_dir, write_stag_id
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
     """Register the ``use`` subcommand parser."""
-    parser = subparsers.add_parser("use", help="Set the current run")
+    parser = subparsers.add_parser("use", help="Set the current run (writes .stag-id)")
     parser.add_argument("run_id", help="Run identifier")
     parser.add_argument(
         "--store-dir",
-        default=".stag/runs",
-        help="Directory where runs are stored (default: .stag/runs)",
+        default=None,
+        help="Directory where runs are stored (default: <STAG_HOME>/runs)",
     )
     return parser
 
@@ -22,9 +23,9 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
 def run_use_command(
     *,
     run_id: str,
-    store_dir: str,
+    store_dir: str | None,
 ) -> dict:
-    """Set the current run.
+    """Set the current run by writing its id to ``.stag-id``.
 
     Parameters
     ----------
@@ -35,19 +36,23 @@ def run_use_command(
 
     Returns
     -------
-    dict with ``run_id`` key.
+    dict with ``run_id`` and ``stag_id_path`` keys.
 
     Raises
     ------
     KeyError
-        If the run_id does not exist.
+        If the run_id does not exist in the store.
+    RuntimeError
+        If not inside a git repository.
     """
-    store = resolve_store(store_dir)
+    resolved_store_dir = store_dir if store_dir is not None else resolve_store_dir()
+    store = resolve_store(resolved_store_dir)
     run_path = store.run_path(run_id)
     if not run_path.exists():
         raise KeyError(f"unknown run_id: {run_id}")
-    save_current_run(run_id, store_dir)
-    return {"run_id": run_id}
+    repo_root = find_repo_root()
+    write_stag_id(repo_root, run_id)
+    return {"run_id": run_id, "stag_id_path": str(repo_root / ".stag-id")}
 
 
 def cli_use(args) -> int:

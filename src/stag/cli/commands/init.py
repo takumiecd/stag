@@ -6,7 +6,8 @@ import argparse
 from pathlib import Path
 
 import stag
-from stag.cli.context import resolve_store, save_current_run
+from stag.cli.context import resolve_store
+from stag.cli.paths import find_repo_root, resolve_store_dir, write_stag_id
 from stag.core.schema.requirements import Requirement
 
 
@@ -31,8 +32,13 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--store-dir",
-        default=".stag/runs",
-        help="Directory to save runs (default: .stag/runs)",
+        default=None,
+        help="Directory to save runs (default: <STAG_HOME>/runs)",
+    )
+    parser.add_argument(
+        "--no-stag-id-commit",
+        action="store_true",
+        help="Create .stag-id but skip suggesting git add (no-op flag for scripting)",
     )
     return parser
 
@@ -43,7 +49,7 @@ def run_init_command(
     target_type: str,
     target_id: str | None,
     run_id: str | None,
-    store_dir: str,
+    store_dir: str | None,
 ) -> dict[str, str]:
     """Create a new run and save it to disk.
 
@@ -59,16 +65,20 @@ def run_init_command(
         Explicit run id. If None, one is generated automatically.
     store_dir:
         Directory under which run directories are created.
+        If None, defaults to ``<STAG_HOME>/runs``.
 
     Returns
     -------
-    dict with at least ``run_id``.
+    dict with at least ``run_id``, ``root_node_id``, and ``stag_id_path``
+    (the path where ``.stag-id`` was written, or None if not in a git repo).
 
     Raises
     ------
     FileExistsError
         If the run directory already exists.
     """
+    resolved_store_dir = store_dir if store_dir is not None else resolve_store_dir()
+
     requirement = Requirement(
         requirement_id=requirement_id,
         target_type=target_type,
@@ -77,14 +87,29 @@ def run_init_command(
 
     handle = stag.init(requirement, run_id=run_id)
 
-    store = resolve_store(store_dir)
+    store = resolve_store(resolved_store_dir)
     run_path = store.run_path(handle.run_id)
     if run_path.exists():
         raise FileExistsError(f"run directory already exists: {run_path}")
 
     store.save_run(handle)
-    save_current_run(handle.run_id, store_dir)
-    return {"run_id": handle.run_id, "root_node_id": handle.root_node_id}
+
+    # Write .stag-id in the repo root if we are inside a git repo.
+    written_stag_id_path: str | None = None
+    try:
+        repo_root = find_repo_root()
+        write_stag_id(repo_root, handle.run_id)
+        written_stag_id_path = str(repo_root / ".stag-id")
+    except RuntimeError:
+        # Not inside a git repo — skip .stag-id creation silently.
+        pass
+
+    return {
+        "run_id": handle.run_id,
+        "root_node_id": handle.root_node_id,
+        "store_dir": resolved_store_dir,
+        "stag_id_path": written_stag_id_path,
+    }
 
 
 def cli_init(args) -> int:
@@ -100,4 +125,10 @@ def cli_init(args) -> int:
         store_dir=args.store_dir,
     )
     print(result["run_id"])
+    if result.get("stag_id_path"):
+        import sys
+        print(
+            f"hint: run 'git add {result['stag_id_path']}' to track this run in git",
+            file=sys.stderr,
+        )
     return 0

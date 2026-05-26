@@ -65,7 +65,7 @@ stag transition create --run demo --work-session ws_a --from <node_id> \\
 ```
 
 Fixed mode stores the run/session in the current shell environment, not in
-shared `current.json` state:
+shared `.stag-id` state:
 
 ```bash
 eval "$(stag work-session env --run demo --new)"
@@ -192,7 +192,7 @@ stag transition create --run demo --work-session ws_a --from <node_id> \\
   --payload-type transition_payload --field type=experiment
 ```
 
-固定モードでは、共有の `current.json` ではなく、現在の shell 環境に run/session
+固定モードでは、共有の `.stag-id` ではなく、現在の shell 環境に run/session
 を固定します。並列ターミナルや sub process ではこちらを使います。
 
 ```bash

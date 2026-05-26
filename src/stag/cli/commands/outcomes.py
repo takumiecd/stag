@@ -13,7 +13,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument("transition_id", help="Transition to inspect")
     parser.add_argument("--run", default=None)
     parser.add_argument("--include-payloads", action="store_true")
-    parser.add_argument("--store-dir", default=".stag/runs")
+    parser.add_argument("--store-dir", default=None)
     return parser
 
 

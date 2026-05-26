@@ -31,7 +31,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument("--full-payloads", action="store_true",
                         help="Include full payload metrics / rationale")
     parser.add_argument("--run", default=None)
-    parser.add_argument("--store-dir", default=".stag/runs")
+    parser.add_argument("--store-dir", default=None)
     return parser
 
 

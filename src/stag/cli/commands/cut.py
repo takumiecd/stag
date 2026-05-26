@@ -23,7 +23,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     group.add_argument("--transition", dest="transition_id", metavar="TRANSITION_ID")
     parser.add_argument("--run", default=None)
     parser.add_argument("--reason", default=None)
-    parser.add_argument("--store-dir", default=".stag/runs")
+    parser.add_argument("--store-dir", default=None)
     parser.add_argument("--user", default=None)
     parser.add_argument("--work-session", default=None)
     return parser

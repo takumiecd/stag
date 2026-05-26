@@ -26,11 +26,11 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     payload_sub = parser.add_subparsers(dest="payload_command", required=True)
 
     sp_types = payload_sub.add_parser("types", help="List registered payload types")
-    sp_types.add_argument("--store-dir", default=".stag/runs")
+    sp_types.add_argument("--store-dir", default=None)
 
     sp_schema = payload_sub.add_parser("schema", help="Show payload type fields")
     sp_schema.add_argument("payload_type")
-    sp_schema.add_argument("--store-dir", default=".stag/runs")
+    sp_schema.add_argument("--store-dir", default=None)
 
     sp_add = payload_sub.add_parser("add", help="Attach a payload to a node or transition")
     target = sp_add.add_mutually_exclusive_group(required=True)
@@ -40,7 +40,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     sp_add.add_argument("--field", action="append", default=None, help="Payload field as key=value")
     sp_add.add_argument("--json", default=None, help="Payload fields as a JSON object")
     sp_add.add_argument("--run", default=None)
-    sp_add.add_argument("--store-dir", default=".stag/runs")
+    sp_add.add_argument("--store-dir", default=None)
     sp_add.add_argument("--user", default=None)
     sp_add.add_argument("--work-session", default=None)
 
@@ -49,12 +49,12 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     target.add_argument("--node", dest="node_id", default=None)
     target.add_argument("--transition", dest="transition_id", default=None)
     sp_list.add_argument("--run", default=None)
-    sp_list.add_argument("--store-dir", default=".stag/runs")
+    sp_list.add_argument("--store-dir", default=None)
 
     sp_show = payload_sub.add_parser("show", help="Show one payload")
     sp_show.add_argument("payload_id")
     sp_show.add_argument("--run", default=None)
-    sp_show.add_argument("--store-dir", default=".stag/runs")
+    sp_show.add_argument("--store-dir", default=None)
 
     return parser
 

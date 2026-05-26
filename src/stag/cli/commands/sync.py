@@ -48,7 +48,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
 
 def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--run", default=None)
-    parser.add_argument("--store-dir", default=".stag/runs")
+    parser.add_argument("--store-dir", default=None)
     parser.add_argument("--remote", default=None)
     parser.add_argument("--remote-dir", default=None)
 

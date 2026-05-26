@@ -17,12 +17,12 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     sp_show.add_argument("node_id")
     sp_show.add_argument("--with-payloads", action="store_true")
     sp_show.add_argument("--run", default=None)
-    sp_show.add_argument("--store-dir", default=".stag/runs")
+    sp_show.add_argument("--store-dir", default=None)
 
     sp_payloads = node_sub.add_parser("payloads", help="Show node payloads")
     sp_payloads.add_argument("node_id")
     sp_payloads.add_argument("--run", default=None)
-    sp_payloads.add_argument("--store-dir", default=".stag/runs")
+    sp_payloads.add_argument("--store-dir", default=None)
 
     return parser
 

@@ -13,7 +13,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument("--run", default=None)
     parser.add_argument("--from-node", required=True)
     parser.add_argument("--depth", type=int, default=None)
-    parser.add_argument("--store-dir", default=".stag/runs")
+    parser.add_argument("--store-dir", default=None)
     return parser
 
 

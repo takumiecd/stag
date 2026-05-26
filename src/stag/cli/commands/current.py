@@ -4,17 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
-from stag.cli.context import load_current_run
+from stag.cli.paths import find_repo_root, read_stag_id, resolve_stag_home
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
     """Register the ``current`` subcommand parser."""
-    parser = subparsers.add_parser("current", help="Show the current run")
+    parser = subparsers.add_parser("current", help="Show the current run (from .stag-id)")
     parser.add_argument(
         "--store-dir",
-        default=".stag/runs",
-        help="Directory where runs are stored (default: .stag/runs)",
+        default=None,
+        help="Directory where runs are stored (default: <STAG_HOME>/runs)",
     )
     parser.add_argument(
         "--json",
@@ -27,31 +28,40 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
 
 def run_current_command(
     *,
-    store_dir: str,
+    store_dir: str | None = None,
 ) -> dict:
-    """Show the current run.
+    """Show the current run resolved from ``.stag-id``.
 
     Parameters
     ----------
     store_dir:
-        Directory where runs are stored.
+        Ignored (kept for API compatibility). The run path is derived from
+        STAG_HOME and the run_id in ``.stag-id``.
 
     Returns
     -------
-    dict with ``run_id`` key.
+    dict with ``run_id`` and ``run_path`` keys.
 
     Raises
     ------
     RuntimeError
-        If no current run is set.
+        If not in a git repo or no ``.stag-id`` is present.
     """
-    run_id = load_current_run(store_dir)
-    return {"run_id": run_id, "store_dir": store_dir}
+    repo_root = find_repo_root()
+    run_id = read_stag_id(repo_root)
+    if not run_id:
+        raise RuntimeError(
+            "no current run set. "
+            "Run 'stag init' to create a run or 'stag use <run_id>' to set one."
+        )
+    stag_home = resolve_stag_home()
+    run_path = str(stag_home / "runs" / run_id)
+    return {"run_id": run_id, "run_path": run_path}
 
 
 def cli_current(args) -> int:
     """Entry point for ``stag current`` subcommand."""
-    result = run_current_command(store_dir=args.store_dir)
+    result = run_current_command(store_dir=getattr(args, "store_dir", None))
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

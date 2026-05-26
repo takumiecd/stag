@@ -23,20 +23,20 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     create.add_argument("--name", required=True)
     create.add_argument("--root-node", required=True, dest="root_node")
     create.add_argument("--run", default=None)
-    create.add_argument("--store-dir", default=".stag/runs")
+    create.add_argument("--store-dir", default=None)
     create.add_argument("--user", default=None)
     create.add_argument("--work-session", default=None)
 
     # view list
     lst = view_sub.add_parser("list", help="List all GraphViews")
     lst.add_argument("--run", default=None)
-    lst.add_argument("--store-dir", default=".stag/runs")
+    lst.add_argument("--store-dir", default=None)
 
     # view show
     show = view_sub.add_parser("show", help="Show a GraphView")
     show.add_argument("view_name")
     show.add_argument("--run", default=None)
-    show.add_argument("--store-dir", default=".stag/runs")
+    show.add_argument("--store-dir", default=None)
 
     return parser
 

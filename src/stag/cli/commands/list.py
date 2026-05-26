@@ -13,7 +13,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("list", help="List saved runs")
     parser.add_argument(
         "--store-dir",
-        default=".stag/runs",
+        default=None,
         help="Directory where runs are stored (default: .stag/runs)",
     )
     return parser
