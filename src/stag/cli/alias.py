@@ -18,23 +18,19 @@ Format of aliases.toml::
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
 from typing import Optional
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
+try:
+    import tomllib  # py311+ stdlib
+except ModuleNotFoundError:  # py310 fallback
     try:
-        import tomllib  # type: ignore[no-redef]
-    except ModuleNotFoundError:
-        try:
-            import tomli as tomllib  # type: ignore[no-redef]
-        except ModuleNotFoundError as exc:
-            raise ImportError(
-                "Python 3.10 requires the 'tomli' package for TOML parsing. "
-                "Install it with: pip install tomli"
-            ) from exc
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError as exc:
+        raise ImportError(
+            "Python 3.10 requires the 'tomli' package for TOML parsing. "
+            "Install it with: pip install tomli"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
