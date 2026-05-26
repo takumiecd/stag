@@ -1,4 +1,4 @@
-"""RunHandle.verify implementation."""
+"""RunHandle.git.verify implementation."""
 
 from __future__ import annotations
 

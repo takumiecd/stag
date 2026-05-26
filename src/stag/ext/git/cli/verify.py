@@ -69,7 +69,7 @@ def run_verify_command(
     store = resolve_store(store_dir)
     handle = store.load_run(run_id)
 
-    violations = handle.verify(
+    violations = handle.git.verify(
         repo_path=repo_path,
         skip_dead_sha_check=skip_dead_sha_check,
     )

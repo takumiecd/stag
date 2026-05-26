@@ -212,7 +212,7 @@ def run_hook_post_rewrite(
     """Process a post-rewrite hook invocation.
 
     Reads sha_map from stdin (or ``stdin_lines`` for testing), calls
-    ``RunHandle.adopt_rewrite``, and persists the run.
+    ``RunHandle.git.adopt_rewrite``, and persists the run.
 
     Parameters
     ----------
@@ -269,7 +269,7 @@ def run_hook_post_rewrite(
     store = resolve_store(store_dir)
     handle = store.load_run(run_id)
 
-    result = handle.adopt_rewrite(
+    result = handle.git.adopt_rewrite(
         sha_map=sha_map,
         onto=onto,
         mode=mode,
@@ -419,7 +419,7 @@ def run_hook_post_commit(
                     ),
                 }
             try:
-                transition = handle.revert(
+                transition = handle.git.revert(
                     target_transition=reverted_t,
                     user_id=user_id,
                     work_session_id=work_session_id,
@@ -449,7 +449,7 @@ def run_hook_post_commit(
     if cp_match:
         source_sha = cp_match.group(1)
         try:
-            transition = handle.cherry_pick(
+            transition = handle.git.cherry_pick(
                 source_sha=source_sha,
                 user_id=user_id,
                 work_session_id=work_session_id,
@@ -499,7 +499,7 @@ def run_hook_post_merge(
     """Process a post-merge hook invocation.
 
     Detects whether the newest commit is a merge commit that stag has not
-    yet recorded, and adopts it by calling ``handle.merge(dry_run=True)``.
+    yet recorded, and adopts it by calling ``handle.git.merge(dry_run=True)``.
 
     Detection logic
     ---------------
@@ -509,7 +509,7 @@ def run_hook_post_merge(
     3. Check if HEAD has two parents (``git rev-parse HEAD^2`` succeeds).
        If squash merge (squash=True), HEAD has only one parent but this hook
        still fires — log a warning and skip.
-    4. If a real merge commit: call ``handle.merge(dry_run=True, ...)`` to
+    4. If a real merge commit: call ``handle.git.merge(dry_run=True, ...)`` to
        adopt it into the stag graph.
 
     Returns
@@ -623,7 +623,7 @@ def run_hook_post_merge(
             other_node_id = other_t.output_node_id
 
     try:
-        transition = handle.merge(
+        transition = handle.git.merge(
             other_node_id=other_node_id,
             other_branch=None,  # branch unknown from hook context
             head_commit=head_sha,

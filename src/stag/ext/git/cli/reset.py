@@ -92,7 +92,7 @@ def run_reset_command(
 
     before = graph_counts(handle)
 
-    result = handle.reset(
+    result = handle.git.reset(
         to_node_id=to_node_id,
         to_sha=to_sha,
         mode=mode,

@@ -71,7 +71,7 @@ def run_cherry_pick_command(
 
     before = graph_counts(handle)
 
-    transition = handle.cherry_pick(
+    transition = handle.git.cherry_pick(
         source_sha=source_sha,
         branch=branch,
         user_id=user_id,

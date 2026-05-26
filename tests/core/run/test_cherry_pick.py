@@ -1,4 +1,4 @@
-"""Tests for RunHandle.cherry_pick (dry_run=True, no real git required)."""
+"""Tests for RunHandle.git.cherry_pick (dry_run=True, no real git required)."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def _ensure_session(handle, user_id: str = "user", ws_id: str = "ws_1") -> None:
 def _first_commit(handle, sha: str = "sha_src") -> object:
     """Record an original commit so cherry-pick can reference it."""
     _ensure_session(handle)
-    return handle.commit(
+    return handle.git.commit(
         message="source commit",
         branch="feature",
         user_id="user",
@@ -37,7 +37,7 @@ class TestCherryPickImplDryRun:
         handle = _make_handle()
         _first_commit(handle, sha="sha_src1")
 
-        t = handle.cherry_pick(
+        t = handle.git.cherry_pick(
             source_sha="sha_src1",
             branch="main",
             user_id="user",
@@ -52,7 +52,7 @@ class TestCherryPickImplDryRun:
         _first_commit(handle, sha="sha_src2")
         nodes_before = set(handle.run_graph.nodes)
 
-        handle.cherry_pick(
+        handle.git.cherry_pick(
             source_sha="sha_src2",
             branch="main",
             user_id="user",
@@ -67,7 +67,7 @@ class TestCherryPickImplDryRun:
         handle = _make_handle()
         orig = _first_commit(handle, sha="sha_src3")
 
-        t = handle.cherry_pick(
+        t = handle.git.cherry_pick(
             source_sha="sha_src3",
             branch="main",
             user_id="user",
@@ -89,7 +89,7 @@ class TestCherryPickImplDryRun:
         handle = _make_handle()
         _ensure_session(handle)
 
-        t = handle.cherry_pick(
+        t = handle.git.cherry_pick(
             source_sha="sha_foreign",
             branch="main",
             user_id="user",
@@ -107,7 +107,7 @@ class TestCherryPickImplDryRun:
         handle = _make_handle()
         _first_commit(handle, sha="sha_src4")
 
-        t = handle.cherry_pick(
+        t = handle.git.cherry_pick(
             source_sha="sha_src4",
             branch="main",
             user_id="user",
@@ -125,7 +125,7 @@ class TestCherryPickImplDryRun:
         handle = _make_handle()
         _first_commit(handle, sha="sha_src5")
 
-        t = handle.cherry_pick(
+        t = handle.git.cherry_pick(
             source_sha="sha_src5",
             branch="hotfix",
             user_id="user",
@@ -142,7 +142,7 @@ class TestCherryPickImplDryRun:
         handle = _make_handle()
         _first_commit(handle, sha="sha_src6")
 
-        t = handle.cherry_pick(
+        t = handle.git.cherry_pick(
             source_sha="sha_src6",
             branch="main",
             user_id="user",
@@ -158,7 +158,7 @@ class TestCherryPickImplDryRun:
         handle = _make_handle()
         _first_commit(handle, sha="sha_src7")
 
-        t = handle.cherry_pick(
+        t = handle.git.cherry_pick(
             source_sha="sha_src7",
             branch="main",
             user_id="user",
@@ -174,7 +174,7 @@ class TestCherryPickImplDryRun:
         handle = _make_handle()
         _first_commit(handle, sha="sha_src8")
 
-        t = handle.cherry_pick(
+        t = handle.git.cherry_pick(
             source_sha="sha_src8",
             branch="main",
             user_id="user",
@@ -189,7 +189,7 @@ class TestCherryPickImplDryRun:
         _first_commit(handle, sha="sha_noevent")
         initial_events = len(handle.run_graph.work_events)
 
-        handle.cherry_pick(
+        handle.git.cherry_pick(
             source_sha="sha_noevent",
             branch="main",
             head_commit="sha_cp_no_event",

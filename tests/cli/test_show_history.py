@@ -39,7 +39,7 @@ def _make_handle_with_two_git_payloads(td: str, run_id: str = "run_show"):
 
     # Create a transition with dry_run commit.
     handle.ensure_work_session(user_id="user", work_session_id="ws")
-    t = handle.commit(
+    t = handle.git.commit(
         message="initial",
         branch="main",
         user_id="user",

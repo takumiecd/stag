@@ -128,7 +128,7 @@ def run_merge_command(
 
     before = graph_counts(handle)
 
-    transition = handle.merge(
+    transition = handle.git.merge(
         other_branch=other_branch,
         other_node_id=other_node_id,
         message=message,

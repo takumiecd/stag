@@ -83,7 +83,7 @@ class TestCherryPickCLIIntegration:
         store = resolve_store(_store_dir(tmp_path))
         handle = store.load_run("run_cp")
         handle.ensure_work_session(user_id="alice", work_session_id="ws_feat")
-        t_feat = handle.commit(
+        t_feat = handle.git.commit(
             message="add feat.txt",
             branch="feature",
             user_id="alice",

@@ -1,4 +1,4 @@
-"""Tests for RunHandle.adopt_rewrite (amend/rebase sha tracking)."""
+"""Tests for RunHandle.git.adopt_rewrite (amend/rebase sha tracking)."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def _make_handle(run_id: str = "run_rewrite"):
 def _commit(handle, sha: str, branch: str = "main", ws: str = "ws") -> str:
     """Helper: do a dry_run commit and return the transition_id."""
     handle.ensure_work_session(user_id="user", work_session_id=ws)
-    t = handle.commit(
+    t = handle.git.commit(
         message=f"commit {sha}",
         branch=branch,
         user_id="user",
@@ -34,7 +34,7 @@ class TestAdoptRewriteAmend:
         handle = _make_handle()
         t_id = _commit(handle, "sha_before")
 
-        result = handle.adopt_rewrite(
+        result = handle.git.adopt_rewrite(
             sha_map={"sha_before": "sha_after"},
             onto="sha_after",
             mode="amend",
@@ -49,7 +49,7 @@ class TestAdoptRewriteAmend:
         handle = _make_handle()
         t_id = _commit(handle, "sha_v1")
 
-        handle.adopt_rewrite(
+        handle.git.adopt_rewrite(
             sha_map={"sha_v1": "sha_v2"},
             onto="sha_v2",
             mode="amend",
@@ -64,7 +64,7 @@ class TestAdoptRewriteAmend:
         handle = _make_handle()
         t_id = _commit(handle, "sha_old")
 
-        handle.adopt_rewrite(
+        handle.git.adopt_rewrite(
             sha_map={"sha_old": "sha_new"},
             onto="sha_new",
             mode="amend",
@@ -84,7 +84,7 @@ class TestAdoptRewriteAmend:
         handle = _make_handle()
         _commit(handle, "sha_a")
 
-        result = handle.adopt_rewrite(
+        result = handle.git.adopt_rewrite(
             sha_map={"sha_a": "sha_b"},
             onto="sha_b",
             mode="amend",
@@ -106,7 +106,7 @@ class TestAdoptRewriteAmend:
         handle = _make_handle()
         _commit(handle, "sha_known")
 
-        result = handle.adopt_rewrite(
+        result = handle.git.adopt_rewrite(
             sha_map={"sha_unknown": "sha_xyz"},
             onto="sha_xyz",
             mode="amend",
@@ -123,7 +123,7 @@ class TestAdoptRewriteAmend:
 
         initial_event_count = len(handle.run_graph.work_events)
 
-        result = handle.adopt_rewrite(
+        result = handle.git.adopt_rewrite(
             sha_map={"sha_nouser": "sha_nouser_v2"},
             onto="sha_nouser_v2",
             mode="amend",
@@ -144,7 +144,7 @@ class TestAdoptRewriteRebase:
         t1 = _commit(handle, "old_sha_1")
         t2 = _commit(handle, "old_sha_2")
 
-        result = handle.adopt_rewrite(
+        result = handle.git.adopt_rewrite(
             sha_map={"old_sha_1": "new_sha_1", "old_sha_2": "new_sha_2"},
             onto="new_sha_2",
             mode="rebase",
@@ -161,7 +161,7 @@ class TestAdoptRewriteRebase:
         t1 = _commit(handle, "r_old_1")
         t2 = _commit(handle, "r_old_2")
 
-        handle.adopt_rewrite(
+        handle.git.adopt_rewrite(
             sha_map={"r_old_1": "r_new_1", "r_old_2": "r_new_2"},
             onto="r_new_2",
             mode="rebase",
@@ -177,7 +177,7 @@ class TestAdoptRewriteRebase:
         t1 = _commit(handle, "sha_x1")
         t2 = _commit(handle, "sha_x2")
 
-        result = handle.adopt_rewrite(
+        result = handle.git.adopt_rewrite(
             sha_map={"sha_x1": "sha_y1", "sha_x2": "sha_y2"},
             onto="sha_y2",
             mode="rebase",
@@ -200,7 +200,7 @@ class TestAdoptRewriteRebase:
         handle = _make_handle()
         t1 = _commit(handle, "known_sha")
 
-        result = handle.adopt_rewrite(
+        result = handle.git.adopt_rewrite(
             sha_map={"known_sha": "known_new", "orphan_sha": "orphan_new"},
             onto="known_new",
             mode="rebase",
@@ -216,7 +216,7 @@ class TestAdoptRewriteRebase:
         handle = _make_handle()
         t1 = _commit(handle, "inherit_sha", branch="feature/abc")
 
-        handle.adopt_rewrite(
+        handle.git.adopt_rewrite(
             sha_map={"inherit_sha": "inherit_sha_new"},
             onto="inherit_sha_new",
             mode="rebase",

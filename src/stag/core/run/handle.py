@@ -152,13 +152,7 @@ from stag.core.run.view import (  # noqa: E402
     view_list_impl as _view_list_impl,
     view_show_impl as _view_show_impl,
 )
-from stag.ext.git.verbs.commit import commit_impl as _commit_impl  # noqa: E402
-from stag.ext.git.verbs.rewrite import adopt_rewrite_impl as _adopt_rewrite_impl  # noqa: E402
-from stag.ext.git.verbs.revert import revert_impl as _revert_impl  # noqa: E402
-from stag.ext.git.verbs.cherry_pick import cherry_pick_impl as _cherry_pick_impl  # noqa: E402
-from stag.ext.git.verbs.reset import reset_impl as _reset_impl  # noqa: E402
-from stag.ext.git.verbs.merge import merge_impl as _merge_impl  # noqa: E402
-from stag.ext.git.verbs.verify import verify_impl as _verify_impl  # noqa: E402
+from stag.ext.git import GitNamespace  # noqa: E402
 
 RunHandle.transition = _transition_impl
 RunHandle.attach = _attach_impl
@@ -170,10 +164,4 @@ RunHandle.outcomes = _outcomes_impl
 RunHandle.view_create = _view_create_impl
 RunHandle.view_list = _view_list_impl
 RunHandle.view_show = _view_show_impl
-RunHandle.commit = _commit_impl
-RunHandle.adopt_rewrite = _adopt_rewrite_impl
-RunHandle.revert = _revert_impl
-RunHandle.cherry_pick = _cherry_pick_impl
-RunHandle.reset = _reset_impl
-RunHandle.merge = _merge_impl
-RunHandle.verify = _verify_impl
+RunHandle.git = property(lambda self: GitNamespace(self))  # type: ignore[attr-defined]

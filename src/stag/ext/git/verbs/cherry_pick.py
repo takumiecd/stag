@@ -1,4 +1,4 @@
-"""RunHandle.cherry_pick implementation."""
+"""RunHandle.git.cherry_pick implementation."""
 
 from __future__ import annotations
 

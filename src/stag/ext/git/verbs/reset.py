@@ -1,4 +1,4 @@
-"""RunHandle.reset implementation."""
+"""RunHandle.git.reset implementation."""
 
 from __future__ import annotations
 

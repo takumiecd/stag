@@ -1,4 +1,4 @@
-"""Tests for RunHandle.commit (dry_run=True, no real git required)."""
+"""Tests for RunHandle.git.commit (dry_run=True, no real git required)."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class TestCommitImplDryRun:
     def test_returns_transition(self):
         handle = _make_handle()
         _ensure_session(handle)
-        t = handle.commit(
+        t = handle.git.commit(
             message="test commit",
             branch="main",
             user_id="user",
@@ -47,7 +47,7 @@ class TestCommitImplDryRun:
         handle = _make_handle()
         _ensure_session(handle)
         initial_nodes = set(handle.run_graph.nodes)
-        handle.commit(
+        handle.git.commit(
             message="test commit",
             branch="main",
             user_id="user",
@@ -61,7 +61,7 @@ class TestCommitImplDryRun:
     def test_branch_payload_attached(self):
         handle = _make_handle()
         _ensure_session(handle)
-        t = handle.commit(
+        t = handle.git.commit(
             message="test commit",
             branch="feature/x",
             user_id="user",
@@ -79,7 +79,7 @@ class TestCommitImplDryRun:
     def test_git_change_payload_attached(self):
         handle = _make_handle()
         _ensure_session(handle)
-        t = handle.commit(
+        t = handle.git.commit(
             message="test commit",
             branch="main",
             user_id="user",
@@ -98,7 +98,7 @@ class TestCommitImplDryRun:
     def test_branch_tip_event_appended(self):
         handle = _make_handle()
         _ensure_session(handle)
-        t = handle.commit(
+        t = handle.git.commit(
             message="test commit",
             branch="main",
             user_id="user",
@@ -113,7 +113,7 @@ class TestCommitImplDryRun:
     def test_session_pointer_event_appended(self):
         handle = _make_handle()
         _ensure_session(handle)
-        t = handle.commit(
+        t = handle.git.commit(
             message="test commit",
             branch="main",
             user_id="user",
@@ -131,7 +131,7 @@ class TestCommitImplDryRun:
         _ensure_session(handle)
 
         # First commit.
-        t1 = handle.commit(
+        t1 = handle.git.commit(
             message="first",
             branch="main",
             user_id="user",
@@ -141,7 +141,7 @@ class TestCommitImplDryRun:
         )
 
         # Second commit should start from t1's output node.
-        t2 = handle.commit(
+        t2 = handle.git.commit(
             message="second",
             branch="main",
             user_id="user",
@@ -157,7 +157,7 @@ class TestCommitImplDryRun:
         _ensure_session(handle)
         root_id = handle.root_node_id
 
-        t = handle.commit(
+        t = handle.git.commit(
             message="first commit from root",
             branch="main",
             user_id="user",
@@ -172,7 +172,7 @@ class TestCommitImplDryRun:
         handle = _make_handle()
         initial_event_count = len(handle.run_graph.work_events)
 
-        handle.commit(
+        handle.git.commit(
             message="no session",
             branch="main",
             head_commit="abc",
@@ -188,7 +188,7 @@ class TestCommitImplDryRun:
 
         prev_output = handle.root_node_id
         for i in range(3):
-            t = handle.commit(
+            t = handle.git.commit(
                 message=f"commit {i}",
                 branch="main",
                 user_id="user",

@@ -119,7 +119,7 @@ def run_commit_command(
 
     if merge is not None:
         other_branch, other_node_id = _parse_merge_ref(merge)
-        transition = handle.merge(
+        transition = handle.git.merge(
             other_branch=other_branch,
             other_node_id=other_node_id,
             message=message,
@@ -131,7 +131,7 @@ def run_commit_command(
             head_commit=head_commit,
         )
     else:
-        transition = handle.commit(
+        transition = handle.git.commit(
             message=message,
             branch=branch,
             user_id=user_id,

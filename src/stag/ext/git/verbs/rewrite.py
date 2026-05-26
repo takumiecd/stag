@@ -1,4 +1,4 @@
-"""RunHandle.adopt_rewrite implementation."""
+"""RunHandle.git.adopt_rewrite implementation."""
 
 from __future__ import annotations
 

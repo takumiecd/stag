@@ -1,4 +1,4 @@
-"""RunHandle.merge implementation."""
+"""RunHandle.git.merge implementation."""
 
 from __future__ import annotations
 

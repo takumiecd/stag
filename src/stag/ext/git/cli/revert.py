@@ -80,7 +80,7 @@ def run_revert_command(
 
     before = graph_counts(handle)
 
-    transition = handle.revert(
+    transition = handle.git.revert(
         target_sha=target_sha,
         target_transition=target_transition,
         message=message,

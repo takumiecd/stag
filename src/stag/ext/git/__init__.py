@@ -72,6 +72,8 @@ class GitExtension(ExtensionBase):
         import stag.ext.git.payloads  # noqa: F401
 
     def register_verbs(self, handle: "RunHandle") -> None:
+        if hasattr(handle, self.name):
+            return
         setattr(handle, self.name, GitNamespace(handle))
 
     def register_cli(self, subparsers: "argparse._SubParsersAction") -> None:

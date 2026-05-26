@@ -102,7 +102,7 @@ class TestVerifyCLIRealGit:
         handle.ensure_work_session(user_id="alice", work_session_id="ws_v")
 
         sha1 = _git_commit_file(repo, "f1.txt", "first")
-        t1 = handle.commit(
+        t1 = handle.git.commit(
             message="first",
             branch="main",
             user_id="alice",
@@ -112,7 +112,7 @@ class TestVerifyCLIRealGit:
         )
 
         sha2 = _git_commit_file(repo, "f2.txt", "second")
-        t2 = handle.commit(
+        t2 = handle.git.commit(
             message="second",
             branch="main",
             user_id="alice",
@@ -146,7 +146,7 @@ class TestVerifyCLIRealGit:
         handle.ensure_work_session(user_id="alice", work_session_id="ws_a")
 
         sha1 = _git_commit_file(repo, "f1.txt", "first")
-        t1 = handle.commit(
+        t1 = handle.git.commit(
             message="first",
             branch="main",
             user_id="alice",
@@ -164,7 +164,7 @@ class TestVerifyCLIRealGit:
         new_sha = _get_head_sha(repo)
 
         # Update stag record via adopt_rewrite (amend mode, no onto needed).
-        handle.adopt_rewrite(
+        handle.git.adopt_rewrite(
             sha_map={sha1: new_sha},
             onto=new_sha,
             mode="amend",
@@ -218,7 +218,7 @@ class TestVerifyCLIRealGit:
         )
 
         # Record t1 with sha_A, then t2 with sha_B (sha_B is NOT a descendant of sha_A).
-        t1 = handle.commit(
+        t1 = handle.git.commit(
             message="commit A",
             branch="main",
             user_id="alice",
@@ -226,7 +226,7 @@ class TestVerifyCLIRealGit:
             head_commit=sha_A,
             dry_run=True,
         )
-        t2 = handle.commit(
+        t2 = handle.git.commit(
             message="commit B (wrong sha)",
             branch="main",
             user_id="alice",
@@ -260,7 +260,7 @@ class TestVerifyCLIMocked:
         handle = store.load_run(run_id)
         handle.ensure_work_session(user_id="alice", work_session_id="ws_m")
         for i, sha in enumerate(["sha_A", "sha_B"]):
-            handle.commit(
+            handle.git.commit(
                 message=f"commit {i + 1}",
                 branch="main",
                 user_id="alice",

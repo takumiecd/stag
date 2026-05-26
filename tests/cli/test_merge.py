@@ -32,7 +32,7 @@ def _build_two_branch_run(handle, ws_main: str = "ws_main", ws_feat: str = "ws_f
     handle.ensure_work_session(user_id="user", work_session_id=ws_feat)
     root_id = handle.root_node_id
 
-    t_main = handle.commit(
+    t_main = handle.git.commit(
         message="main commit", branch="main",
         user_id="user", work_session_id=ws_main,
         head_commit="sha_main", dry_run=True,
@@ -50,7 +50,7 @@ def _build_two_branch_run(handle, ws_main: str = "ws_main", ws_feat: str = "ws_f
     )
     handle.run_graph.add_work_event(sp)
 
-    t_feat = handle.commit(
+    t_feat = handle.git.commit(
         message="feature commit", branch="feature",
         user_id="user", work_session_id=ws_feat,
         head_commit="sha_feat", dry_run=True,

@@ -1,4 +1,4 @@
-"""Tests for RunHandle.reset (dry_run=True, no real git required)."""
+"""Tests for RunHandle.git.reset (dry_run=True, no real git required)."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def _make_chain(handle, length: int = 3):
     transitions = []
     nodes = []
     for i in range(length):
-        t = handle.commit(
+        t = handle.git.commit(
             message=f"commit {i+1}",
             branch="main",
             user_id="user",
@@ -53,7 +53,7 @@ class TestResetImplDryRun:
         transitions, nodes = _make_chain(handle, length=3)
         count_before = len(handle.run_graph.transitions)
 
-        handle.reset(
+        handle.git.reset(
             to_node_id=nodes[0],  # n1
             mode="hard",
             user_id="user",
@@ -68,7 +68,7 @@ class TestResetImplDryRun:
         transitions, nodes = _make_chain(handle, length=3)
         count_before = len(handle.run_graph.nodes)
 
-        handle.reset(
+        handle.git.reset(
             to_node_id=nodes[0],
             mode="hard",
             user_id="user",
@@ -83,7 +83,7 @@ class TestResetImplDryRun:
 
         events_before = [e for e in handle.run_graph.work_events if e.event_type == RESET_EVENT]
 
-        handle.reset(
+        handle.git.reset(
             to_node_id=nodes[0],
             mode="hard",
             user_id="user",
@@ -98,7 +98,7 @@ class TestResetImplDryRun:
         transitions, nodes = _make_chain(handle, length=3)
         # current is n3 (nodes[2]), resetting to n1 (nodes[0])
 
-        handle.reset(
+        handle.git.reset(
             to_node_id=nodes[0],
             mode="hard",
             user_id="user",
@@ -116,7 +116,7 @@ class TestResetImplDryRun:
         handle = _make_handle()
         transitions, nodes = _make_chain(handle, length=3)
 
-        handle.reset(
+        handle.git.reset(
             to_node_id=nodes[0],
             mode="hard",
             user_id="user",
@@ -136,7 +136,7 @@ class TestResetImplDryRun:
             if e.event_type == SESSION_POINTER_EVENT
         ]
 
-        handle.reset(
+        handle.git.reset(
             to_node_id=nodes[0],
             mode="hard",
             user_id="user",
@@ -155,7 +155,7 @@ class TestResetImplDryRun:
         transitions, nodes = _make_chain(handle, length=3)
         t1, t2, t3 = transitions
 
-        handle.reset(
+        handle.git.reset(
             to_node_id=nodes[0],  # n1 — so t2 and t3 are discarded
             mode="hard",
             user_id="user",
@@ -171,7 +171,7 @@ class TestResetImplDryRun:
         transitions, nodes = _make_chain(handle, length=3)
         t1, t2, t3 = transitions
 
-        handle.reset(
+        handle.git.reset(
             to_node_id=nodes[0],
             mode="hard",
             user_id="user",
@@ -185,7 +185,7 @@ class TestResetImplDryRun:
         transitions, nodes = _make_chain(handle, length=3)
         t1, t2, t3 = transitions
 
-        handle.reset(
+        handle.git.reset(
             to_node_id=nodes[0],
             mode="mixed",
             user_id="user",
@@ -200,7 +200,7 @@ class TestResetImplDryRun:
         transitions, nodes = _make_chain(handle, length=3)
         t1, t2, t3 = transitions
 
-        handle.reset(
+        handle.git.reset(
             to_node_id=nodes[0],
             mode="soft",
             user_id="user",
@@ -215,7 +215,7 @@ class TestResetImplDryRun:
         transitions, nodes = _make_chain(handle, length=3)
         t2, t3 = transitions[1], transitions[2]
 
-        handle.reset(
+        handle.git.reset(
             to_node_id=nodes[0],
             mode="hard",
             user_id="user",
@@ -234,7 +234,7 @@ class TestResetImplDryRun:
         handle = _make_handle()
         transitions, nodes = _make_chain(handle, length=2)
 
-        result = handle.reset(
+        result = handle.git.reset(
             to_node_id=nodes[0],
             mode="hard",
             user_id="user",
@@ -254,7 +254,7 @@ class TestResetImplDryRun:
         transitions, nodes = _make_chain(handle, length=3)
         t2, t3 = transitions[1], transitions[2]
 
-        result = handle.reset(
+        result = handle.git.reset(
             to_node_id=nodes[0],
             mode="hard",
             user_id="user",
@@ -275,7 +275,7 @@ class TestResetImplDryRun:
         req = Requirement(requirement_id="req2", target_type="task", target_id="t2")
         other = stag.init(req, run_id="run_other")
         other.ensure_work_session(user_id="u", work_session_id="ws_o")
-        other_t = other.commit(
+        other_t = other.git.commit(
             message="other",
             branch="main",
             user_id="u",
@@ -296,7 +296,7 @@ class TestResetImplDryRun:
         handle.run_graph.add_node(alien)
 
         with pytest.raises(ValueError, match="not an ancestor"):
-            handle.reset(
+            handle.git.reset(
                 to_node_id="n_alien",
                 mode="hard",
                 user_id="user",
@@ -309,7 +309,7 @@ class TestResetImplDryRun:
         handle = _make_handle()
         transitions, nodes = _make_chain(handle, length=2)
 
-        result = handle.reset(
+        result = handle.git.reset(
             to_node_id=nodes[1],  # same as current
             mode="hard",
             user_id="user",
@@ -326,7 +326,7 @@ class TestResetImplDryRun:
 
         # Pass work_session_id so from_node is resolved correctly,
         # but omit user_id so no work events should be written.
-        result = handle.reset(
+        result = handle.git.reset(
             to_node_id=nodes[0],
             mode="hard",
             work_session_id="ws_1",
@@ -345,7 +345,7 @@ class TestResetImplDryRun:
         handle.cut(t2.transition_id, target_kind="transition", reason="pre-cut")
 
         # reset should not raise even though t2 is already cut.
-        handle.reset(
+        handle.git.reset(
             to_node_id=nodes[0],
             mode="hard",
             user_id="user",
@@ -360,7 +360,7 @@ class TestResetImplDryRun:
         handle = _make_handle()
         transitions, nodes = _make_chain(handle, length=3)
         # sha_1 corresponds to t1 (nodes[0])
-        result = handle.reset(
+        result = handle.git.reset(
             to_sha="sha_1",
             mode="hard",
             user_id="user",
@@ -374,7 +374,7 @@ class TestResetImplDryRun:
         _make_chain(handle, length=2)
 
         with pytest.raises(KeyError, match="no stag transition found"):
-            handle.reset(
+            handle.git.reset(
                 to_sha="nonexistent_sha",
                 mode="hard",
                 dry_run=True,
@@ -385,14 +385,14 @@ class TestResetImplDryRun:
         _make_chain(handle, length=1)
 
         with pytest.raises(ValueError, match="Either to_node_id or to_sha"):
-            handle.reset(mode="hard", dry_run=True)
+            handle.git.reset(mode="hard", dry_run=True)
 
     def test_both_args_raises(self):
         handle = _make_handle()
         transitions, nodes = _make_chain(handle, length=1)
 
         with pytest.raises(ValueError, match="mutually exclusive"):
-            handle.reset(
+            handle.git.reset(
                 to_node_id=nodes[0],
                 to_sha="sha_1",
                 mode="hard",
@@ -405,7 +405,7 @@ class TestResetImplDryRun:
         transitions, nodes = _make_chain(handle, length=3)
         t1, t2, t3 = transitions
 
-        result = handle.reset(
+        result = handle.git.reset(
             to_node_id=nodes[1],  # n2
             mode="hard",
             user_id="user",

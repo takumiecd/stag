@@ -1,4 +1,4 @@
-"""Tests for RunHandle.verify (descendant constraint, no real git required).
+"""Tests for RunHandle.git.verify (descendant constraint, no real git required).
 
 All git subprocess calls are mocked via ``unittest.mock.patch``.
 """
@@ -36,7 +36,7 @@ def _make_chain(handle, shas: list[str]):
     _ensure_session(handle)
     result = []
     for i, sha in enumerate(shas):
-        t = handle.commit(
+        t = handle.git.commit(
             message=f"commit {i + 1}",
             branch="main",
             user_id="user",
@@ -98,7 +98,7 @@ class TestVerifyHappyPath:
         """A run with no transitions has nothing to check."""
         handle = _make_handle()
         with _mock_git_ok():
-            violations = handle.verify()
+            violations = handle.git.verify()
         assert violations == []
 
     def test_single_commit_no_violations(self):
@@ -106,7 +106,7 @@ class TestVerifyHappyPath:
         handle = _make_handle()
         _make_chain(handle, ["sha_A"])
         with _mock_git_ok():
-            violations = handle.verify()
+            violations = handle.git.verify()
         # root → t1(sha_A): input is root node (no sha) → skip
         assert violations == []
 
@@ -116,7 +116,7 @@ class TestVerifyHappyPath:
         _make_chain(handle, ["sha_A", "sha_B"])
 
         with _mock_git_ok():
-            violations = handle.verify()
+            violations = handle.git.verify()
 
         assert violations == []
 
@@ -126,7 +126,7 @@ class TestVerifyHappyPath:
         _make_chain(handle, ["sha_A", "sha_B", "sha_C"])
 
         with _mock_git_ok():
-            violations = handle.verify()
+            violations = handle.git.verify()
 
         assert violations == []
 
@@ -144,7 +144,7 @@ class TestVerifyNonDescendant:
         t2 = chain[1][0]
 
         with _mock_git_non_ancestor():
-            violations = handle.verify()
+            violations = handle.git.verify()
 
         assert len(violations) == 1
         v = violations[0]
@@ -160,7 +160,7 @@ class TestVerifyNonDescendant:
         t2 = chain[1][0]
 
         with _mock_git_non_ancestor():
-            violations = handle.verify()
+            violations = handle.git.verify()
 
         v = violations[0]
         assert v.details["output_sha"] == "sha_B"
@@ -191,7 +191,7 @@ class TestVerifyMissingSha:
         )
 
         with _mock_git_ok():
-            violations = handle.verify()
+            violations = handle.git.verify()
 
         kinds = [v.kind for v in violations]
         assert "missing_sha" in kinds
@@ -212,7 +212,7 @@ class TestVerifyMissingSha:
         )
 
         with _mock_git_ok():
-            violations = handle.verify()
+            violations = handle.git.verify()
 
         missing = [v for v in violations if v.kind == "missing_sha"]
         assert len(missing) == 1
@@ -239,7 +239,7 @@ class TestVerifyCutTransitions:
         )
 
         with _mock_git_non_ancestor():
-            violations = handle.verify()
+            violations = handle.git.verify()
 
         # t2 is cut → skipped; only t1 remains, and t1's input is root (no sha) → ok
         assert violations == []
@@ -258,7 +258,7 @@ class TestVerifyCutTransitions:
         )
 
         with _mock_git_non_ancestor():
-            violations = handle.verify()
+            violations = handle.git.verify()
 
         assert violations == []
 
@@ -273,7 +273,7 @@ class TestVerifyRootNodeSkipped:
         """root → t1: root has no sha, so input side is skipped. No violation."""
         handle = _make_handle()
         _ensure_session(handle)
-        handle.commit(
+        handle.git.commit(
             message="first",
             branch="main",
             user_id="user",
@@ -285,7 +285,7 @@ class TestVerifyRootNodeSkipped:
         # Even if merge-base would return non-ancestor, the root-input check
         # skips it because root is not in transition_by_output_node.
         with _mock_git_non_ancestor():
-            violations = handle.verify()
+            violations = handle.git.verify()
 
         # No t2 to create a chain, so nothing checked at git level.
         assert violations == []
@@ -346,7 +346,7 @@ class TestVerifyMissingInputSha:
         graph.attach_payload(gcp)
 
         with _mock_git_ok():
-            violations = handle.verify()
+            violations = handle.git.verify()
 
         missing_input = [v for v in violations if v.kind == "missing_input_sha"]
         assert len(missing_input) == 1
@@ -365,7 +365,7 @@ class TestVerifyDeadSha:
         _make_chain(handle, ["sha_A", "sha_B"])
 
         with _mock_git_dead_sha():
-            violations = handle.verify()
+            violations = handle.git.verify()
 
         dead = [v for v in violations if v.kind == "dead_sha"]
         assert len(dead) >= 1

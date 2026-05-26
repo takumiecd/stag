@@ -1,4 +1,4 @@
-"""Tests for RunHandle.merge (dry_run=True, no real git required)."""
+"""Tests for RunHandle.git.merge (dry_run=True, no real git required)."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def _make_two_branch_run():
     n_root = handle.root_node_id
 
     # Advance main branch.
-    t1 = handle.commit(
+    t1 = handle.git.commit(
         message="main commit",
         branch="main",
         user_id="user",
@@ -64,7 +64,7 @@ def _make_two_branch_run():
     )
     handle.run_graph.add_work_event(sp_event)
 
-    t2 = handle.commit(
+    t2 = handle.git.commit(
         message="feature commit",
         branch="feature",
         user_id="user",
@@ -81,7 +81,7 @@ class TestMergeImplDryRun:
     def test_creates_multi_input_transition(self):
         handle, n_root, n1, n2, t1, t2 = _make_two_branch_run()
 
-        merge_t = handle.merge(
+        merge_t = handle.git.merge(
             other_node_id=n2,
             branch="main",
             user_id="user",
@@ -96,7 +96,7 @@ class TestMergeImplDryRun:
     def test_merge_payload_attached(self):
         handle, n_root, n1, n2, t1, t2 = _make_two_branch_run()
 
-        merge_t = handle.merge(
+        merge_t = handle.git.merge(
             other_node_id=n2,
             branch="main",
             user_id="user",
@@ -114,7 +114,7 @@ class TestMergeImplDryRun:
     def test_git_change_payload_attached(self):
         handle, n_root, n1, n2, t1, t2 = _make_two_branch_run()
 
-        merge_t = handle.merge(
+        merge_t = handle.git.merge(
             other_node_id=n2,
             branch="main",
             user_id="user",
@@ -132,7 +132,7 @@ class TestMergeImplDryRun:
     def test_branch_tip_event_updated(self):
         handle, n_root, n1, n2, t1, t2 = _make_two_branch_run()
 
-        merge_t = handle.merge(
+        merge_t = handle.git.merge(
             other_node_id=n2,
             branch="main",
             user_id="user",
@@ -147,7 +147,7 @@ class TestMergeImplDryRun:
     def test_session_pointer_advances(self):
         handle, n_root, n1, n2, t1, t2 = _make_two_branch_run()
 
-        merge_t = handle.merge(
+        merge_t = handle.git.merge(
             other_node_id=n2,
             branch="main",
             user_id="user",
@@ -164,7 +164,7 @@ class TestMergeImplDryRun:
     def test_join_true_records_join_payload(self):
         handle, n_root, n1, n2, t1, t2 = _make_two_branch_run()
 
-        join_t = handle.merge(
+        join_t = handle.git.merge(
             other_node_id=n2,
             branch="main",
             user_id="user",
@@ -187,7 +187,7 @@ class TestMergeImplDryRun:
     def test_join_false_no_join_payload(self):
         handle, n_root, n1, n2, t1, t2 = _make_two_branch_run()
 
-        merge_t = handle.merge(
+        merge_t = handle.git.merge(
             other_node_id=n2,
             branch="main",
             user_id="user",
@@ -210,7 +210,7 @@ class TestMergeImplDryRun:
         n_root = handle.root_node_id
 
         # Advance main.
-        t_main = handle.commit(
+        t_main = handle.git.commit(
             message="main", branch="main",
             user_id="user", work_session_id="ws_main",
             head_commit="sha_m", dry_run=True,
@@ -227,14 +227,14 @@ class TestMergeImplDryRun:
         )
         handle.run_graph.add_work_event(sp)
 
-        t_feat = handle.commit(
+        t_feat = handle.git.commit(
             message="feat", branch="feature",
             user_id="user", work_session_id="ws_feat",
             head_commit="sha_f", dry_run=True,
         )
 
         # Merge using other_branch name — resolves via BranchTipEvent.
-        merge_t = handle.merge(
+        merge_t = handle.git.merge(
             other_branch="feature",
             branch="main",
             user_id="user",
@@ -248,19 +248,19 @@ class TestMergeImplDryRun:
         handle = _make_handle("run_no_other")
         _ensure_session(handle)
         with pytest.raises(ValueError, match="other_node_id or other_branch"):
-            handle.merge(dry_run=True)
+            handle.git.merge(dry_run=True)
 
     def test_unknown_branch_raises_value_error(self):
         handle = _make_handle("run_unknown_branch")
         _ensure_session(handle)
         with pytest.raises(ValueError, match="no BranchTipEvent found"):
-            handle.merge(other_branch="nonexistent", dry_run=True)
+            handle.git.merge(other_branch="nonexistent", dry_run=True)
 
     def test_no_user_id_skips_events(self):
         handle, n_root, n1, n2, t1, t2 = _make_two_branch_run()
         initial_event_count = len(handle.run_graph.work_events)
 
-        handle.merge(
+        handle.git.merge(
             other_node_id=n2,
             branch="main",
             head_commit="sha_no_user",
@@ -276,7 +276,7 @@ class TestMergeImplDryRun:
         handle, n_root, n1, n2, t1, t2 = _make_two_branch_run()
         initial_nodes = set(handle.run_graph.nodes)
 
-        merge_t = handle.merge(
+        merge_t = handle.git.merge(
             other_node_id=n2,
             branch="main",
             user_id="user",
@@ -294,7 +294,7 @@ class TestMergeImplDryRun:
         _ensure_session(handle, ws_id="ws_x")
 
         # Commit once.
-        t = handle.commit(
+        t = handle.git.commit(
             message="first", branch="main",
             user_id="user", work_session_id="ws_x",
             head_commit="sha_1", dry_run=True,
@@ -302,7 +302,7 @@ class TestMergeImplDryRun:
         n_out = t.output_node_id
 
         # Try to merge current node into itself — should deduplicate inputs.
-        merge_t = handle.merge(
+        merge_t = handle.git.merge(
             other_node_id=n_out,
             branch="main",
             user_id="user",

@@ -85,7 +85,7 @@ class TestCheckBranchTipConsistency:
         _ensure_session(handle)
 
         # Do a commit to establish a tip.
-        t = handle.commit(
+        t = handle.git.commit(
             message="first",
             branch="main",
             user_id="user",
@@ -104,7 +104,7 @@ class TestCheckBranchTipConsistency:
         _ensure_session(handle)
 
         # session A commits → tip advances to n2.
-        t = handle.commit(
+        t = handle.git.commit(
             message="session A commit",
             branch="main",
             user_id="user",
@@ -130,7 +130,7 @@ class TestCheckBranchTipConsistency:
         handle = _make_handle("run_multi_current")
         _ensure_session(handle)
 
-        t = handle.commit(
+        t = handle.git.commit(
             message="commit",
             branch="main",
             user_id="user",
@@ -174,7 +174,7 @@ class TestCommitGuard:
         _ensure_session(handle, ws_id="ws_b")
 
         # Session A commits successfully.
-        t_a = handle.commit(
+        t_a = handle.git.commit(
             message="session A",
             branch="main",
             user_id="user",
@@ -187,7 +187,7 @@ class TestCommitGuard:
         _set_session_pointer(handle, ws_id="ws_b", node_ids=(handle.root_node_id,))
 
         with pytest.raises(ParallelSessionConflict):
-            handle.commit(
+            handle.git.commit(
                 message="session B conflict",
                 branch="main",
                 user_id="user",
@@ -203,7 +203,7 @@ class TestCommitGuard:
         _ensure_session(handle, ws_id="ws_b")
 
         # Session A commits.
-        t_a = handle.commit(
+        t_a = handle.git.commit(
             message="session A",
             branch="main",
             user_id="user",
@@ -217,7 +217,7 @@ class TestCommitGuard:
         _set_session_pointer(handle, ws_id="ws_b", node_ids=(tip_node,))
 
         # Session B commits successfully.
-        t_b = handle.commit(
+        t_b = handle.git.commit(
             message="session B after update",
             branch="main",
             user_id="user",
@@ -233,7 +233,7 @@ class TestCommitGuard:
         _ensure_session(handle)
 
         # No prior tip — should succeed.
-        t = handle.commit(
+        t = handle.git.commit(
             message="first ever",
             branch="new-branch",
             user_id="user",
@@ -254,7 +254,7 @@ class TestRevertGuard:
         handle = _make_handle(run_id)
         _ensure_session(handle, ws_id="ws_a")
 
-        t = handle.commit(
+        t = handle.git.commit(
             message="initial",
             branch="main",
             user_id="user",
@@ -272,7 +272,7 @@ class TestRevertGuard:
         tip_a = handle.run_graph.transitions[tid].output_node_id
         _set_session_pointer(handle, ws_id="ws_a", node_ids=(tip_a,))
 
-        t_a2 = handle.commit(
+        t_a2 = handle.git.commit(
             message="session A second commit",
             branch="main",
             user_id="user",
@@ -285,7 +285,7 @@ class TestRevertGuard:
         _set_session_pointer(handle, ws_id="ws_b", node_ids=(handle.root_node_id,))
 
         with pytest.raises(ParallelSessionConflict):
-            handle.revert(
+            handle.git.revert(
                 target_transition=tid,
                 branch="main",
                 user_id="user",
@@ -306,7 +306,7 @@ class TestCherryPickGuard:
         _ensure_session(handle, ws_id="ws_b")
 
         # Session A commits.
-        t_a = handle.commit(
+        t_a = handle.git.commit(
             message="session A",
             branch="main",
             user_id="user",
@@ -319,7 +319,7 @@ class TestCherryPickGuard:
         _set_session_pointer(handle, ws_id="ws_b", node_ids=(handle.root_node_id,))
 
         with pytest.raises(ParallelSessionConflict):
-            handle.cherry_pick(
+            handle.git.cherry_pick(
                 source_sha="deadbeef1234",
                 branch="main",
                 user_id="user",
@@ -341,7 +341,7 @@ class TestMergeGuard:
         _ensure_session(handle, ws_id="ws_feature")
 
         # Establish feature branch tip (another node to merge from).
-        t_feat = handle.commit(
+        t_feat = handle.git.commit(
             message="feature commit",
             branch="feature",
             user_id="user",
@@ -353,7 +353,7 @@ class TestMergeGuard:
 
         # Session A advances main.
         _set_session_pointer(handle, ws_id="ws_a", node_ids=(handle.root_node_id,))
-        t_a = handle.commit(
+        t_a = handle.git.commit(
             message="session A on main",
             branch="main",
             user_id="user",
@@ -366,7 +366,7 @@ class TestMergeGuard:
         _set_session_pointer(handle, ws_id="ws_b", node_ids=(handle.root_node_id,))
 
         with pytest.raises(ParallelSessionConflict):
-            handle.merge(
+            handle.git.merge(
                 other_node_id=feat_node,
                 branch="main",
                 user_id="user",

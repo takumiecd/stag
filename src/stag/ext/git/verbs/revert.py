@@ -1,4 +1,4 @@
-"""RunHandle.revert implementation."""
+"""RunHandle.git.revert implementation."""
 
 from __future__ import annotations
 

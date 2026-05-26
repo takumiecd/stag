@@ -1,4 +1,4 @@
-"""Tests for RunHandle.revert (dry_run=True, no real git required)."""
+"""Tests for RunHandle.git.revert (dry_run=True, no real git required)."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def _ensure_session(handle, user_id: str = "user", ws_id: str = "ws_1") -> None:
 def _first_commit(handle, sha: str = "sha_orig") -> object:
     """Record a commit transition so we have something to revert."""
     _ensure_session(handle)
-    return handle.commit(
+    return handle.git.commit(
         message="original commit",
         branch="main",
         user_id="user",
@@ -37,7 +37,7 @@ class TestRevertImplDryRun:
         handle = _make_handle()
         orig = _first_commit(handle, sha="sha_orig")
 
-        t = handle.revert(
+        t = handle.git.revert(
             target_sha="sha_orig",
             branch="main",
             user_id="user",
@@ -52,7 +52,7 @@ class TestRevertImplDryRun:
         _first_commit(handle, sha="sha_a")
         initial_nodes = set(handle.run_graph.nodes)
 
-        handle.revert(
+        handle.git.revert(
             target_sha="sha_a",
             branch="main",
             user_id="user",
@@ -67,7 +67,7 @@ class TestRevertImplDryRun:
         handle = _make_handle()
         orig = _first_commit(handle, sha="sha_orig")
 
-        t = handle.revert(
+        t = handle.git.revert(
             target_sha="sha_orig",
             branch="main",
             user_id="user",
@@ -88,7 +88,7 @@ class TestRevertImplDryRun:
         handle = _make_handle()
         _first_commit(handle, sha="sha_orig")
 
-        t = handle.revert(
+        t = handle.git.revert(
             target_sha="sha_orig",
             branch="main",
             user_id="user",
@@ -107,7 +107,7 @@ class TestRevertImplDryRun:
         handle = _make_handle()
         _first_commit(handle, sha="sha_orig")
 
-        t = handle.revert(
+        t = handle.git.revert(
             target_sha="sha_orig",
             branch="feature/x",
             user_id="user",
@@ -131,7 +131,7 @@ class TestRevertImplDryRun:
             handle.run_graph.payloads_by_transition.get(orig.transition_id, [])
         )
 
-        handle.revert(
+        handle.git.revert(
             target_sha="sha_orig",
             branch="main",
             user_id="user",
@@ -149,7 +149,7 @@ class TestRevertImplDryRun:
         handle = _make_handle()
         _first_commit(handle, sha="sha_orig")
 
-        t = handle.revert(
+        t = handle.git.revert(
             target_sha="sha_orig",
             branch="main",
             user_id="user",
@@ -165,7 +165,7 @@ class TestRevertImplDryRun:
         handle = _make_handle()
         _first_commit(handle, sha="sha_orig")
 
-        t = handle.revert(
+        t = handle.git.revert(
             target_sha="sha_orig",
             branch="main",
             user_id="user",
@@ -181,7 +181,7 @@ class TestRevertImplDryRun:
         handle = _make_handle()
         orig = _first_commit(handle, sha="sha_orig2")
 
-        t = handle.revert(
+        t = handle.git.revert(
             target_transition=orig.transition_id,
             branch="main",
             user_id="user",
@@ -200,7 +200,7 @@ class TestRevertImplDryRun:
         _ensure_session(handle)
 
         with pytest.raises(KeyError, match="no stag transition found"):
-            handle.revert(
+            handle.git.revert(
                 target_sha="nonexistent_sha",
                 branch="main",
                 head_commit="x",
@@ -212,7 +212,7 @@ class TestRevertImplDryRun:
         _ensure_session(handle)
 
         with pytest.raises(KeyError, match="unknown transition_id"):
-            handle.revert(
+            handle.git.revert(
                 target_transition="t_nonexistent",
                 branch="main",
                 head_commit="x",
@@ -224,14 +224,14 @@ class TestRevertImplDryRun:
         _ensure_session(handle)
 
         with pytest.raises(ValueError, match="Either target_sha or target_transition"):
-            handle.revert(dry_run=True)
+            handle.git.revert(dry_run=True)
 
     def test_both_args_raises(self):
         handle = _make_handle()
         _first_commit(handle, sha="sha_x")
 
         with pytest.raises(ValueError, match="mutually exclusive"):
-            handle.revert(
+            handle.git.revert(
                 target_sha="sha_x",
                 target_transition="t_x",
                 dry_run=True,
@@ -242,7 +242,7 @@ class TestRevertImplDryRun:
         _first_commit(handle, sha="sha_noevent")
         initial_events = len(handle.run_graph.work_events)
 
-        handle.revert(
+        handle.git.revert(
             target_sha="sha_noevent",
             branch="main",
             head_commit="sha_rev_no_event",
@@ -256,7 +256,7 @@ class TestRevertImplDryRun:
         handle = _make_handle()
         _first_commit(handle, sha="sha_orig3")
 
-        t = handle.revert(
+        t = handle.git.revert(
             target_sha="sha_orig3",
             branch="main",
             user_id="user",

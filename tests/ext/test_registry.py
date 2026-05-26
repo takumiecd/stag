@@ -28,6 +28,7 @@ def test_git_extension_registers_namespace():
 
     assert hasattr(handle, "git")
     assert callable(handle.git.commit)
+    assert not hasattr(handle, "commit")
 
 
 def test_load_unknown_raises():

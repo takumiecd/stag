@@ -38,7 +38,7 @@ def _build_chain(handle, length: int, user_id: str = "alice", ws_id: str = "ws")
     handle.ensure_work_session(user_id=user_id, work_session_id=ws_id)
     results = []
     for i in range(length):
-        t = handle.commit(
+        t = handle.git.commit(
             message=f"commit {i + 1}",
             branch="main",
             user_id=user_id,
