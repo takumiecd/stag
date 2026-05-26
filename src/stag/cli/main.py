@@ -27,10 +27,12 @@ from stag.cli.commands.cut import add_parser as add_cut_parser, cli_cut
 from stag.cli.commands.show import add_parser as add_show_parser, cli_show
 from stag.cli.commands.sync import add_parser as add_sync_parser, cli_sync
 from stag.cli.commands.trace import add_parser as add_trace_parser, cli_trace
+from stag.cli.commands.merge import add_parser as add_merge_parser, cli_merge
 from stag.cli.commands.migrate import add_parser as add_migrate_parser, cli_migrate
 from stag.cli.commands.transition import add_parser as add_transition_parser, cli_transition
 from stag.cli.commands.use import add_parser as add_use_parser, cli_use
 from stag.cli.commands.tui import add_parser as add_tui_parser, cli_tui
+from stag.cli.commands.verify import add_parser as add_verify_parser, cli_verify
 from stag.cli.commands.view import add_parser as add_view_parser, cli_view
 from stag.cli.commands.work_session import (
     add_parser as add_work_session_parser,
@@ -57,6 +59,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_guide_parser(subparsers)
     add_init_parser(subparsers)
     add_list_parser(subparsers)
+    add_merge_parser(subparsers)
     add_migrate_parser(subparsers)
     add_node_parser(subparsers)
     add_outcomes_parser(subparsers)
@@ -69,6 +72,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_sync_parser(subparsers)
     add_tui_parser(subparsers)
     add_trace_parser(subparsers)
+    add_verify_parser(subparsers)
     add_transition_parser(subparsers)
     add_use_parser(subparsers)
     add_view_parser(subparsers)
@@ -111,6 +115,8 @@ def main(argv: list[str] | None = None) -> int:
         return cli_init(args)
     if args.command == "list":
         return cli_list(args)
+    if args.command == "merge":
+        return cli_merge(args)
     if args.command == "migrate":
         return cli_migrate(args)
     if args.command == "node":
@@ -139,6 +145,8 @@ def main(argv: list[str] | None = None) -> int:
         return cli_transition(args)
     if args.command == "use":
         return cli_use(args)
+    if args.command == "verify":
+        return cli_verify(args)
     if args.command == "view":
         return cli_view(args)
     if args.command == "work-session":
