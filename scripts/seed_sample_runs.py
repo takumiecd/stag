@@ -11,14 +11,12 @@ from pathlib import Path
 
 import stag
 from stag import (
-    CommitEntry,
-    DiffSummary,
-    GitChangePayload,
     NodePayload,
     Requirement,
     TransitionPayload,
 )
 from stag.core.ids import opaque_id
+from stag.ext.git.payloads import CommitEntry, DiffSummary, GitChangePayload
 from stag.storage.jsonl import JsonlRunStore
 
 

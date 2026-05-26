@@ -1,21 +1,4 @@
-"""RunHandle.verify implementation.
-
-Validates the Descendant constraint (REDESIGN §1, §10.9 invariant 7) over all
-non-cut transitions in the run.
-
-For each non-cut Transition t:
-  1. Compute output_sha = current_sha(t). If None, record "missing_sha".
-  2. For each input_node n in t.input_node_ids:
-     - If n is the root node (not in transition_by_output_node), skip.
-     - Let in_t = transition_by_output_node[n]; input_sha = current_sha(in_t).
-     - If input_sha is None: record "missing_input_sha".
-     - Else check via git: input_sha must be an ancestor-or-equal of output_sha.
-       * exit 0 → OK (ancestor or equal)
-       * exit 1 → "non_descendant"
-       * exit 128 or object-missing → "dead_sha"
-
-Uses subprocess to call git. cwd = repo_path or Path.cwd().
-"""
+"""RunHandle.verify implementation."""
 
 from __future__ import annotations
 
@@ -39,7 +22,6 @@ class VerifyViolation:
 
 
 def _sha_exists(sha: str, repo_path: Path) -> bool:
-    """Return True if sha is present as a git object in repo_path."""
     result = subprocess.run(
         ["git", "cat-file", "-e", sha],
         cwd=str(repo_path),
@@ -49,15 +31,6 @@ def _sha_exists(sha: str, repo_path: Path) -> bool:
 
 
 def _is_ancestor(ancestor_sha: str, descendant_sha: str, repo_path: Path) -> Literal["ok", "non_descendant", "dead_sha"]:
-    """Check whether ancestor_sha is an ancestor-or-equal of descendant_sha.
-
-    Returns
-    -------
-    "ok"             : ancestor_sha is an ancestor of (or equal to) descendant_sha
-    "non_descendant" : ancestor_sha is NOT an ancestor of descendant_sha
-    "dead_sha"       : one or both objects are missing from the git object store
-    """
-    # Pre-check object existence for a cleaner dead_sha signal.
     if not _sha_exists(ancestor_sha, repo_path):
         return "dead_sha"
     if not _sha_exists(descendant_sha, repo_path):
@@ -72,7 +45,6 @@ def _is_ancestor(ancestor_sha: str, descendant_sha: str, repo_path: Path) -> Lit
         return "ok"
     if result.returncode == 1:
         return "non_descendant"
-    # exit 128 = bad object; treat as dead_sha (shouldn't reach here after cat-file checks)
     return "dead_sha"
 
 
@@ -82,29 +54,7 @@ def verify_impl(
     repo_path: Path | None = None,
     skip_dead_sha_check: bool = False,
 ) -> list[VerifyViolation]:
-    """Verify the descendant constraint over all non-cut transitions.
-
-    For each non-cut Transition t:
-      1. Compute output_sha = current_sha(t). If None, record "missing_sha".
-      2. For each input_node n in t.input_node_ids:
-         - If n is the root node (not in transition_by_output_node), skip.
-         - Let in_t = transition_by_output_node[n]; input_sha = current_sha(in_t).
-         - If input_sha is None: record "missing_input_sha".
-         - Else check via ``git merge-base --is-ancestor input_sha output_sha``.
-
-    Parameters
-    ----------
-    repo_path:
-        Path to the git repo root. Defaults to cwd.
-    skip_dead_sha_check:
-        If True, skip the ``git cat-file -e`` pre-check and classify
-        non-zero ``merge-base`` exits as "non_descendant" rather than
-        "dead_sha". Useful when running without a real git repo (tests).
-
-    Returns
-    -------
-    List of VerifyViolation records (empty = all good).
-    """
+    """Verify the descendant constraint over all non-cut transitions."""
     from stag.core.cuts import inactive_transition_ids  # noqa: PLC0415
 
     graph = self.run_graph
@@ -114,13 +64,11 @@ def verify_impl(
     violations: list[VerifyViolation] = []
 
     for t_id, transition in graph.transitions.items():
-        # Skip cut / inactive transitions.
         if t_id in inactive:
             continue
 
         output_sha = graph.current_sha(t_id)
 
-        # 1. Check that transition has a sha at all.
         if output_sha is None:
             violations.append(
                 VerifyViolation(
@@ -135,9 +83,7 @@ def verify_impl(
             )
             continue
 
-        # 2. For each input node, check that output_sha is a descendant of input_sha.
         for input_node_id in transition.input_node_ids:
-            # Root node has no incoming transition → no sha → skip.
             if input_node_id not in graph.transition_by_output_node:
                 continue
 
@@ -164,7 +110,6 @@ def verify_impl(
                 continue
 
             if skip_dead_sha_check:
-                # Simplified path for testing without a real git repo.
                 result = subprocess.run(
                     ["git", "merge-base", "--is-ancestor", input_sha, output_sha],
                     cwd=str(resolved_repo_path),
@@ -200,7 +145,7 @@ def verify_impl(
                         },
                     )
                 )
-            else:  # dead_sha
+            else:
                 violations.append(
                     VerifyViolation(
                         transition_id=t_id,

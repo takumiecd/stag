@@ -7,19 +7,19 @@ import tempfile
 from pathlib import Path
 
 from stag.core.cuts import is_inactive_transition
-from stag.core.git import repo as git_repo
-from stag.core.git.session import (
+from stag.ext.git.helpers import repo as git_repo
+from stag.ext.git.helpers.session import (
     GitSession,
     clear_current_pointer,
     load_session,
     save_session,
 )
-from stag.core.schema.payloads import (
+from stag.ext.git.payloads import (
     CommitEntry,
     DiffSummary,
     GitChangePayload,
-    TransitionPayload,
 )
+from stag.core.schema.payloads import TransitionPayload
 from stag.core.run.handle import RunHandle
 
 

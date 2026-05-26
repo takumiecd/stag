@@ -7,14 +7,13 @@ import pytest
 from stag.core.schema.graph import Node, Transition
 from stag.core.schema.payloads import (
     CutPayload,
-    DiffSummary,
-    GitChangePayload,
     NodePayload,
     PayloadBase,
     TransitionPayload,
     payload_from_dict,
     register_payload_class,
 )
+from stag.ext.git.payloads import DiffSummary, GitChangePayload
 
 
 # ---------------------------------------------------------------------------

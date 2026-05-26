@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 
 from stag.core.schema.payloads import (
-    MergePayload,
     JoinPayload,
     payload_from_dict,
 )
+from stag.ext.git.payloads import MergePayload
 
 
 class TestMergePayload:

@@ -10,17 +10,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from stag.core.schema.graph import Node, Transition
-from stag.core.schema.payloads import (
+from stag.ext.git.payloads import (
     BranchPayload,
     CommitEntry,
     DiffSummary,
     GitChangePayload,
-    PayloadBase,
+)
+from stag.core.schema.payloads import PayloadBase
+from stag.ext.git.events import (
+    latest_branch_tip,
+    make_branch_tip_event,
 )
 from stag.core.schema.work_helpers import (
-    latest_branch_tip,
     latest_session_pointer,
-    make_branch_tip_event,
     make_session_pointer_event,
 )
 
@@ -48,34 +50,13 @@ def check_branch_tip_consistency(
     branch: str,
     current_node_ids: tuple[str, ...],
 ) -> None:
-    """Raise ParallelSessionConflict if branch's latest tip is not in current_node_ids.
-
-    If no BranchTipEvent exists for ``branch`` yet (first commit on this branch),
-    skip the check (no conflict possible).
-
-    Parameters
-    ----------
-    graph:
-        The RunGraph to query.
-    branch:
-        The git branch name being committed to.
-    current_node_ids:
-        The session's current node IDs at commit time.
-
-    Raises
-    ------
-    ParallelSessionConflict
-        If the branch tip exists and is NOT in current_node_ids, indicating
-        another session has already advanced the branch.
-    """
+    """Raise ParallelSessionConflict if branch's latest tip is not in current_node_ids."""
     tip_event = latest_branch_tip(graph, branch)
     if tip_event is None:
-        # No BranchTipEvent yet — first commit on this branch, no conflict possible.
         return
 
     tip_node_id = tip_event.data.get("tip_node_id")
     if tip_node_id is None:
-        # Malformed event — skip the check rather than blocking legitimate commits.
         return
 
     tip_node_id_str = str(tip_node_id)
@@ -110,7 +91,7 @@ def resolve_current_branch(
     if branch is not None:
         return branch
     if not dry_run:
-        from stag.core.git import repo as git_repo  # noqa: PLC0415
+        from stag.ext.git.helpers import repo as git_repo  # noqa: PLC0415
         resolved = git_repo.current_branch(repo_path)
         if resolved is not None:
             return resolved
@@ -134,7 +115,7 @@ def capture_git_info(
     commit_log: tuple[CommitEntry, ...] = ()
 
     try:
-        from stag.core.git import repo as git_repo  # noqa: PLC0415
+        from stag.ext.git.helpers import repo as git_repo  # noqa: PLC0415
         raw_log = git_repo.commit_log_for_commits(repo_path, [head_commit])
         commit_log = tuple(
             CommitEntry(
@@ -186,48 +167,13 @@ def record_forward_transition(
     user_id: str | None,
     work_session_id: str | None,
 ) -> Transition:
-    """Append node, transition, standard payloads + extra payloads, and work events.
-
-    Parameters
-    ----------
-    current_node_ids:
-        Input node IDs for the new Transition.
-    current_branch:
-        Git branch name at commit time.
-    head_commit:
-        New HEAD commit SHA.
-    diff_summary:
-        Diff stats.
-    commit_log:
-        Commit log entries.
-    extra_payloads:
-        Additional payloads to attach (e.g. RevertPayload, CherryPickPayload).
-        These must have ``target_id`` set to an empty string; it will be
-        replaced with the new transition_id before attaching.
-    event_type:
-        Work event type string (e.g. "commit_created", "revert_created").
-    event_summary:
-        Short string for the work event summary field.
-    event_data:
-        Extra data dict for the work event.
-    user_id:
-        User ID for attribution. If None, work events are not recorded.
-    work_session_id:
-        Work session ID. If None, work events are not recorded.
-
-    Returns
-    -------
-    The newly created Transition.
-    """
-    # Ensure work session exists.
+    """Append node, transition, standard payloads + extra payloads, and work events."""
     if user_id is not None and work_session_id is not None:
         self.ensure_work_session(user_id=user_id, work_session_id=work_session_id)
 
-    # New Node.
     output_node = Node(node_id=self._next_id("n"))
     self.run_graph.add_node(output_node)
 
-    # New Transition.
     transition_id = self._next_id("t")
     transition = Transition(
         transition_id=transition_id,
@@ -236,7 +182,6 @@ def record_forward_transition(
     )
     self.run_graph.add_transition(transition)
 
-    # BranchPayload.
     branch_payload = BranchPayload(
         payload_id=self._next_id("pl"),
         target_id=transition_id,
@@ -244,7 +189,6 @@ def record_forward_transition(
     )
     self.run_graph.attach_payload(branch_payload)
 
-    # GitChangePayload.
     git_payload = GitChangePayload(
         payload_id=self._next_id("pl"),
         target_id=transition_id,
@@ -255,12 +199,9 @@ def record_forward_transition(
     )
     self.run_graph.attach_payload(git_payload)
 
-    # Extra typed payloads (RevertPayload, CherryPickPayload, etc.).
-    # Callers must pass them with correct target_id already set.
     for pl in extra_payloads:
         self.run_graph.attach_payload(pl)
 
-    # BranchTipEvent + SessionPointerEvent.
     if user_id is not None and work_session_id is not None:
         tip_event = make_branch_tip_event(
             event_id=self._next_id("we"),
@@ -282,7 +223,6 @@ def record_forward_transition(
         )
         self.run_graph.add_work_event(sp_event)
 
-    # Audit work event.
     created = (
         output_node.node_id,
         transition_id,

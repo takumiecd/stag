@@ -5,10 +5,7 @@ from stag.core.ids import opaque_id, sequential_id, slugify, timestamp_id
 from stag.core.run import RunHandle, init
 from stag.core.run_graph import RunGraph
 from stag.core.schema import (
-    CommitEntry,
     CutPayload,
-    DiffSummary,
-    GitChangePayload,
     Node,
     NodePayload,
     Payload,
@@ -24,10 +21,7 @@ from stag.core.types import (
 )
 
 __all__ = [
-    "CommitEntry",
     "CutPayload",
-    "DiffSummary",
-    "GitChangePayload",
     "GraphView",
     "Node",
     "NodePayload",

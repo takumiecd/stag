@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from stag.core.cuts import inactive_node_ids, inactive_transition_ids
 from stag.core.run.handle import RunHandle
 from stag.core.run_graph import RunGraph
-from stag.core.schema.payloads import CutPayload, GitChangePayload, NodePayload, TransitionPayload
+from stag.core.schema.payloads import CutPayload, NodePayload, TransitionPayload
+from stag.ext.git.payloads import GitChangePayload
 
 
 @dataclass

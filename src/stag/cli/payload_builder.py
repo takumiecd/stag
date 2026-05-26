@@ -8,7 +8,6 @@ from typing import Literal
 
 from stag.core.schema.payloads import (
     CutPayload,
-    GitChangePayload,
     NodePayload,
     PayloadBase,
     TransitionPayload,
@@ -141,7 +140,7 @@ def build_payload(
         **data,
     }
     payload = payload_from_dict(raw)
-    if isinstance(payload, GitChangePayload):
+    if payload.payload_type == "git_change":
         raise ValueError("use 'stag git add' to attach git_change payloads")
     return payload
 

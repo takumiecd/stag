@@ -65,7 +65,7 @@ class TestCommitCLIIntegration:
         (repo / "foo.txt").write_text("bar\n")
         subprocess.run(["git", "add", "foo.txt"], cwd=str(repo), check=True, capture_output=True)
 
-        from stag.cli.commands.commit import run_commit_command
+        from stag.ext.git.cli.commit import run_commit_command
 
         result = run_commit_command(
             message="add foo.txt",
@@ -90,7 +90,7 @@ class TestCommitCLIIntegration:
         (repo / "a.txt").write_text("a\n")
         subprocess.run(["git", "add", "a.txt"], cwd=str(repo), check=True, capture_output=True)
 
-        from stag.cli.commands.commit import run_commit_command
+        from stag.ext.git.cli.commit import run_commit_command
         from stag.core.schema.work_helpers import latest_branch_tip
 
         result = run_commit_command(
@@ -116,7 +116,7 @@ class TestCommitCLIIntegration:
 
         _init_stag(repo, tmp_path, run_id="run_chain")
 
-        from stag.cli.commands.commit import run_commit_command
+        from stag.ext.git.cli.commit import run_commit_command
 
         (repo / "c1.txt").write_text("c1\n")
         subprocess.run(["git", "add", "c1.txt"], cwd=str(repo), check=True, capture_output=True)

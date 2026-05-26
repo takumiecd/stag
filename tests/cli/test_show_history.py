@@ -12,7 +12,8 @@ from stag.cli.commands.init import run_init_command
 from stag.cli.commands.show import run_show_command
 from stag.cli.context import resolve_store
 from stag.core.schema.graph import Node, Transition
-from stag.core.schema.payloads import DiffSummary, GitChangePayload, TransitionPayload
+from stag.core.schema.payloads import TransitionPayload
+from stag.ext.git.payloads import DiffSummary, GitChangePayload
 from stag.core.schema.requirements import Requirement
 
 

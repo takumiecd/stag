@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-from stag.cli.commands.commit import run_commit_command
+from stag.ext.git.cli.commit import run_commit_command
 from stag.cli.commands.init import run_init_command
-from stag.core.run._forward_transition import ParallelSessionConflict
+from stag.ext.git.verbs._forward_transition import ParallelSessionConflict
 from stag.core.schema.work_helpers import make_session_pointer_event
 
 

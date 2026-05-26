@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from stag.cli.commands.init import run_init_command
-from stag.cli.commands.hook import run_hook_install, run_hook_post_merge
+from stag.ext.git.cli.hook import run_hook_install, run_hook_post_merge
 from stag.cli.context import resolve_store
 
 
@@ -73,7 +73,7 @@ class TestRunHookPostMerge:
 
     def test_skip_already_known_sha(self, tmp_path):
         """If HEAD sha is already in stag, action is skip."""
-        from stag.cli.commands.commit import run_commit_command
+        from stag.ext.git.cli.commit import run_commit_command
         from stag.core.schema.work_helpers import make_session_pointer_event
 
         _init_stag(tmp_path, run_id="run_pm_known")
@@ -102,8 +102,8 @@ class TestRunHookPostMerge:
 
     def test_adopt_merge_when_other_node_known(self, tmp_path):
         """When ^2 parent sha is already in stag, adopt creates multi-input transition."""
-        from stag.cli.commands.commit import run_commit_command
-        from stag.core.schema.payloads import MergePayload
+        from stag.ext.git.cli.commit import run_commit_command
+        from stag.ext.git.payloads import MergePayload
         from stag.core.schema.work import WorkSession
         from stag.core.schema.work_helpers import make_session_pointer_event
 

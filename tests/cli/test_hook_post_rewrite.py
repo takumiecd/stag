@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from stag.cli.commands.commit import run_commit_command
-from stag.cli.commands.hook import run_hook_post_rewrite
+from stag.ext.git.cli.commit import run_commit_command
+from stag.ext.git.cli.hook import run_hook_post_rewrite
 from stag.cli.commands.init import run_init_command
 from stag.cli.context import resolve_store
 from stag.core.schema.work_helpers import AMEND_EVENT, REBASE_EVENT

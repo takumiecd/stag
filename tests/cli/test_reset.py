@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from stag.cli.commands.init import run_init_command
-from stag.cli.commands.reset import run_reset_command
+from stag.ext.git.cli.reset import run_reset_command
 from stag.cli.context import resolve_store
 from stag.core.cuts import is_inactive_transition
 from stag.core.schema.work_helpers import RESET_EVENT, SESSION_POINTER_EVENT, latest_session_pointer

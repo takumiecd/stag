@@ -6,7 +6,7 @@ import pytest
 
 from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import Node, Transition
-from stag.core.schema.payloads import DiffSummary, GitChangePayload
+from stag.ext.git.payloads import DiffSummary, GitChangePayload
 
 
 def _make_graph_with_transition() -> tuple[RunGraph, str]:

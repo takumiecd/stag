@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from stag.core.cuts import is_inactive_transition
-from stag.core.git import repo as git_repo
-from stag.core.git.session import (
+from stag.ext.git.helpers import repo as git_repo
+from stag.ext.git.helpers.session import (
     GitSession,
     clear_current_pointer,
     list_sessions,

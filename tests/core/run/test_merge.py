@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 
 from stag.core.schema.graph import Node
-from stag.core.schema.payloads import GitChangePayload, MergePayload, JoinPayload
+from stag.core.schema.payloads import JoinPayload
+from stag.ext.git.payloads import GitChangePayload, MergePayload
 from stag.core.schema.requirements import Requirement
 from stag.core.schema.work_helpers import (
     BRANCH_TIP_EVENT,

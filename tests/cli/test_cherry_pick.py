@@ -104,8 +104,8 @@ class TestCherryPickCLIIntegration:
         )
 
         # Cherry-pick the feature commit to main.
-        from stag.cli.commands.cherry_pick import run_cherry_pick_command
-        from stag.core.schema.payloads import CherryPickPayload
+        from stag.ext.git.cli.cherry_pick import run_cherry_pick_command
+        from stag.ext.git.payloads import CherryPickPayload
 
         r_cp = run_cherry_pick_command(
             source_sha=feature_sha,
@@ -164,8 +164,8 @@ class TestCherryPickCLIIntegration:
             cwd=str(repo), capture_output=True, check=True,
         )
 
-        from stag.cli.commands.cherry_pick import run_cherry_pick_command
-        from stag.core.schema.payloads import CherryPickPayload
+        from stag.ext.git.cli.cherry_pick import run_cherry_pick_command
+        from stag.ext.git.payloads import CherryPickPayload
 
         r_cp = run_cherry_pick_command(
             source_sha=pick_sha,

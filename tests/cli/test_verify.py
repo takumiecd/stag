@@ -14,7 +14,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from stag.cli.commands.init import run_init_command
-from stag.cli.commands.verify import run_verify_command
+from stag.ext.git.cli.verify import run_verify_command
 from stag.cli.context import resolve_store
 
 

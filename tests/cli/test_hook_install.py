@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from stag.cli.commands.hook import run_hook_install
+from stag.ext.git.cli.hook import run_hook_install
 
 
 def _init_git_repo(path: Path) -> Path:

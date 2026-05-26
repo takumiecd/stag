@@ -4,21 +4,27 @@ A target may have multiple payloads attached.
 Payloads are immutable and append-only; CutPayload encodes cuts
 without ever deleting graph records.
 
-Built-in payload types:
+Built-in payload types defined here (core):
   - NodePayload: generic node payload with type + content dict
   - TransitionPayload: generic transition payload with type + content dict
   - CutPayload: append-only inactivity marker (node or transition)
-  - GitChangePayload: git commit/diff record (transition only)
+  - JoinPayload: multi-input transition without a common ancestor (extension-agnostic)
 
-Users can register custom PayloadBase subclasses with register_payload_class().
-Unknown payload_type values fall back to the appropriate generic class.
+Extension-specific payload classes (e.g. GitChangePayload, BranchPayload,
+RevertPayload, CherryPickPayload, MergePayload) live with their owning
+extension and register themselves via ``register_payload_class`` and
+``register_payload_decoder`` at import time.
+
+Users can register custom PayloadBase subclasses with register_payload_class()
+and supply a decoder via register_payload_decoder(). Unknown payload_type
+values fall back to the appropriate generic class.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Literal, Union
+from typing import Callable, Literal, Union
 
 from stag.core.types import JSONValue, to_jsonable
 
@@ -76,7 +82,7 @@ class TransitionPayload(PayloadBase):
 
 
 # ---------------------------------------------------------------------------
-# Built-in typed payloads
+# Built-in typed payloads (core)
 # ---------------------------------------------------------------------------
 
 
@@ -100,186 +106,16 @@ class CutPayload(PayloadBase):
 
 
 @dataclass(frozen=True)
-class CommitEntry:
-    """A single commit entry in a GitChangePayload commit_log."""
-
-    sha: str
-    subject: str
-    author: str
-    date: str  # ISO 8601 with timezone
-
-    def to_dict(self) -> dict[str, str]:
-        return {"sha": self.sha, "subject": self.subject, "author": self.author, "date": self.date}
-
-
-@dataclass(frozen=True)
-class DiffSummary:
-    """Aggregate diff stats from git --shortstat."""
-
-    files_changed: int
-    insertions: int
-    deletions: int
-
-    def to_dict(self) -> dict[str, int]:
-        return {
-            "files_changed": self.files_changed,
-            "insertions": self.insertions,
-            "deletions": self.deletions,
-        }
-
-
-@dataclass(frozen=True)
-class BranchPayload(PayloadBase):
-    """Branch where a transition was created. Historical, immutable.
-
-    Attached to a Transition at commit time. Records the git branch name
-    on which the transition originated. Not updated on merge/rebase.
-    """
-
-    payload_id: str
-    target_id: str
-    branch: str
-    metadata: dict[str, JSONValue] = field(default_factory=dict)
-
-    target_kind: Literal["transition"] = field(default="transition", init=False)
-    payload_type: str = field(default="branch", init=False)
-
-    def to_dict(self) -> dict[str, JSONValue]:
-        return {
-            "payload_id": self.payload_id,
-            "payload_type": self.payload_type,
-            "target_kind": self.target_kind,
-            "target_id": self.target_id,
-            "branch": self.branch,
-            "metadata": dict(self.metadata),
-        }
-
-
-@dataclass(frozen=True)
-class GitChangePayload(PayloadBase):
-    """Git repository change information attached to a Transition."""
-
-    payload_id: str
-    target_id: str
-    branch: str
-    head_commit: str
-    diff_summary: DiffSummary = field(
-        default_factory=lambda: DiffSummary(files_changed=0, insertions=0, deletions=0)
-    )
-    commit_log: tuple[CommitEntry, ...] = ()
-    metadata: dict[str, JSONValue] = field(default_factory=dict)
-
-    target_kind: Literal["transition"] = field(default="transition", init=False)
-    payload_type: str = field(default="git_change", init=False)
-
-    def to_dict(self) -> dict[str, JSONValue]:
-        return {
-            "payload_id": self.payload_id,
-            "payload_type": self.payload_type,
-            "target_kind": self.target_kind,
-            "target_id": self.target_id,
-            "branch": self.branch,
-            "head_commit": self.head_commit,
-            "diff_summary": self.diff_summary.to_dict(),
-            "commit_log": [c.to_dict() for c in self.commit_log],
-            "metadata": dict(self.metadata),
-        }
-
-
-@dataclass(frozen=True)
-class RevertPayload(PayloadBase):
-    """Marks a transition as a revert of another transition.
-
-    Attached to the *new* (forward) transition that undoes the original commit.
-    The reverted transition is NOT touched; no CutPayload is appended to it.
-    """
-
-    payload_id: str
-    target_id: str
-    reverted_transition: str  # original t_id whose effect is undone
-    reverted_commit: str      # original sha that was reverted
-    metadata: dict[str, JSONValue] = field(default_factory=dict)
-
-    target_kind: Literal["transition"] = field(default="transition", init=False)
-    payload_type: str = field(default="revert", init=False)
-
-    def to_dict(self) -> dict[str, JSONValue]:
-        return {
-            "payload_id": self.payload_id,
-            "payload_type": self.payload_type,
-            "target_kind": self.target_kind,
-            "target_id": self.target_id,
-            "reverted_transition": self.reverted_transition,
-            "reverted_commit": self.reverted_commit,
-            "metadata": dict(self.metadata),
-        }
-
-
-@dataclass(frozen=True)
-class CherryPickPayload(PayloadBase):
-    """Marks a transition as a cherry-pick of another transition / commit."""
-
-    payload_id: str
-    target_id: str
-    source_transition: str | None  # may be None if cross-repo or not found
-    source_commit: str
-    metadata: dict[str, JSONValue] = field(default_factory=dict)
-
-    target_kind: Literal["transition"] = field(default="transition", init=False)
-    payload_type: str = field(default="cherry_pick", init=False)
-
-    def to_dict(self) -> dict[str, JSONValue]:
-        return {
-            "payload_id": self.payload_id,
-            "payload_type": self.payload_type,
-            "target_kind": self.target_kind,
-            "target_id": self.target_id,
-            "source_transition": self.source_transition,
-            "source_commit": self.source_commit,
-            "metadata": dict(self.metadata),
-        }
-
-
-@dataclass(frozen=True)
-class MergePayload(PayloadBase):
-    """Marks a transition as a git merge (multi-input, with common ancestor).
-
-    Attached to the new Transition that represents the merge commit.
-    Input node IDs are (current_tip, other_tip); the transition has 2+ inputs.
-    """
-
-    payload_id: str
-    target_id: str
-    merged_from: str   # branch name or node id of the merged-in branch
-    merged_into: str   # branch name or node id of the target (current) branch
-    metadata: dict[str, JSONValue] = field(default_factory=dict)
-
-    target_kind: Literal["transition"] = field(default="transition", init=False)
-    payload_type: str = field(default="merge", init=False)
-
-    def to_dict(self) -> dict[str, JSONValue]:
-        return {
-            "payload_id": self.payload_id,
-            "payload_type": self.payload_type,
-            "target_kind": self.target_kind,
-            "target_id": self.target_id,
-            "merged_from": self.merged_from,
-            "merged_into": self.merged_into,
-            "metadata": dict(self.metadata),
-        }
-
-
-@dataclass(frozen=True)
 class JoinPayload(PayloadBase):
-    """Marks a transition as a stag-only join (multi-input, NO common ancestor).
+    """Multi-input transition without a common ancestor (extension-agnostic).
 
-    Used to integrate independent DAGs that don't share a git history.
-    Unlike MergePayload, there is no corresponding git merge commit required.
+    Used to integrate independent DAGs that don't share a common history.
+    Lives in core because the "logical join" concept is not git-specific.
     """
 
     payload_id: str
     target_id: str
-    joined_views: tuple[str, ...]  # branch or view names being joined
+    joined_views: tuple[str, ...]
     metadata: dict[str, JSONValue] = field(default_factory=dict)
 
     target_kind: Literal["transition"] = field(default="transition", init=False)
@@ -297,117 +133,43 @@ class JoinPayload(PayloadBase):
 
 
 # ---------------------------------------------------------------------------
-# Payload union type (for type annotations)
+# Payload union type (core only — extensions extend via registration)
 # ---------------------------------------------------------------------------
 
-Payload = Union[
-    NodePayload,
-    TransitionPayload,
-    CutPayload,
-    GitChangePayload,
-    BranchPayload,
-    RevertPayload,
-    CherryPickPayload,
-    MergePayload,
-    JoinPayload,
-]
+Payload = Union[NodePayload, TransitionPayload, CutPayload, JoinPayload]
 
 
 # ---------------------------------------------------------------------------
-# Registry
+# Registries
 # ---------------------------------------------------------------------------
 
 _PAYLOAD_REGISTRY: dict[str, type[PayloadBase]] = {}
+_PAYLOAD_DECODERS: dict[str, Callable[[dict[str, JSONValue]], PayloadBase]] = {}
 
 
 def register_payload_class(cls: type[PayloadBase]) -> None:
-    """Register a custom PayloadBase subclass for deserialization dispatch.
+    """Register a PayloadBase subclass for deserialization dispatch.
 
     The class must have a ``payload_type`` class-level attribute (a string).
-    Call this once at import time before loading any runs.
-
-    Example::
-
-        @dataclass(frozen=True)
-        class ExperimentResultPayload(PayloadBase):
-            ...
-            payload_type: str = field(default="experiment_result", init=False)
-
-        register_payload_class(ExperimentResultPayload)
+    Call this once at import time (typically from an extension module).
     """
-    # Instantiate a sentinel to read payload_type — use a class-level attribute if available.
     pt = getattr(cls, "payload_type", None)
     if pt is None:
         raise ValueError(f"{cls.__name__} must have a payload_type class attribute")
     _PAYLOAD_REGISTRY[pt] = cls
 
 
-# Register built-ins.
-register_payload_class(NodePayload)
-register_payload_class(TransitionPayload)
-register_payload_class(CutPayload)
-register_payload_class(GitChangePayload)
-register_payload_class(BranchPayload)
-register_payload_class(RevertPayload)
-register_payload_class(CherryPickPayload)
-register_payload_class(MergePayload)
-register_payload_class(JoinPayload)
+def register_payload_decoder(
+    payload_type: str,
+    decoder: Callable[[dict[str, JSONValue]], PayloadBase],
+) -> None:
+    """Register a custom decoder function for a payload_type.
 
-
-# ---------------------------------------------------------------------------
-# Deserialization
-# ---------------------------------------------------------------------------
-
-
-def payload_from_dict(data: dict[str, JSONValue]) -> PayloadBase:
-    """Reconstruct a PayloadBase subclass from its JSON dict form.
-
-    Dispatches by ``payload_type``. Falls back to NodePayload / TransitionPayload
-    for unknown types (preserving original payload_type as ``type`` and
-    original data as ``content``).
+    Decoders take precedence over the registered class lookup in
+    ``payload_from_dict``. Use this when the JSON shape needs custom
+    reconstruction logic (e.g. nested dataclasses like CommitEntry).
     """
-    payload_type = data.get("payload_type")
-    cls = _PAYLOAD_REGISTRY.get(str(payload_type)) if payload_type is not None else None
-
-    if cls is NodePayload:
-        return _node_payload_from_dict(data)
-    if cls is TransitionPayload:
-        return _transition_payload_from_dict(data)
-    if cls is CutPayload:
-        return _cut_from_dict(data)
-    if cls is GitChangePayload:
-        return _git_change_from_dict(data)
-    if cls is BranchPayload:
-        return _branch_payload_from_dict(data)
-    if cls is RevertPayload:
-        return _revert_from_dict(data)
-    if cls is CherryPickPayload:
-        return _cherry_pick_from_dict(data)
-    if cls is MergePayload:
-        return _merge_from_dict(data)
-    if cls is JoinPayload:
-        return _join_from_dict(data)
-    if cls is not None:
-        # Custom registered class — try constructor with all fields.
-        return _generic_custom_from_dict(cls, data)
-
-    # Unknown payload_type: fall back to generic based on target_kind.
-    target_kind = data.get("target_kind", "node")
-    if target_kind == "transition":
-        return TransitionPayload(
-            payload_id=str(data.get("payload_id", "")),
-            target_id=str(data.get("target_id", "")),
-            type=str(payload_type or "unknown"),
-            content={k: v for k, v in data.items() if k not in ("payload_id", "target_id", "target_kind", "payload_type", "type", "content", "metadata")},
-            metadata=dict(data.get("metadata") or {}),
-        )
-    return NodePayload(
-        payload_id=str(data.get("payload_id", "")),
-        target_id=str(data.get("target_id", "")),
-        type=str(payload_type or "unknown"),
-        content={k: v for k, v in data.items() if k not in ("payload_id", "target_id", "target_kind", "payload_type", "type", "content", "metadata")},
-        metadata=dict(data.get("metadata") or {}),
-    )
+    _PAYLOAD_DECODERS[payload_type] = decoder
 
 
 def _node_payload_from_dict(data: dict[str, JSONValue]) -> NodePayload:
@@ -435,76 +197,7 @@ def _cut_from_dict(data: dict[str, JSONValue]) -> CutPayload:
         payload_id=str(data["payload_id"]),
         target_id=str(data["target_id"]),
         target_kind=data["target_kind"],  # type: ignore[arg-type]
-        reason=data.get("reason"),
-        metadata=dict(data.get("metadata") or {}),
-    )
-
-
-def _git_change_from_dict(data: dict[str, JSONValue]) -> GitChangePayload:
-    raw_log = data.get("commit_log") or []
-    commit_log = tuple(
-        CommitEntry(
-            sha=str(e["sha"]),
-            subject=str(e["subject"]),
-            author=str(e["author"]),
-            date=str(e["date"]),
-        )
-        for e in raw_log
-    )
-    raw_summary = data.get("diff_summary") or {}
-    diff_summary = DiffSummary(
-        files_changed=int(raw_summary.get("files_changed", 0)),
-        insertions=int(raw_summary.get("insertions", 0)),
-        deletions=int(raw_summary.get("deletions", 0)),
-    )
-    return GitChangePayload(
-        payload_id=str(data["payload_id"]),
-        target_id=str(data["target_id"]),
-        branch=str(data.get("branch", "")),
-        head_commit=str(data.get("head_commit", "")),
-        diff_summary=diff_summary,
-        commit_log=commit_log,
-        metadata=dict(data.get("metadata") or {}),
-    )
-
-
-def _branch_payload_from_dict(data: dict[str, JSONValue]) -> BranchPayload:
-    return BranchPayload(
-        payload_id=str(data["payload_id"]),
-        target_id=str(data["target_id"]),
-        branch=str(data.get("branch", "")),
-        metadata=dict(data.get("metadata") or {}),
-    )
-
-
-def _revert_from_dict(data: dict[str, JSONValue]) -> RevertPayload:
-    return RevertPayload(
-        payload_id=str(data["payload_id"]),
-        target_id=str(data["target_id"]),
-        reverted_transition=str(data.get("reverted_transition", "")),
-        reverted_commit=str(data.get("reverted_commit", "")),
-        metadata=dict(data.get("metadata") or {}),
-    )
-
-
-def _cherry_pick_from_dict(data: dict[str, JSONValue]) -> CherryPickPayload:
-    raw_source_transition = data.get("source_transition")
-    source_transition = str(raw_source_transition) if raw_source_transition is not None else None
-    return CherryPickPayload(
-        payload_id=str(data["payload_id"]),
-        target_id=str(data["target_id"]),
-        source_transition=source_transition,
-        source_commit=str(data.get("source_commit", "")),
-        metadata=dict(data.get("metadata") or {}),
-    )
-
-
-def _merge_from_dict(data: dict[str, JSONValue]) -> MergePayload:
-    return MergePayload(
-        payload_id=str(data["payload_id"]),
-        target_id=str(data["target_id"]),
-        merged_from=str(data.get("merged_from", "")),
-        merged_into=str(data.get("merged_into", "")),
+        reason=data.get("reason"),  # type: ignore[arg-type]
         metadata=dict(data.get("metadata") or {}),
     )
 
@@ -523,6 +216,7 @@ def _join_from_dict(data: dict[str, JSONValue]) -> JoinPayload:
 def _generic_custom_from_dict(cls: type[PayloadBase], data: dict[str, JSONValue]) -> PayloadBase:
     """Best-effort reconstruction for user-registered subclasses."""
     import dataclasses
+
     if dataclasses.is_dataclass(cls):
         fields = {f.name for f in dataclasses.fields(cls) if f.init}  # type: ignore[arg-type]
         kwargs = {k: v for k, v in data.items() if k in fields}
@@ -530,5 +224,65 @@ def _generic_custom_from_dict(cls: type[PayloadBase], data: dict[str, JSONValue]
             return cls(**kwargs)  # type: ignore[return-value]
         except Exception:
             pass
-    # Fallback: generic node or transition payload.
     return payload_from_dict({**data, "payload_type": None})
+
+
+# Register core built-ins.
+register_payload_class(NodePayload)
+register_payload_class(TransitionPayload)
+register_payload_class(CutPayload)
+register_payload_class(JoinPayload)
+
+register_payload_decoder("node_payload", _node_payload_from_dict)
+register_payload_decoder("transition_payload", _transition_payload_from_dict)
+register_payload_decoder("cut", _cut_from_dict)
+register_payload_decoder("join", _join_from_dict)
+
+
+# ---------------------------------------------------------------------------
+# Deserialization
+# ---------------------------------------------------------------------------
+
+
+def payload_from_dict(data: dict[str, JSONValue]) -> PayloadBase:
+    """Reconstruct a PayloadBase subclass from its JSON dict form.
+
+    Dispatch order:
+      1. Custom decoder registered via register_payload_decoder.
+      2. Registered class (via register_payload_class) — best-effort
+         constructor invocation through _generic_custom_from_dict.
+      3. Generic NodePayload / TransitionPayload fallback (unknown type).
+    """
+    payload_type = data.get("payload_type")
+    pt_str = str(payload_type) if payload_type is not None else ""
+
+    decoder = _PAYLOAD_DECODERS.get(pt_str) if pt_str else None
+    if decoder is not None:
+        return decoder(data)
+
+    cls = _PAYLOAD_REGISTRY.get(pt_str) if pt_str else None
+    if cls is not None:
+        return _generic_custom_from_dict(cls, data)
+
+    # Unknown payload_type: fall back to generic based on target_kind.
+    target_kind = data.get("target_kind", "node")
+    leftover = {
+        k: v
+        for k, v in data.items()
+        if k not in ("payload_id", "target_id", "target_kind", "payload_type", "type", "content", "metadata")
+    }
+    if target_kind == "transition":
+        return TransitionPayload(
+            payload_id=str(data.get("payload_id", "")),
+            target_id=str(data.get("target_id", "")),
+            type=pt_str or "unknown",
+            content=leftover,
+            metadata=dict(data.get("metadata") or {}),
+        )
+    return NodePayload(
+        payload_id=str(data.get("payload_id", "")),
+        target_id=str(data.get("target_id", "")),
+        type=pt_str or "unknown",
+        content=leftover,
+        metadata=dict(data.get("metadata") or {}),
+    )

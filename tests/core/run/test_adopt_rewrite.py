@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 import stag
-from stag.core.schema.payloads import GitChangePayload
+from stag.ext.git.payloads import GitChangePayload
 from stag.core.schema.requirements import Requirement
 from stag.core.schema.work_helpers import AMEND_EVENT, REBASE_EVENT
 

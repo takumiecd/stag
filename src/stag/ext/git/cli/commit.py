@@ -172,7 +172,7 @@ def run_commit_command(
 
 def cli_commit(args) -> int:
     """Entry point for ``stag commit`` subcommand."""
-    from stag.core.run._forward_transition import ParallelSessionConflict  # noqa: PLC0415
+    from stag.ext.git.verbs._forward_transition import ParallelSessionConflict  # noqa: PLC0415
 
     run_id = resolve_run_id_from_args(args)
     user_id = resolve_user_id_from_args(args)

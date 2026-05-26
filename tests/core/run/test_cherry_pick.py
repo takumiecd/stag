@@ -4,11 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from stag.core.schema.payloads import (
-    BranchPayload,
-    CherryPickPayload,
-    GitChangePayload,
-)
+from stag.ext.git.payloads import BranchPayload, CherryPickPayload, GitChangePayload
 from stag.core.schema.work_helpers import latest_branch_tip, latest_session_pointer
 import stag
 from stag.core.schema.requirements import Requirement

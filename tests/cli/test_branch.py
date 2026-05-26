@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 from stag.cli.commands.init import run_init_command
-from stag.cli.commands.branch import run_branch_list_command, run_branch_show_command
-from stag.cli.commands.commit import run_commit_command
+from stag.ext.git.cli.branch import run_branch_list_command, run_branch_show_command
+from stag.ext.git.cli.commit import run_commit_command
 
 
 def _init_git_repo(path: Path) -> Path:

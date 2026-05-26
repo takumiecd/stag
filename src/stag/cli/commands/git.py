@@ -138,7 +138,7 @@ def _cli_git_attach(args) -> int:
     handle = store.load_run(run_id)
     run_dir = _run_dir(store, run_id)
 
-    from stag.core.git.attach import attach_commits_to_transition
+    from stag.ext.git.helpers.attach import attach_commits_to_transition
 
     try:
         before = graph_counts(handle)

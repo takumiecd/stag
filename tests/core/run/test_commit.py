@@ -6,7 +6,7 @@ import pytest
 
 from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import Node
-from stag.core.schema.payloads import BranchPayload, GitChangePayload
+from stag.ext.git.payloads import BranchPayload, GitChangePayload
 from stag.core.schema.requirements import Requirement
 from stag.core.schema.work import WorkSession
 from stag.core.schema.work_helpers import (

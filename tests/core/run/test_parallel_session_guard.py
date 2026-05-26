@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from stag.core.run._forward_transition import (
+from stag.ext.git.verbs._forward_transition import (
     ParallelSessionConflict,
     check_branch_tip_consistency,
 )

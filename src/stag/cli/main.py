@@ -7,10 +7,10 @@ import sys
 
 from stag.cli.commands.alias_cmd import add_parser as add_alias_parser, cli_alias
 from stag.cli.commands.anchor import add_parser as add_anchor_parser, cli_anchor
-from stag.cli.commands.branch import add_parser as add_branch_parser, cli_branch
-from stag.cli.commands.cherry_pick import add_parser as add_cherry_pick_parser, cli_cherry_pick
-from stag.cli.commands.commit import add_parser as add_commit_parser, cli_commit
-from stag.cli.commands.hook import add_parser as add_hook_parser, cli_hook
+from stag.ext.git.cli.branch import add_parser as add_branch_parser, cli_branch
+from stag.ext.git.cli.cherry_pick import add_parser as add_cherry_pick_parser, cli_cherry_pick
+from stag.ext.git.cli.commit import add_parser as add_commit_parser, cli_commit
+from stag.ext.git.cli.hook import add_parser as add_hook_parser, cli_hook
 from stag.cli.commands.current import add_parser as add_current_parser, cli_current
 from stag.cli.commands.dump import add_parser as add_dump_parser, cli_dump
 from stag.cli.commands.ext import add_parser as add_ext_parser, cli_ext
@@ -23,18 +23,18 @@ from stag.cli.commands.node import add_parser as add_node_parser, cli_node
 from stag.cli.commands.outcomes import add_parser as add_outcomes_parser, cli_outcomes
 from stag.cli.commands.payload import add_parser as add_payload_parser, cli_payload
 from stag.cli.commands.reachable import add_parser as add_reachable_parser, cli_reachable
-from stag.cli.commands.reset import add_parser as add_reset_parser, cli_reset
-from stag.cli.commands.revert import add_parser as add_revert_parser, cli_revert
+from stag.ext.git.cli.reset import add_parser as add_reset_parser, cli_reset
+from stag.ext.git.cli.revert import add_parser as add_revert_parser, cli_revert
 from stag.cli.commands.cut import add_parser as add_cut_parser, cli_cut
 from stag.cli.commands.show import add_parser as add_show_parser, cli_show
 from stag.cli.commands.sync import add_parser as add_sync_parser, cli_sync
 from stag.cli.commands.trace import add_parser as add_trace_parser, cli_trace
-from stag.cli.commands.merge import add_parser as add_merge_parser, cli_merge
+from stag.ext.git.cli.merge import add_parser as add_merge_parser, cli_merge
 from stag.cli.commands.migrate import add_parser as add_migrate_parser, cli_migrate
 from stag.cli.commands.transition import add_parser as add_transition_parser, cli_transition
 from stag.cli.commands.use import add_parser as add_use_parser, cli_use
 from stag.cli.commands.tui import add_parser as add_tui_parser, cli_tui
-from stag.cli.commands.verify import add_parser as add_verify_parser, cli_verify
+from stag.ext.git.cli.verify import add_parser as add_verify_parser, cli_verify
 from stag.cli.commands.view import add_parser as add_view_parser, cli_view
 from stag.cli.commands.work_session import (
     add_parser as add_work_session_parser,

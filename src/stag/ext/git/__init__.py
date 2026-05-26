@@ -1,0 +1,1 @@
+"""stag git extension package."""

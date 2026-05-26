@@ -58,9 +58,9 @@ class TestRevertCLIIntegration:
         (repo / "file.txt").write_text("content\n")
         subprocess.run(["git", "add", "file.txt"], cwd=str(repo), check=True, capture_output=True)
 
-        from stag.cli.commands.commit import run_commit_command
-        from stag.cli.commands.revert import run_revert_command
-        from stag.core.schema.payloads import RevertPayload
+        from stag.ext.git.cli.commit import run_commit_command
+        from stag.ext.git.cli.revert import run_revert_command
+        from stag.ext.git.payloads import RevertPayload
 
         r1 = run_commit_command(
             message="add file.txt",
@@ -109,8 +109,8 @@ class TestRevertCLIIntegration:
         (repo / "a.txt").write_text("a\n")
         subprocess.run(["git", "add", "a.txt"], cwd=str(repo), check=True, capture_output=True)
 
-        from stag.cli.commands.commit import run_commit_command
-        from stag.cli.commands.revert import run_revert_command
+        from stag.ext.git.cli.commit import run_commit_command
+        from stag.ext.git.cli.revert import run_revert_command
 
         r1 = run_commit_command(
             message="add a.txt",
@@ -154,8 +154,8 @@ class TestRevertCLIIntegration:
         (repo / "b.txt").write_text("b\n")
         subprocess.run(["git", "add", "b.txt"], cwd=str(repo), check=True, capture_output=True)
 
-        from stag.cli.commands.commit import run_commit_command
-        from stag.cli.commands.revert import run_revert_command
+        from stag.ext.git.cli.commit import run_commit_command
+        from stag.ext.git.cli.revert import run_revert_command
 
         r1 = run_commit_command(
             message="add b.txt",

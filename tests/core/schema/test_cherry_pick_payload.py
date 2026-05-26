@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from stag.core.schema.payloads import CherryPickPayload, payload_from_dict
+from stag.core.schema.payloads import payload_from_dict
+from stag.ext.git.payloads import CherryPickPayload
 
 
 class TestCherryPickPayload:

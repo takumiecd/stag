@@ -434,7 +434,7 @@ class StagApp(App):
         if self._current_handle is None or data is None:
             return
         try:
-            from stag.core.git.attach import attach_commits_to_transition
+            from stag.ext.git.helpers.attach import attach_commits_to_transition
 
             result = attach_commits_to_transition(
                 self._current_handle,

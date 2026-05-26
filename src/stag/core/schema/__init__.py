@@ -2,10 +2,7 @@
 
 from stag.core.schema.graph import Node, Transition
 from stag.core.schema.payloads import (
-    CommitEntry,
     CutPayload,
-    DiffSummary,
-    GitChangePayload,
     NodePayload,
     Payload,
     PayloadBase,
@@ -17,10 +14,7 @@ from stag.core.schema.requirements import Requirement
 from stag.core.schema.snapshots import TraceContext
 
 __all__ = [
-    "CommitEntry",
     "CutPayload",
-    "DiffSummary",
-    "GitChangePayload",
     "Node",
     "NodePayload",
     "Payload",

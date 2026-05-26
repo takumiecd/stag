@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from stag.core.cuts import is_inactive_transition
-from stag.core.git import repo as git_repo
-from stag.core.git.finish import _write_patch_artifact
+from stag.ext.git.helpers import repo as git_repo
+from stag.ext.git.helpers.finish import _write_patch_artifact
 from stag.core.run.handle import RunHandle
-from stag.core.schema.payloads import CommitEntry, DiffSummary, GitChangePayload
+from stag.ext.git.payloads import CommitEntry, DiffSummary, GitChangePayload
 
 
 def attach_commits_to_transition(

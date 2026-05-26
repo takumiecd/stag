@@ -1,25 +1,18 @@
-"""RunHandle.adopt_rewrite implementation.
-
-Handles amend and rebase operations by appending new GitChangePayloads to
-existing transitions whose current sha matches the old sha in the sha_map.
-
-S4 scope: pick / reword (sha-only updates) only.
-drop / squash / fixup are TODO for S5 (interactive rebase full support).
-"""
+"""RunHandle.adopt_rewrite implementation."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from stag.core.schema.payloads import DiffSummary, GitChangePayload
-from stag.core.schema.work_helpers import (
+from stag.ext.git.payloads import DiffSummary, GitChangePayload
+from stag.ext.git.events import (
     AMEND_EVENT,
     make_amend_event,
     make_rebase_event,
 )
 
 if TYPE_CHECKING:
-    from stag.core.schema.payloads import CommitEntry
+    from stag.ext.git.payloads import CommitEntry
 
 
 def adopt_rewrite_impl(
@@ -34,51 +27,7 @@ def adopt_rewrite_impl(
     diff_summaries: dict[str, DiffSummary] | None = None,
     commit_logs: dict[str, tuple[CommitEntry, ...]] | None = None,
 ) -> dict:
-    """Append new GitChangePayload(s) to transitions whose latest sha is in sha_map.
-
-    For each (old_sha, new_sha) in sha_map:
-    - Find the transition t with current_sha == old_sha.
-    - If not found: skip and record in skipped_shas.
-    - Else: build a new GitChangePayload(target=t, branch, head_commit=new_sha,
-      diff_summary, commit_log) and attach it.
-
-    Then record one AmendEvent (mode="amend") or RebaseEvent (mode="rebase").
-
-    Parameters
-    ----------
-    sha_map:
-        Mapping of old_sha -> new_sha for each rewritten commit.
-    onto:
-        The rebase target commit (or new_sha for amend).
-    mode:
-        "amend" for a single-commit amend; "rebase" for a rebase.
-    branch:
-        Override branch name for new GitChangePayloads.
-        If None, branch is copied from the existing GitChangePayload.
-    user_id:
-        User ID for work events.
-    work_session_id:
-        Work session ID for work events.
-    diff_summaries:
-        Optional per-new_sha DiffSummary. If absent, DiffSummary(0, 0, 0) is used.
-    commit_logs:
-        Optional per-new_sha commit log. If absent, empty tuple is used.
-
-    Returns
-    -------
-    dict with keys:
-        - affected_transitions: list of transition IDs that got new GitChangePayloads
-        - skipped_shas: list of old shas where no matching transition was found
-        - event_id: ID of the recorded AmendEvent or RebaseEvent (None if no
-          work_session_id / user_id provided)
-
-    Notes
-    -----
-    TODO (S5): Handle interactive rebase drop (CutPayload) and squash/fixup
-    (SquashedIntoPayload + CutPayload on absorbed side, new GitChangePayload on
-    survivor). This implementation treats all entries as pick-equivalent (sha update
-    only).
-    """
+    """Append new GitChangePayload(s) to transitions whose latest sha is in sha_map."""
     affected_transitions: list[str] = []
     skipped_shas: list[str] = []
 
@@ -91,7 +40,6 @@ def adopt_rewrite_impl(
             skipped_shas.append(old_sha)
             continue
 
-        # Resolve branch: prefer caller-supplied, else copy from existing payload.
         resolved_branch = branch
         if resolved_branch is None:
             existing_git = self.run_graph.payloads_for_transition(
@@ -114,20 +62,17 @@ def adopt_rewrite_impl(
         self.run_graph.attach_payload(new_payload)
         affected_transitions.append(t_id)
 
-    # Record one AmendEvent or RebaseEvent.
     event_id: str | None = None
     if user_id is not None and work_session_id is not None:
         self.ensure_work_session(user_id=user_id, work_session_id=work_session_id)
         eid = self._next_id("we")
 
         if mode == AMEND_EVENT or mode == "amend":
-            # For amend, sha_map should have exactly 1 entry.
             items = list(sha_map.items())
             if items:
                 old_sha_single, new_sha_single = items[0]
             else:
                 old_sha_single, new_sha_single = ("", onto)
-            # Find affected transition (may be in skipped if not found).
             t_for_amend = affected_transitions[0] if affected_transitions else ""
             event = make_amend_event(
                 event_id=eid,

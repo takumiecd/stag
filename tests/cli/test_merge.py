@@ -62,8 +62,8 @@ def _build_two_branch_run(handle, ws_main: str = "ws_main", ws_feat: str = "ws_f
 class TestMergeCLIIntegration:
     def test_merge_records_multi_input_transition(self, tmp_path):
         """run_merge_command creates a multi-input transition with MergePayload."""
-        from stag.cli.commands.merge import run_merge_command
-        from stag.core.schema.payloads import MergePayload
+        from stag.ext.git.cli.merge import run_merge_command
+        from stag.ext.git.payloads import MergePayload
 
         _init_stag(tmp_path, run_id="run_mg1")
         sd = _store_dir(tmp_path)
@@ -100,7 +100,7 @@ class TestMergeCLIIntegration:
 
     def test_join_records_join_payload(self, tmp_path):
         """stag merge --join records JoinPayload not MergePayload."""
-        from stag.cli.commands.merge import run_merge_command
+        from stag.ext.git.cli.merge import run_merge_command
         from stag.core.schema.payloads import JoinPayload
 
         _init_stag(tmp_path, run_id="run_join1")
@@ -141,8 +141,8 @@ class TestMergeCLIIntegration:
 
     def test_commit_with_merge_flag(self, tmp_path):
         """run_commit_command --merge drives merge via commit CLI."""
-        from stag.cli.commands.commit import run_commit_command
-        from stag.core.schema.payloads import MergePayload
+        from stag.ext.git.cli.commit import run_commit_command
+        from stag.ext.git.payloads import MergePayload
 
         _init_stag(tmp_path, run_id="run_cm1")
         sd = _store_dir(tmp_path)
@@ -181,7 +181,7 @@ class TestMergeCLIIntegration:
 
     def test_merge_by_branch_name(self, tmp_path):
         """run_merge_command resolves branch tip via BranchTipEvent."""
-        from stag.cli.commands.merge import run_merge_command
+        from stag.ext.git.cli.merge import run_merge_command
 
         _init_stag(tmp_path, run_id="run_brname")
         sd = _store_dir(tmp_path)
@@ -211,7 +211,7 @@ class TestMergeCLIIntegration:
 
     def test_merge_graph_has_correct_output_node(self, tmp_path):
         """Output node of merge transition should be new, different from both inputs."""
-        from stag.cli.commands.merge import run_merge_command
+        from stag.ext.git.cli.merge import run_merge_command
 
         _init_stag(tmp_path, run_id="run_graph_out")
         sd = _store_dir(tmp_path)
@@ -240,7 +240,7 @@ class TestMergeCLIIntegration:
 
     def test_merge_unknown_branch_returns_error(self, tmp_path):
         """Merging a nonexistent branch name should raise an exception."""
-        from stag.cli.commands.merge import run_merge_command
+        from stag.ext.git.cli.merge import run_merge_command
 
         _init_stag(tmp_path, run_id="run_unk")
         sd = _store_dir(tmp_path)
@@ -260,7 +260,7 @@ class TestMergeCLIIntegration:
 
     def test_merge_dump_shows_join_correctly(self, tmp_path):
         """After merge, stag dump should show the multi-input transition."""
-        from stag.cli.commands.merge import run_merge_command
+        from stag.ext.git.cli.merge import run_merge_command
 
         _init_stag(tmp_path, run_id="run_dump")
         sd = _store_dir(tmp_path)

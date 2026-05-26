@@ -272,7 +272,7 @@ class RunGraph:
         transition_id:
             The transition to query.
         """
-        from stag.core.schema.payloads import GitChangePayload  # noqa: PLC0415
+        from stag.ext.git.payloads import GitChangePayload  # noqa: PLC0415
 
         git_payloads = self.payloads_for_transition(
             transition_id, payload_type="git_change"

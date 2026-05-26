@@ -148,7 +148,7 @@ def run_init_command(
     if not no_hooks:
         try:
             repo_root_for_hooks = find_repo_root()
-            from stag.cli.commands.hook import run_hook_install  # noqa: PLC0415
+            from stag.ext.git.cli.hook import run_hook_install  # noqa: PLC0415
             hook_result = run_hook_install(repo_path=repo_root_for_hooks, force=False)
             if hook_result["status"] == "installed":
                 installed_hook_path = hook_result["hook_path"]

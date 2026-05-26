@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from stag.core.run.verify import VerifyViolation
+from stag.ext.git.verbs.verify import VerifyViolation
 from stag.core.schema.requirements import Requirement
 import stag
 
@@ -300,7 +300,8 @@ class TestVerifyMissingInputSha:
     def test_input_transition_has_no_sha(self):
         """Input transition has no GitChangePayload → 'missing_input_sha' violation."""
         handle = _make_handle()
-        from stag.core.schema.payloads import TransitionPayload, GitChangePayload
+        from stag.core.schema.payloads import TransitionPayload
+        from stag.ext.git.payloads import GitChangePayload
         from stag.core.ids import opaque_id
         from stag.core.schema.graph import Node, Transition
 

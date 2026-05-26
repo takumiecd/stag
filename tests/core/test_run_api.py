@@ -9,11 +9,10 @@ from stag.core.cuts import is_active_node
 from stag.core.schema.graph import Transition
 from stag.core.schema.payloads import (
     CutPayload,
-    GitChangePayload,
-    DiffSummary,
     NodePayload,
     TransitionPayload,
 )
+from stag.ext.git.payloads import DiffSummary, GitChangePayload
 from stag.core.schema.requirements import Requirement
 
 
