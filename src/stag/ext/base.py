@@ -75,15 +75,24 @@ class ExtensionBase:
     name: str = ""
     version: str = "0.0"
 
-    def register_schema(self) -> None: ...
-    def register_verbs(self, handle: "RunHandle") -> None: ...
-    def register_cli(self, subparsers: "argparse._SubParsersAction") -> None: ...
+    def register_schema(self) -> None:
+        return None
+
+    def register_verbs(self, handle: "RunHandle") -> None:
+        del handle
+
+    def register_cli(self, subparsers: "argparse._SubParsersAction") -> None:
+        del subparsers
 
     def default_aliases(self) -> dict[str, str]:
         return {}
 
-    def register_init_options(self, parser: "argparse.ArgumentParser") -> None: ...
-    def on_init(self, ctx: InitContext) -> None: ...
+    def register_init_options(self, parser: "argparse.ArgumentParser") -> None:
+        del parser
+
+    def on_init(self, ctx: InitContext) -> None:
+        del ctx
 
     def validate(self, handle: "RunHandle") -> list[Violation]:
+        del handle
         return []
