@@ -15,8 +15,6 @@ from pathlib import Path
 from stag.core.schema.graph import Node, Transition
 from stag.core.schema.payloads import BranchPayload, CommitEntry, DiffSummary, GitChangePayload
 from stag.core.schema.work_helpers import (
-    BRANCH_TIP_EVENT,
-    SESSION_POINTER_EVENT,
     latest_session_pointer,
     make_branch_tip_event,
     make_session_pointer_event,
