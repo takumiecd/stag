@@ -21,6 +21,7 @@ from stag.cli.commands.node import add_parser as add_node_parser, cli_node
 from stag.cli.commands.outcomes import add_parser as add_outcomes_parser, cli_outcomes
 from stag.cli.commands.payload import add_parser as add_payload_parser, cli_payload
 from stag.cli.commands.reachable import add_parser as add_reachable_parser, cli_reachable
+from stag.cli.commands.reset import add_parser as add_reset_parser, cli_reset
 from stag.cli.commands.revert import add_parser as add_revert_parser, cli_revert
 from stag.cli.commands.cut import add_parser as add_cut_parser, cli_cut
 from stag.cli.commands.show import add_parser as add_show_parser, cli_show
@@ -61,6 +62,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_outcomes_parser(subparsers)
     add_payload_parser(subparsers)
     add_reachable_parser(subparsers)
+    add_reset_parser(subparsers)
     add_revert_parser(subparsers)
     add_cut_parser(subparsers)
     add_show_parser(subparsers)
@@ -119,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
         return cli_payload(args)
     if args.command == "reachable":
         return cli_reachable(args)
+    if args.command == "reset":
+        return cli_reset(args)
     if args.command == "revert":
         return cli_revert(args)
     if args.command == "cut":

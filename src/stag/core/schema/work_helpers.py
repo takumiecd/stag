@@ -13,6 +13,7 @@ SESSION_POINTER_EVENT = "session_pointer"
 BRANCH_TIP_EVENT = "branch_tip"
 AMEND_EVENT = "amend"
 REBASE_EVENT = "rebase"
+RESET_EVENT = "reset"
 
 
 def make_session_pointer_event(
@@ -189,6 +190,59 @@ def make_rebase_event(
             "sha_map": dict(sha_map),
             "affected_transitions": list(affected_transitions),
             "onto": onto,
+        },
+    )
+
+
+def make_reset_event(
+    *,
+    event_id: str,
+    run_id: str,
+    work_session_id: str,
+    user_id: str,
+    from_node_id: str,
+    to_node_id: str,
+    mode: str,
+    discarded_transition_ids: tuple[str, ...],
+) -> WorkEvent:
+    """Build a ResetEvent as a WorkEvent.
+
+    Records a reset operation. Unlike commit/revert/cherry-pick, reset does NOT
+    create a new Transition. Instead it records the rollback as a WorkEvent and
+    updates the session pointer.
+
+    Parameters
+    ----------
+    event_id:
+        Unique event identifier.
+    run_id:
+        Run this event belongs to.
+    work_session_id:
+        Session in which the reset occurred.
+    user_id:
+        User performing the reset.
+    from_node_id:
+        The current node ID immediately before the reset.
+    to_node_id:
+        The target node ID to which HEAD is reset (must be an ancestor of from_node_id).
+    mode:
+        One of "hard", "mixed", "soft". Only "hard" causes CutPayloads to be
+        attached to discarded transitions.
+    discarded_transition_ids:
+        Transition IDs that are discarded by the reset (output_node_id lies in
+        the range between from_node and to_node, exclusive of to_node).
+    """
+    return WorkEvent(
+        event_id=event_id,
+        run_id=run_id,
+        work_session_id=work_session_id,
+        user_id=user_id,
+        event_type=RESET_EVENT,
+        data={
+            "from_node_id": from_node_id,
+            "to_node_id": to_node_id,
+            "mode": mode,
+            "discarded_transition_ids": list(discarded_transition_ids),
         },
     )
 
