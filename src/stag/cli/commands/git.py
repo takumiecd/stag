@@ -7,13 +7,13 @@ import json
 import sys
 from pathlib import Path
 
+from stag.cli.append_batch import graph_counts, maybe_append_or_save
 from stag.cli.context import (
     resolve_run_id_from_args,
     resolve_store,
     resolve_user_id_from_args,
     resolve_work_session_id_from_args,
 )
-from stag.cli.append_batch import graph_counts, maybe_append_or_save
 
 # ---------------------------------------------------------------------------
 # Parser registration
@@ -21,8 +21,27 @@ from stag.cli.append_batch import graph_counts, maybe_append_or_save
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
+    """Register the ``git`` command namespace."""
     git_parser = subparsers.add_parser("git", help="Git integration commands")
     git_sub = git_parser.add_subparsers(dest="git_command", required=True)
+
+    from stag.ext.git.cli.branch import add_parser as add_branch_parser
+    from stag.ext.git.cli.cherry_pick import add_parser as add_cherry_pick_parser
+    from stag.ext.git.cli.commit import add_parser as add_commit_parser
+    from stag.ext.git.cli.hook import add_parser as add_hook_parser
+    from stag.ext.git.cli.merge import add_parser as add_merge_parser
+    from stag.ext.git.cli.reset import add_parser as add_reset_parser
+    from stag.ext.git.cli.revert import add_parser as add_revert_parser
+    from stag.ext.git.cli.verify import add_parser as add_verify_parser
+
+    add_branch_parser(git_sub)
+    add_cherry_pick_parser(git_sub)
+    add_commit_parser(git_sub)
+    add_hook_parser(git_sub)
+    add_merge_parser(git_sub)
+    add_reset_parser(git_sub)
+    add_revert_parser(git_sub)
+    add_verify_parser(git_sub)
 
     sp_list = git_sub.add_parser("list", help="List git_change payloads for a Transition")
     sp_list.add_argument("--transition", required=True, dest="transition_id")
@@ -59,12 +78,38 @@ def _run_dir(store: object, run_id: str) -> Path:
 
 
 def cli_git(args) -> int:
+    """Dispatch canonical ``stag git`` subcommands."""
+    from stag.ext.git.cli.branch import cli_branch
+    from stag.ext.git.cli.cherry_pick import cli_cherry_pick
+    from stag.ext.git.cli.commit import cli_commit
+    from stag.ext.git.cli.hook import cli_hook
+    from stag.ext.git.cli.merge import cli_merge
+    from stag.ext.git.cli.reset import cli_reset
+    from stag.ext.git.cli.revert import cli_revert
+    from stag.ext.git.cli.verify import cli_verify
+
     if args.git_command == "add":
         return _cli_git_attach(args)
+    if args.git_command == "branch":
+        return cli_branch(args)
+    if args.git_command == "cherry-pick":
+        return cli_cherry_pick(args)
+    if args.git_command == "commit":
+        return cli_commit(args)
+    if args.git_command == "hook":
+        return cli_hook(args)
     if args.git_command == "list":
         return _cli_git_list(args)
+    if args.git_command == "merge":
+        return cli_merge(args)
+    if args.git_command == "reset":
+        return cli_reset(args)
+    if args.git_command == "revert":
+        return cli_revert(args)
     if args.git_command == "show":
         return _cli_git_show(args)
+    if args.git_command == "verify":
+        return cli_verify(args)
     print(f"unknown git subcommand: {args.git_command}", file=sys.stderr)
     return 1
 
