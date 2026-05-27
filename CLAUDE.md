@@ -53,6 +53,7 @@ Two-tier design. Core payloads live under `src/stag/core/schema/payloads.py`; ex
 
 **Core typed payloads**:
 - `CutPayload(payload_id, target_id, target_kind, reason=None)` — append-only cut marker
+- `JoinPayload(payload_id, target_id, joined_views)` — transition-targeting marker for a multi-input transition that joins independent histories with no common ancestor (extension-agnostic; `target_kind="transition"`)
 
 **Git extension payloads** (`src/stag/ext/git/payloads.py`):
 - `GitChangePayload(payload_id, target_id, branch, head_commit, diff_summary, commit_log=())` — git record on a Transition

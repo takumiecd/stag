@@ -8,7 +8,7 @@ STAGは `ExtensionBase` を継承した拡張クラスを定義し、Pythonの `
 
 ```python
 # my_stag_ext/extension.py
-from stag.ext.base import ExtensionBase, InitContext
+from stag.ext.base import CliCommand, ExtensionBase, InitContext
 from stag.core.run.handle import RunHandle
 
 class MyExtension(ExtensionBase):
@@ -23,9 +23,11 @@ class MyExtension(ExtensionBase):
         # Python API に機能を追加 (例: handle.myext.do_something())
         pass
 
-    def register_cli(self, subparsers) -> None:
+    def cli_commands(self) -> list["CliCommand"]:
         # CLI サブコマンドを登録 (例: stag myext do-something)
-        pass
+        # 各要素は CliCommand(name, add_parser, handler)。
+        # add_parser(subparsers) -> ArgumentParser、handler(args) -> int。
+        return []
 
     def default_aliases(self) -> dict[str, str]:
         # デフォルトのCLIエイリアス (例: stag do -> stag myext do-something)
