@@ -44,13 +44,14 @@ def run_impl(
         list(command_tuple),
         cwd=str(resolved_cwd),
         capture_output=True,
-        text=True,
     )
     duration_ms = round((time.perf_counter() - start) * 1000)
     finished_at = datetime.now(timezone.utc).isoformat()
 
-    stdout, truncated_stdout = _truncate(result.stdout, max_output_chars)
-    stderr, truncated_stderr = _truncate(result.stderr, max_output_chars)
+    stdout_raw = result.stdout.decode("utf-8", errors="replace")
+    stderr_raw = result.stderr.decode("utf-8", errors="replace")
+    stdout, truncated_stdout = _truncate(stdout_raw, max_output_chars)
+    stderr, truncated_stderr = _truncate(stderr_raw, max_output_chars)
 
     if user_id is not None and work_session_id is not None:
         self.ensure_work_session(user_id=user_id, work_session_id=work_session_id)

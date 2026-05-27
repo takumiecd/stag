@@ -13,6 +13,7 @@ from stag.cli.context import (
     resolve_user_id_from_args,
     resolve_work_session_id_from_args,
 )
+from stag.ext.command import CommandNamespace
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
@@ -51,11 +52,12 @@ def run_command_run_command(
     if not store.run_path(run_id).exists():
         raise KeyError(f"unknown run_id: {run_id}")
     handle = store.load_run(run_id)
-    if not hasattr(handle, "command"):
+    command_ns = getattr(handle, "command", None)
+    if not isinstance(command_ns, CommandNamespace):
         raise RuntimeError("command extension is not enabled for this run")
 
     before = graph_counts(handle)
-    result = handle.command.run(
+    result = command_ns.run(
         command=argv,
         cwd=cwd,
         user_id=user_id,
