@@ -1,1 +1,0 @@
-"""MCTS search policy placeholder."""

@@ -1,1 +1,0 @@
-"""Beam search policy placeholder."""

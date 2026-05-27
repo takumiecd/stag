@@ -1,1 +1,0 @@
-"""Greedy search policy placeholder."""
