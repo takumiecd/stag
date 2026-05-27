@@ -264,4 +264,4 @@ class TestRevertImplDryRun:
             head_commit="sha_revert3",
             dry_run=True,
         )
-        assert handle.run_graph.current_sha(t.transition_id) == "sha_revert3"
+        assert handle.git.current_sha(t.transition_id) == "sha_revert3"

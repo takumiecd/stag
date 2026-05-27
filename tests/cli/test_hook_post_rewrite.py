@@ -95,7 +95,7 @@ class TestHookPostRewriteAmend:
         # Verify persistence.
         store = resolve_store(_store_dir(tmp_path))
         handle = store.load_run("run_pr")
-        assert handle.run_graph.current_sha(t_id) == new_sha
+        assert handle.git.current_sha(t_id) == new_sha
 
     def test_amend_records_amend_event(self, tmp_path, monkeypatch):
         repo = _init_git_repo(tmp_path / "repo")
@@ -215,8 +215,8 @@ class TestHookPostRewriteRebase:
 
         store = resolve_store(_store_dir(tmp_path))
         handle = store.load_run("run_rebase")
-        assert handle.run_graph.current_sha(r1["transition_id"]) == new1
-        assert handle.run_graph.current_sha(r2["transition_id"]) == new2
+        assert handle.git.current_sha(r1["transition_id"]) == new1
+        assert handle.git.current_sha(r2["transition_id"]) == new2
 
     def test_rebase_records_rebase_event(self, tmp_path, monkeypatch):
         repo = _init_git_repo(tmp_path / "repo")

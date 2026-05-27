@@ -7,12 +7,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from stag.core.cuts import cut_transition_ids
-from stag.ext.git.events import make_reset_event
-from stag.ext.git.helpers.repo import resolve_worktree_path
 from stag.core.schema.work_helpers import (
     latest_session_pointer,
     make_session_pointer_event,
 )
+from stag.ext.git.events import make_reset_event
+from stag.ext.git.helpers.repo import resolve_worktree_path
+from stag.ext.git.queries import current_sha, transition_by_sha
 
 if TYPE_CHECKING:
     from stag.core.run.handle import RunHandle
@@ -67,7 +68,7 @@ def reset_impl(
     resolved_repo_path = resolve_worktree_path(repo_path)
 
     if to_sha is not None:
-        t_id = graph.transition_by_sha(to_sha)
+        t_id = transition_by_sha(graph, to_sha)
         if t_id is None:
             raise KeyError(f"no stag transition found for sha {to_sha!r}")
         transition = graph.transitions[t_id]
@@ -98,7 +99,7 @@ def reset_impl(
     target_sha: str | None = None
     incoming_t_id = graph.transition_by_output_node.get(to_node_id)
     if incoming_t_id is not None:
-        target_sha = graph.current_sha(incoming_t_id)
+        target_sha = current_sha(graph, incoming_t_id)
 
     if not dry_run and target_sha is not None:
         result = subprocess.run(

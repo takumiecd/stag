@@ -13,6 +13,7 @@ import sys
 
 from stag.cli.context import resolve_run_id_from_args, resolve_store
 from stag.core.schema.work_helpers import BRANCH_TIP_EVENT
+from stag.ext.git.queries import branch_members
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
@@ -84,7 +85,7 @@ def run_branch_show_command(
 
     members: set[str] = set()
     if tip_node_id:
-        members = graph.branch_members(name)
+        members = branch_members(graph, name)
 
     # Find transitions with BranchPayload(branch=name).
     branch_transitions = []

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from stag.ext.git.helpers.repo import resolve_worktree_path
-
+from stag.ext.git.queries import transition_by_sha
 
 # ---------------------------------------------------------------------------
 # Hook script content
@@ -236,8 +236,9 @@ def run_hook_post_rewrite(
     dict with keys from ``adopt_rewrite``:
         - affected_transitions, skipped_shas, event_id
     """
-    from stag.cli.context import resolve_store  # noqa: PLC0415
     import os  # noqa: PLC0415
+
+    from stag.cli.context import resolve_store  # noqa: PLC0415
 
     # Parse sha_map from stdin.
     if stdin_lines is None:
@@ -337,8 +338,9 @@ def run_hook_post_commit(
         - transition_id: the new stag transition ID (or None)
         - message: human-readable description
     """
-    import subprocess as _sp  # noqa: PLC0415
     import os  # noqa: PLC0415
+    import subprocess as _sp  # noqa: PLC0415
+
     from stag.cli.context import resolve_store  # noqa: PLC0415
 
     resolved_repo_path: Path = resolve_worktree_path(repo_path)
@@ -392,7 +394,7 @@ def run_hook_post_commit(
             "message": f"could not load run: {exc}",
         }
 
-    if handle.run_graph.transition_by_sha(head_sha) is not None:
+    if transition_by_sha(handle.run_graph, head_sha) is not None:
         # Already recorded by stag revert/cherry-pick/commit — skip.
         return {
             "action": "skip",
@@ -409,7 +411,7 @@ def run_hook_post_commit(
         if sha_match:
             reverted_sha = sha_match.group(1)
             # Look up the reverted transition.
-            reverted_t = handle.run_graph.transition_by_sha(reverted_sha)
+            reverted_t = transition_by_sha(handle.run_graph, reverted_sha)
             if reverted_t is None:
                 # We don't know the original commit — skip; can't link properly.
                 return {
@@ -521,8 +523,9 @@ def run_hook_post_merge(
         - transition_id: new stag transition ID (or None)
         - message: human-readable description
     """
-    import subprocess as _sp  # noqa: PLC0415
     import os  # noqa: PLC0415
+    import subprocess as _sp  # noqa: PLC0415
+
     from stag.cli.context import resolve_store  # noqa: PLC0415
 
     resolved_repo_path: Path = resolve_worktree_path(repo_path)
@@ -582,7 +585,7 @@ def run_hook_post_merge(
             "message": f"post-merge: could not load run: {exc}",
         }
 
-    if handle.run_graph.transition_by_sha(head_sha) is not None:
+    if transition_by_sha(handle.run_graph, head_sha) is not None:
         return {
             "action": "skip",
             "transition_id": None,
@@ -618,7 +621,7 @@ def run_hook_post_merge(
     # ------------------------------------------------------------------
     # Look up the other node by its sha, if known.
     other_node_id: str | None = None
-    other_transition_id = handle.run_graph.transition_by_sha(other_sha)
+    other_transition_id = transition_by_sha(handle.run_graph, other_sha)
     if other_transition_id is not None:
         other_t = handle.run_graph.transitions.get(other_transition_id)
         if other_t is not None:
@@ -670,8 +673,9 @@ def cli_hook(args) -> int:
         return 0
 
     if args.hook_command == "post-rewrite":
-        from stag.cli.context import resolve_run_id_from_args  # noqa: PLC0415
         import os  # noqa: PLC0415
+
+        from stag.cli.context import resolve_run_id_from_args  # noqa: PLC0415
 
         try:
             run_id = resolve_run_id_from_args(args)
@@ -697,8 +701,9 @@ def cli_hook(args) -> int:
         return 0
 
     if args.hook_command == "post-commit":
-        from stag.cli.context import resolve_run_id_from_args  # noqa: PLC0415
         import os  # noqa: PLC0415
+
+        from stag.cli.context import resolve_run_id_from_args  # noqa: PLC0415
 
         try:
             run_id = resolve_run_id_from_args(args)
@@ -721,8 +726,9 @@ def cli_hook(args) -> int:
         return 0
 
     if args.hook_command == "post-merge":
-        from stag.cli.context import resolve_run_id_from_args  # noqa: PLC0415
         import os  # noqa: PLC0415
+
+        from stag.cli.context import resolve_run_id_from_args  # noqa: PLC0415
 
         try:
             run_id = resolve_run_id_from_args(args)

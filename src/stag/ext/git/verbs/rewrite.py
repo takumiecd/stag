@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from stag.ext.git.payloads import DiffSummary, GitChangePayload
 from stag.ext.git.events import (
     AMEND_EVENT,
     make_amend_event,
     make_rebase_event,
 )
+from stag.ext.git.payloads import DiffSummary, GitChangePayload
+from stag.ext.git.queries import transition_by_sha
 
 if TYPE_CHECKING:
     from stag.ext.git.payloads import CommitEntry
@@ -35,7 +36,7 @@ def adopt_rewrite_impl(
     _commit_logs = commit_logs or {}
 
     for old_sha, new_sha in sha_map.items():
-        t_id = self.run_graph.transition_by_sha(old_sha)
+        t_id = transition_by_sha(self.run_graph, old_sha)
         if t_id is None:
             skipped_shas.append(old_sha)
             continue

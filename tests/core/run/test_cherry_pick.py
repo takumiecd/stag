@@ -182,7 +182,7 @@ class TestCherryPickImplDryRun:
             head_commit="sha_cp8",
             dry_run=True,
         )
-        assert handle.run_graph.current_sha(t.transition_id) == "sha_cp8"
+        assert handle.git.current_sha(t.transition_id) == "sha_cp8"
 
     def test_no_user_id_skips_events(self):
         handle = _make_handle()

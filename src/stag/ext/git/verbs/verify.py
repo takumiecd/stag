@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from stag.ext.git.helpers.repo import resolve_worktree_path
+from stag.ext.git.queries import current_sha
 
 if TYPE_CHECKING:
     from stag.core.run.handle import RunHandle
@@ -69,7 +70,7 @@ def verify_impl(
         if t_id in inactive:
             continue
 
-        output_sha = graph.current_sha(t_id)
+        output_sha = current_sha(graph, t_id)
 
         if output_sha is None:
             violations.append(
@@ -90,7 +91,7 @@ def verify_impl(
                 continue
 
             in_t_id = graph.transition_by_output_node[input_node_id]
-            input_sha = graph.current_sha(in_t_id)
+            input_sha = current_sha(graph, in_t_id)
 
             if input_sha is None:
                 violations.append(

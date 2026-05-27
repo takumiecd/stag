@@ -8,7 +8,6 @@ from stag.core.cuts import inactive_node_ids, inactive_transition_ids
 from stag.core.run.handle import RunHandle
 from stag.core.run_graph import RunGraph
 from stag.core.schema.payloads import CutPayload, NodePayload, TransitionPayload
-from stag.ext.git.payloads import GitChangePayload
 
 
 @dataclass
@@ -42,14 +41,13 @@ def _transition_summary(graph: RunGraph, transition_id: str, full: bool) -> str:
     for payload in payloads:
         if isinstance(payload, CutPayload):
             parts.append("✂cut")
-        elif isinstance(payload, GitChangePayload):
-            diff = payload.diff_summary
-            parts.append(f"git:{payload.branch} +{diff.insertions}/-{diff.deletions}")
         elif isinstance(payload, TransitionPayload):
             parts.append(payload.type)
             if full and payload.content:
                 import json
                 parts.append(json.dumps(payload.content)[:60])
+        else:
+            parts.append(payload.payload_type)
     return " ".join(parts) if parts else "transition"
 
 

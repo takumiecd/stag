@@ -1,4 +1,4 @@
-"""Tests for RunGraph.branch_members."""
+"""Tests for git branch membership queries."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from stag.core.run_graph import RunGraph
 from stag.core.schema.graph import Node, Transition
 from stag.core.schema.work import WorkSession
 from stag.core.schema.work_helpers import make_branch_tip_event
+from stag.ext.git.queries import branch_members
 
 
 def _node(graph: RunGraph, node_id: str) -> Node:
@@ -51,7 +52,7 @@ class TestBranchMembers:
     def test_empty_when_no_tip_event(self):
         graph = RunGraph()
         _node(graph, "n_root")
-        assert graph.branch_members("main") == set()
+        assert branch_members(graph, "main") == set()
 
     def test_single_node_tip(self):
         """When the tip is the root (no ancestors), members = {tip}."""
@@ -60,7 +61,7 @@ class TestBranchMembers:
         _add_session(graph)
         _add_branch_tip(graph, "main", "n_root", "we_1")
 
-        members = graph.branch_members("main")
+        members = branch_members(graph, "main")
         assert members == {"n_root"}
 
     def test_chain_includes_all_ancestors(self):
@@ -74,7 +75,7 @@ class TestBranchMembers:
         _add_session(graph)
         _add_branch_tip(graph, "main", "n_2", "we_1")
 
-        members = graph.branch_members("main")
+        members = branch_members(graph, "main")
         assert members == {"n_0", "n_1", "n_2"}
 
     def test_latest_tip_wins(self):
@@ -90,7 +91,7 @@ class TestBranchMembers:
         _add_branch_tip(graph, "main", "n_2", "we_2")
 
         # Latest tip is n_2 → members should include n_0, n_1, n_2.
-        members = graph.branch_members("main")
+        members = branch_members(graph, "main")
         assert members == {"n_0", "n_1", "n_2"}
 
     def test_different_branches_are_independent(self):
@@ -105,8 +106,8 @@ class TestBranchMembers:
         _add_branch_tip(graph, "main", "n_main_tip", "we_m")
         _add_branch_tip(graph, "dev", "n_dev_tip", "we_d")
 
-        main_members = graph.branch_members("main")
-        dev_members = graph.branch_members("dev")
+        main_members = branch_members(graph, "main")
+        dev_members = branch_members(graph, "dev")
 
         assert "n_main_tip" in main_members
         assert "n_root" in main_members
@@ -122,4 +123,4 @@ class TestBranchMembers:
         _add_session(graph)
         _add_branch_tip(graph, "main", "n_root", "we_1")
 
-        assert graph.branch_members("no-such-branch") == set()
+        assert branch_members(graph, "no-such-branch") == set()

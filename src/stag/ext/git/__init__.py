@@ -59,6 +59,21 @@ class GitNamespace:
 
         return verify_impl(self.handle, **kwargs)
 
+    def branch_members(self, branch: str) -> set[str]:
+        from stag.ext.git.queries import branch_members
+
+        return branch_members(self.handle.run_graph, branch)
+
+    def current_sha(self, transition_id: str) -> str | None:
+        from stag.ext.git.queries import current_sha
+
+        return current_sha(self.handle.run_graph, transition_id)
+
+    def transition_by_sha(self, sha: str) -> str | None:
+        from stag.ext.git.queries import transition_by_sha
+
+        return transition_by_sha(self.handle.run_graph, sha)
+
 
 class GitExtension(ExtensionBase):
     """Standard extension for git-backed STAG workflows."""

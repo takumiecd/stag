@@ -6,12 +6,12 @@ import subprocess
 from pathlib import Path
 
 from stag.core.schema.graph import Transition
-from stag.ext.git.payloads import RevertPayload
 from stag.ext.git.helpers.repo import resolve_worktree_path
+from stag.ext.git.payloads import RevertPayload
+from stag.ext.git.queries import current_sha, transition_by_sha
 from stag.ext.git.verbs._forward_transition import (
     capture_git_info,
     check_branch_tip_consistency,
-    record_forward_transition,
     resolve_current_branch,
     resolve_current_node_ids,
 )
@@ -44,7 +44,7 @@ def revert_impl(
     if target_transition is not None:
         if target_transition not in self.run_graph.transitions:
             raise KeyError(f"unknown transition_id: {target_transition}")
-        sha = self.run_graph.current_sha(target_transition)
+        sha = current_sha(self.run_graph, target_transition)
         if sha is None:
             raise ValueError(
                 f"transition {target_transition!r} has no GitChangePayload / sha"
@@ -54,7 +54,7 @@ def revert_impl(
     else:
         assert target_sha is not None
         reverted_commit = target_sha
-        found = self.run_graph.transition_by_sha(target_sha)
+        found = transition_by_sha(self.run_graph, target_sha)
         if found is None:
             raise KeyError(
                 f"no stag transition found for sha {target_sha!r}; "
@@ -113,11 +113,11 @@ def revert_impl(
     )
 
     from stag.core.schema.graph import Node  # noqa: PLC0415
-    from stag.ext.git.payloads import BranchPayload, GitChangePayload  # noqa: PLC0415
+    from stag.core.schema.work_helpers import make_session_pointer_event  # noqa: PLC0415
     from stag.ext.git.events import (  # noqa: PLC0415
         make_branch_tip_event,
     )
-    from stag.core.schema.work_helpers import make_session_pointer_event  # noqa: PLC0415
+    from stag.ext.git.payloads import BranchPayload, GitChangePayload  # noqa: PLC0415
 
     if user_id is not None and work_session_id is not None:
         self.ensure_work_session(user_id=user_id, work_session_id=work_session_id)

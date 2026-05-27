@@ -57,7 +57,7 @@ class TestAdoptRewriteAmend:
             work_session_id="ws",
         )
 
-        assert handle.run_graph.current_sha(t_id) == "sha_v2"
+        assert handle.git.current_sha(t_id) == "sha_v2"
 
     def test_amend_preserves_history(self):
         """Old GitChangePayload is still present; new one is appended."""
@@ -169,8 +169,8 @@ class TestAdoptRewriteRebase:
             work_session_id="ws",
         )
 
-        assert handle.run_graph.current_sha(t1) == "r_new_1"
-        assert handle.run_graph.current_sha(t2) == "r_new_2"
+        assert handle.git.current_sha(t1) == "r_new_1"
+        assert handle.git.current_sha(t2) == "r_new_2"
 
     def test_rebase_records_rebase_event(self):
         handle = _make_handle()

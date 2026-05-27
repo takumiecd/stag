@@ -6,16 +6,17 @@ import subprocess
 from pathlib import Path
 
 from stag.core.schema.graph import Node, Transition
-from stag.ext.git.payloads import BranchPayload, CherryPickPayload, GitChangePayload
+from stag.core.schema.work_helpers import make_session_pointer_event
+from stag.ext.git.events import make_branch_tip_event
 from stag.ext.git.helpers.repo import resolve_worktree_path
+from stag.ext.git.payloads import BranchPayload, CherryPickPayload, GitChangePayload
+from stag.ext.git.queries import transition_by_sha
 from stag.ext.git.verbs._forward_transition import (
     capture_git_info,
     check_branch_tip_consistency,
     resolve_current_branch,
     resolve_current_node_ids,
 )
-from stag.ext.git.events import make_branch_tip_event
-from stag.core.schema.work_helpers import make_session_pointer_event
 
 
 def cherry_pick_impl(
@@ -51,7 +52,7 @@ def cherry_pick_impl(
     if work_session_id is not None:
         check_branch_tip_consistency(self.run_graph, current_branch, current_node_ids)
 
-    source_transition_id: str | None = self.run_graph.transition_by_sha(source_sha)
+    source_transition_id: str | None = transition_by_sha(self.run_graph, source_sha)
 
     if not dry_run:
         cmd = ["git", "cherry-pick", source_sha]
