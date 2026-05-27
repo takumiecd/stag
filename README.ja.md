@@ -16,7 +16,7 @@ STAG は agent framework / planner / executor ではありません。
 
 *インタラクティブな 3-pane TUI で DAG を歩く: 各 attempt、revert、payload の diff、git の履歴が 1 画面で見渡せます。*
 
-> 0.1 alpha — 破壊的変更があり得ます。モデル整理を優先しており、古い run 保存形式の移行サポートはありません。
+> 0.2 beta — コアグラフモデルは安定化に向かっています。ストレージや API の変更はまだ起こる可能性がありますが、リリースノートで説明します。
 
 *English version: see [README.md](README.md).*
 
@@ -235,7 +235,7 @@ PYTHONPATH=src python3 -m stag.cli.main ...
 
 `SqliteRunStore` は同じ内容を per-run の `run.db` 1 ファイルにまとめます。デフォルトの store ディレクトリは `<STAG_HOME>/runs`。
 
-0.1 alpha のため、スキーマは破壊的に変わる可能性があります。古い形式からの自動移行はありません。
+0.2.x シリーズではストレージ形式の互換性を維持します。破壊的変更が必要な場合は、移行手順をリリースノートに明記します。
 
 ---
 

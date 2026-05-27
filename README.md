@@ -16,7 +16,7 @@ It is the graph layer underneath them.
 
 *Interactive 3-pane TUI walks the DAG: attempts, reverts, payload diffs, and full git history all in one view.*
 
-> 0.1 alpha — breaking changes expected. The model is being refined; old run storage formats are not migrated.
+> 0.2 beta — the core graph model is stabilizing. Storage and API changes may still happen, but they will be documented in release notes.
 
 *日本語版は [README.ja.md](README.ja.md) を参照してください。*
 
@@ -235,7 +235,7 @@ PYTHONPATH=src python3 -m stag.cli.main ...
 
 `SqliteRunStore` stores the same data in a single per-run `run.db`. The default store directory is `<STAG_HOME>/runs`.
 
-0.1 alpha schema may change in breaking ways; no migration from older formats.
+The 0.2.x storage format is maintained within the 0.2 series. Breaking changes will require an explicit migration note.
 
 ---
 
