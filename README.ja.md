@@ -1,14 +1,20 @@
 # STAG
 
-**並列に進む最適化作業を、1つも取りこぼさない append-only グラフ。** 複数の AI agent / 人間 / benchmark runner が、同じ run に対して branch・revert・merge しても、試行は1つも失われません。
+**STAG は、思考・作業文脈・並列探索を記録する append-only graph です。**
+
+Git はファイルがどう変わったかを追います。
+STAG は作業がどう進んだかを追います。何を試したのか、なぜ試したのか、何が起きたのか、どの分岐を捨てたり合流したりしたのかを記録します。
+
+STAG は agent framework / planner / executor ではありません。
+それらの下に置かれる graph layer です。
 
 ![STAG CLI Demo](examples/demo_cli.gif)
 
-*2つの AI agent (Claude と Codex) が同じ repo に並列で commit している様子。それぞれが独立した `work-session` を持ち、両方の branch は同じ `RunGraph` 内の sibling transition として記録されます。race condition も上書きも発生しません。*
+*2つの AI agent (Claude と Codex) が同じ run に対して並列に作業している様子。それぞれが独立した `work-session` を持ち、両方の branch は同じ `RunGraph` 内の sibling transition として記録されます。race condition も上書きも発生しません。*
 
 ![STAG TUI Demo](examples/demo_tui.gif)
 
-*インタラクティブな 3-pane TUI で DAG を歩く: 各 experiment、revert、payload の diff、git の履歴が 1 画面で見渡せます。*
+*インタラクティブな 3-pane TUI で DAG を歩く: 各 attempt、revert、payload の diff、git の履歴が 1 画面で見渡せます。*
 
 > 0.1 alpha — 破壊的変更があり得ます。モデル整理を優先しており、古い run 保存形式の移行サポートはありません。
 
@@ -18,28 +24,35 @@
 
 ## なぜ STAG か
 
-実際の最適化作業は混沌としています。vectorization を試し、行き詰まり、multithreading を試し、deadlock になり、revert し、別の手を試す。今日その分岐は、頭の中、scratch メモ、そして「なぜ試したか」を語らない `git log --oneline` の中にしか残りません。
+実際の作業は一直線ではありません。仮説を立てる → 試す → 結果を観測する → ある分岐を捨てる → 別の分岐を採る — そして後から「なぜその道を通ったのか」を辿る必要が出てきます。
+
+- Git は **ファイル履歴** — どの commit でどのバイトが変わったか。
+- STAG は **reasoning / action / decision の履歴** — どの仮説を試し、どんな結果が出て、どの分岐を切ったか。
 
 STAG はそれら全てを 1 つの append-only DAG として記録します:
 
-- **並列 agent でも衝突しない。** Claude と Codex が同じ run に対して `stag git commit` できます。各々独立した work-session を持ちます。
-- **revert しても履歴は残る。** 失敗した Rust 書き換えは削除されず、`CutPayload` で inactive とマークされます。何を試したか・なぜ捨てたかをあとから辿れます。
+- **並列 agent でも衝突しない。** 複数の agent や人間が同じ run を駆動できます。各々独立した work-session を持ち、attempt は sibling transition として並びます。
+- **revert しても履歴は残る。** 失敗した書き換えは削除されず、`CutPayload` で inactive とマークされます。何を試したか・なぜ捨てたかをあとから辿れます。
 - **commit だけでなく domain payload を載せられる。** benchmark 結果、予測、意図 — 何でも attach できます。各 transition が「何のため」だったかを DAG が知っています。
 - **active かどうかは read-time に計算。** 切り捨てた branch は自動で filter されます。履歴を書き換えずに、グラフは綺麗に保たれます。
 
-STAG は executor / planner / agent framework ではありません。それらが「何をしたか」を保存するための基盤です。
+STAG は executor / planner / agent framework ではありません。それらが「何をしたか・なぜそうしたか」を保存するための基盤です。
 
 ---
 
 ## どんな時に使うか
 
-- **並列 AI agent のオーケストレーション** — Claude Code、Codex、自作 agent が同じ codebase で作業する場合。各試行が区別され、あとからレビュー可能になります。
-- **kernel / 数値最適化** — 「tiled で試す、vectorize で試す、fuse で試す」がそれぞれ node になります。revert / merge は first-class。
+- **複数 AI agent / 人間によるソフトウェア作業** — Claude Code、Codex、自作 agent や人間が同じ codebase で作業する場合。各試行が区別され、あとからレビュー可能になります。
+- **研究・設計探索** — 仮説を branch させ、結果を payload で残し、捨てた分岐も証拠として保持します。
 - **調査・デバッグ** — 仮説と観察結果を payload で記録し、原因にたどり着いた時点で trace を逆向きに歩けます。
+- **ベンチマーク駆動の開発** — 「variant A を試す / variant B を試す」が、計測値が attach された transition として記録されます。
+- **kernel / 数値最適化** — 上記の一具体例。tiled / vectorize / fuse の試行が sibling transition になり、revert / merge は first-class。
 
 ---
 
 ## 30 秒で始める
+
+git repository の中で実行してください:
 
 ```bash
 pip install -e .
@@ -48,11 +61,13 @@ stag init my_task --extension git --run-id demo
 echo "def f(): pass" > work.py && git add work.py
 stag git commit -m "baseline"
 
-stag tui          # DAG をインタラクティブに探索
-stag dump         # もしくは LLM 向け outline でダンプ
+stag tui                              # DAG をインタラクティブに探索
+stag graph dump --format outline      # もしくは LLM 向け outline でダンプ
 ```
 
-同じ repo で 2 つの AI agent を並列に動かしたい場合、それぞれに独立した work-session を発行できます:
+`stag dump` は `stag graph dump` の互換ショートカットとして残されています。
+
+同じ repo で 2 つの agent を並列に動かしたい場合、それぞれに独立した work-session を発行できます:
 
 ```bash
 # Claude の端末
@@ -70,6 +85,8 @@ git add . && stag git commit -m "Codex: parallel map"
 
 両方の branch は同じ `RunGraph` 内の sibling transition として記録されます。実際に動く VHS デモは `examples/demo_cli.tape` と `examples/demo_env.sh` を参照してください。
 
+> **分離スコープの注意。** STAG の `work-session` が分離するのは run / session の履歴・actor attribution (誰がどの session で何をしたか) です。Git の working tree 自体は分離しません — 上記の 2 端末は同じチェックアウトを共有しています。本当に同時編集したい場合は `git worktree` や別の clone を使ってください。Git extension 側で git worktree-aware な workflow を first-class にするのは今後の roadmap です。
+
 ---
 
 ## 概念 (1 画面)
@@ -84,6 +101,7 @@ RunGraph
   └── GraphView    ← 軽量な named scope (root_node_id のみ保持)
 ```
 
+- 各 **attempt / experiment / action は transition として記録され**、その結果状態が output node になります。
 - `NodePayload` / `TransitionPayload` — 汎用の注釈。`type` 文字列で目的を区別します。
 - `CutPayload` — append-only な無効化マーカー。対象は削除されず、read-time に filter されます。
 - `GitChangePayload` — `git` extension が `stag git commit` のたびに attach する payload。
@@ -101,11 +119,13 @@ RunGraph
 | `stag work-session env --new --user <name>` | 端末/サブプロセス専用のシェル exports を出力。 |
 | `stag transition create` | git なしで transition を追加。 |
 | `stag payload add` | 既存 Node / Transition に payload を attach。 |
-| `stag dump --format outline` | LLM 向けの indented spanning-tree でダンプ。 |
-| `stag dump --format mermaid` | 人間/ドキュメント向け Mermaid flowchart。 |
+| `stag graph dump --format outline` | LLM 向けの indented spanning-tree でダンプ。 |
+| `stag graph dump --format mermaid` | 人間/ドキュメント向け Mermaid flowchart。 |
 | `stag tui` | 3-pane (Runs / Flowchart / Detail) のインタラクティブ TUI。 |
 | `stag cut node <id>` | Node (とその下流) を inactive に。append-only。 |
 | `stag guide` | 概念をインタラクティブに学ぶ (`--lang ja` で日本語)。 |
+
+`stag dump ...` は `stag graph dump ...` の互換ショートカットとして残されています。
 
 詳細リファレンス: [docs/ja/CLI.md](docs/ja/CLI.md)。
 
@@ -121,9 +141,9 @@ from stag import NodePayload, Requirement, TransitionPayload
 from stag.storage import JsonlRunStore
 
 requirement = Requirement(
-    requirement_id="req_kernel",
-    target_type="kernel",
-    target_id="csc_linear",
+    requirement_id="req_demo",
+    target_type="task",
+    target_id="explore_idea",
 )
 
 run = stag.init(requirement, run_id="demo")
@@ -134,7 +154,7 @@ transition = run.transition(
         payload_id="pending",
         target_id="pending",
         type="experiment",
-        content={"intent": "run baseline benchmark"},
+        content={"intent": "最初の仮説を試す"},
     ),
 )
 
@@ -144,7 +164,7 @@ run.attach(
         payload_id="pending",
         target_id="pending",
         type="result",
-        content={"latency_ms": 1.5, "status": "completed"},
+        content={"observation": "promising", "status": "completed"},
     ),
 )
 

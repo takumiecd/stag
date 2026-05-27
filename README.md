@@ -1,14 +1,20 @@
 # STAG
 
-**An append-only graph for parallel optimization work.** Multiple AI agents, humans, and benchmark runners branch, revert, and merge against the same run — without losing a single attempt.
+**STAG is an append-only graph for thought, work context, and parallel exploration.**
+
+Git tracks how files changed.
+STAG tracks how work moved: what was tried, why it was tried, what happened, and which branches were later abandoned or merged.
+
+It is not an agent framework, planner, or executor.
+It is the graph layer underneath them.
 
 ![STAG CLI Demo](examples/demo_cli.gif)
 
-*Two AI agents (Claude and Codex) committing to the same repo in parallel. Each gets an isolated `work-session`; both branches land as sibling transitions in the same `RunGraph` — no race, no overwrite.*
+*Two AI agents (Claude and Codex) working against the same run in parallel. Each gets an isolated `work-session`; both branches land as sibling transitions in the same `RunGraph` — no race, no overwrite.*
 
 ![STAG TUI Demo](examples/demo_tui.gif)
 
-*Interactive 3-pane TUI walks the DAG: experiments, reverts, payload diffs, and full git history all in one view.*
+*Interactive 3-pane TUI walks the DAG: attempts, reverts, payload diffs, and full git history all in one view.*
 
 > 0.1 alpha — breaking changes expected. The model is being refined; old run storage formats are not migrated.
 
@@ -18,28 +24,35 @@
 
 ## Why STAG?
 
-Real optimization work is messy. You try vectorization, hit a wall, try multithreading, deadlock, revert, try something else. Today these branches live in your head, your scratch notes, and a `git log --oneline` that doesn't say *why* anything was tried.
+Real work is not a straight line. You form a hypothesis, try it, observe what happened, drop one branch, take another, and later need to reconstruct *why* you ended up where you did.
+
+- Git is **file history** — what bytes changed in which commit.
+- STAG is **reasoning / action / decision history** — which hypothesis was tested, which result it produced, and which branches were cut.
 
 STAG records all of it as one append-only DAG:
 
-- **Parallel agents, no conflict.** Claude and Codex can both `stag git commit` against the same run; each gets its own tracked work-session.
-- **Reverts stay in the graph.** A failed Rust rewrite isn't deleted, it's marked inactive via `CutPayload`. You can still see what was tried, and why.
+- **Parallel agents, no conflict.** Several agents or humans can drive the same run; each gets its own tracked work-session and their attempts become sibling transitions.
+- **Reverts stay in the graph.** A failed rewrite isn't deleted, it's marked inactive via `CutPayload`. You can still see what was tried, and why.
 - **Domain payloads, not just commits.** Attach benchmark results, predictions, intent — anything. The DAG knows what each transition was *for*.
 - **Read-time activity.** Killed branches are filtered automatically; the graph stays clean without rewriting history.
 
-STAG is *not* an executor, planner, or agent framework. It is the substrate for storing what they did.
+STAG is *not* an executor, planner, or agent framework. It is the substrate for storing what they did and why.
 
 ---
 
 ## When does STAG fit?
 
-- **Parallel AI agent orchestration** — Claude Code, Codex, custom agents all working on the same codebase. STAG keeps each attempt distinct and reviewable.
-- **Kernel / numeric optimization** — every "try tiled, try vectorized, try fused" experiment becomes a node. Reverts and merges are first-class.
-- **Investigation / debugging** — record hypotheses and observations as payloads; walk the trace backwards when you finally find the bug.
+- **Multi-agent software work** — Claude Code, Codex, custom agents and humans working on the same codebase. STAG keeps each attempt distinct and reviewable.
+- **Research and design exploration** — branch hypotheses, capture results as payloads, keep the dropped branches around as evidence.
+- **Debugging and investigation** — record hypotheses and observations as payloads; walk the trace backwards when you finally find the bug.
+- **Benchmark-driven engineering** — every "try variant A, try variant B" lands as a transition with its measurement attached.
+- **Kernel / numeric optimization** — one specific case of the above: tiled / vectorized / fused experiments as sibling transitions, with reverts and merges first-class.
 
 ---
 
 ## 30-second Quick Start
+
+From inside a git repository:
 
 ```bash
 pip install -e .
@@ -48,11 +61,13 @@ stag init my_task --extension git --run-id demo
 echo "def f(): pass" > work.py && git add work.py
 stag git commit -m "baseline"
 
-stag tui          # explore the DAG interactively
-stag dump         # or dump it as an LLM-friendly outline
+stag tui                              # explore the DAG interactively
+stag graph dump --format outline      # or dump it as an LLM-friendly outline
 ```
 
-Two AI agents on the same repo? Each gets an isolated work-session that doesn't touch the others' state:
+`stag dump` is kept as a compatibility shortcut for `stag graph dump`.
+
+Two agents on the same repo? Each gets an isolated work-session that doesn't touch the others' attribution:
 
 ```bash
 # Claude's terminal
@@ -70,6 +85,8 @@ git add . && stag git commit -m "Codex: parallel map"
 
 Both branches land in the same `RunGraph` as sibling transitions. See `examples/demo_cli.tape` and `examples/demo_env.sh` for the runnable VHS recording of this scenario.
 
+> **Note on isolation.** A STAG `work-session` isolates STAG run/session attribution (who did what, in which session). It does **not** isolate the Git working tree — both terminals above still share the same checkout. For true concurrent editing, use separate `git worktree` directories or independent clones. Making git worktree-aware workflows first-class is on the Git extension roadmap.
+
 ---
 
 ## Concepts (one screen)
@@ -84,6 +101,7 @@ RunGraph
   └── GraphView    ← lightweight named scope (just a root_node_id)
 ```
 
+- Each **attempt / experiment / action is recorded as a transition**, producing an output node that represents the resulting state.
 - `NodePayload` / `TransitionPayload` — generic annotations, distinguished by a `type` string.
 - `CutPayload` — append-only invalidation. The target isn't deleted; it's filtered out at read time.
 - `GitChangePayload` — attached by the `git` extension on every `stag git commit`.
@@ -101,11 +119,13 @@ Activity ("is this node still in scope?") is computed at read time from `RunGrap
 | `stag work-session env --new --user <name>` | Print shell exports so a terminal or subprocess gets its own session. |
 | `stag transition create` | Add a transition without git. |
 | `stag payload add` | Attach a payload to an existing Node / Transition. |
-| `stag dump --format outline` | LLM-friendly indented spanning-tree dump of the whole run. |
-| `stag dump --format mermaid` | Mermaid flowchart for humans / docs. |
+| `stag graph dump --format outline` | LLM-friendly indented spanning-tree dump of the whole run. |
+| `stag graph dump --format mermaid` | Mermaid flowchart for humans / docs. |
 | `stag tui` | Interactive 3-pane explorer (Runs / Flowchart / Detail). |
 | `stag cut node <id>` | Mark a Node (and descendants) inactive — append-only. |
 | `stag guide` | Discover concepts interactively. `--lang ja` for Japanese. |
+
+`stag dump ...` is retained as a compatibility shortcut for `stag graph dump ...`.
 
 Full reference: [docs/en/CLI.md](docs/en/CLI.md).
 
@@ -121,9 +141,9 @@ from stag import NodePayload, Requirement, TransitionPayload
 from stag.storage import JsonlRunStore
 
 requirement = Requirement(
-    requirement_id="req_kernel",
-    target_type="kernel",
-    target_id="csc_linear",
+    requirement_id="req_demo",
+    target_type="task",
+    target_id="explore_idea",
 )
 
 run = stag.init(requirement, run_id="demo")
@@ -134,7 +154,7 @@ transition = run.transition(
         payload_id="pending",
         target_id="pending",
         type="experiment",
-        content={"intent": "run baseline benchmark"},
+        content={"intent": "try the first hypothesis"},
     ),
 )
 
@@ -144,7 +164,7 @@ run.attach(
         payload_id="pending",
         target_id="pending",
         type="result",
-        content={"latency_ms": 1.5, "status": "completed"},
+        content={"observation": "promising", "status": "completed"},
     ),
 )
 
