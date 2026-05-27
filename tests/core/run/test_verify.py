@@ -12,6 +12,7 @@ import pytest
 from stag.ext.git.verbs.verify import VerifyViolation
 from stag.core.schema.requirements import Requirement
 import stag
+from stag.ext import attach_extensions
 
 
 # ---------------------------------------------------------------------------
@@ -21,7 +22,7 @@ import stag
 
 def _make_handle(run_id: str = "run_test"):
     req = Requirement(requirement_id="req1", target_type="task", target_id="t1")
-    return stag.init(req, run_id=run_id)
+    return attach_extensions(stag.init(req, run_id=run_id), ["git"])
 
 
 def _ensure_session(handle, user_id: str = "user", ws_id: str = "ws_1") -> None:

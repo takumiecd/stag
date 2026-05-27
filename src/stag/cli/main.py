@@ -57,7 +57,7 @@ from stag.cli.commands.work_session import (
 )
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _build_parser(*, run_dir: str | None = None) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="stag",
         description="Record optimization and problem-solving processes",
@@ -88,9 +88,9 @@ def _build_parser() -> argparse.ArgumentParser:
     add_view_parser(subparsers)
     add_work_session_parser(subparsers)
 
-    from stag.ext import register_standard_cli  # noqa: PLC0415
+    from stag.ext import register_enabled_cli  # noqa: PLC0415
 
-    register_standard_cli(subparsers)
+    register_enabled_cli(subparsers, run_dir)
 
     return parser
 
@@ -146,20 +146,12 @@ def _resolve_run_dir_for_alias(tokens: list[str]) -> str | None:
 
 
 def _collect_ext_default_aliases(run_dir: str | None) -> list[dict[str, str]]:
-    """Load default_aliases from standard and enabled extensions."""
+    """Load default_aliases from extensions enabled in the current run."""
     from stag.ext import load_extension  # noqa: PLC0415
     from stag.ext.enabled import load_enabled  # noqa: PLC0415
 
     ext_aliases: list[dict[str, str]] = []
     seen: set[str] = set()
-    for ext_name in ["git"]:
-        try:
-            ext = load_extension(ext_name)
-            ext_aliases.append(ext.default_aliases())
-            seen.add(ext.name)
-        except (KeyError, ImportError):
-            continue
-
     if run_dir is None:
         return ext_aliases
 
@@ -177,7 +169,9 @@ def _collect_ext_default_aliases(run_dir: str | None) -> list[dict[str, str]]:
 
 def parse_args(argv: list[str] | None = None):
     """Parse CLI arguments."""
-    parser = _build_parser()
+    tokens: list[str] | None = None if argv is None else list(argv)
+    run_dir = _resolve_run_dir_for_alias(tokens or sys.argv[1:])
+    parser = _build_parser(run_dir=run_dir)
     return parser.parse_args(argv)
 
 
@@ -197,7 +191,8 @@ def main(argv: list[str] | None = None) -> int:
     tokens = resolve_alias(alias_table, tokens)
     # ---
 
-    args = parse_args(tokens)
+    parser = _build_parser(run_dir=run_dir)
+    args = parser.parse_args(tokens)
     handler = getattr(args, "_stag_handler", None)
     if handler is not None:
         return handler(args)

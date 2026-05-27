@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 import stag
+from stag.ext import attach_extensions
 from stag.ext.git.payloads import GitChangePayload
 from stag.core.schema.requirements import Requirement
 from stag.core.schema.work_helpers import AMEND_EVENT, REBASE_EVENT
@@ -12,7 +13,7 @@ from stag.core.schema.work_helpers import AMEND_EVENT, REBASE_EVENT
 
 def _make_handle(run_id: str = "run_rewrite"):
     req = Requirement(requirement_id="req1", target_type="task", target_id="t1")
-    return stag.init(req, run_id=run_id)
+    return attach_extensions(stag.init(req, run_id=run_id), ["git"])
 
 
 def _commit(handle, sha: str, branch: str = "main", ws: str = "ws") -> str:

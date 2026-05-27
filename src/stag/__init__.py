@@ -19,15 +19,13 @@ from stag.core.schema import (
 from stag.core.types import (
     TargetKind,
 )
-from stag.ext import attach_standard_extensions
 
 __version__ = "0.1.0"
 
 
 def init(requirement: Requirement, *, run_id: str | None = None) -> RunHandle:
-    """Create a run handle with the standard extension namespaces attached."""
-    handle = _core_init(requirement, run_id=run_id)
-    return attach_standard_extensions(handle)
+    """Create a core run handle without enabling extensions."""
+    return _core_init(requirement, run_id=run_id)
 
 __all__ = [
     "CutPayload",

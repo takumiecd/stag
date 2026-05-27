@@ -5,8 +5,6 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import pytest
-
 from stag.cli.commands.init import run_init_command
 from stag.ext.git.cli.branch import run_branch_list_command, run_branch_show_command
 from stag.ext.git.cli.commit import run_commit_command
@@ -52,6 +50,7 @@ class TestBranchListCommand:
             target_id="t",
             run_id="run_bl",
             store_dir=_store_dir(tmp_path),
+            extensions=["git"],
         )
 
         result = run_branch_list_command(run_id="run_bl", store_dir=_store_dir(tmp_path))
@@ -68,6 +67,7 @@ class TestBranchListCommand:
             target_id="t",
             run_id="run_bl2",
             store_dir=_store_dir(tmp_path),
+            extensions=["git"],
         )
 
         (repo / "f.txt").write_text("f\n")
@@ -96,6 +96,7 @@ class TestBranchListCommand:
             target_id="t",
             run_id="run_multi",
             store_dir=_store_dir(tmp_path),
+            extensions=["git"],
         )
 
         (repo / "m.txt").write_text("m\n")
@@ -138,6 +139,7 @@ class TestBranchShowCommand:
             target_id="t",
             run_id="run_bs",
             store_dir=_store_dir(tmp_path),
+            extensions=["git"],
         )
 
         result = run_branch_show_command(
@@ -158,6 +160,7 @@ class TestBranchShowCommand:
             target_id="t",
             run_id="run_bs2",
             store_dir=_store_dir(tmp_path),
+            extensions=["git"],
         )
 
         (repo / "x.txt").write_text("x\n")
@@ -189,6 +192,7 @@ class TestBranchShowCommand:
             target_id="t",
             run_id="run_bs3",
             store_dir=_store_dir(tmp_path),
+            extensions=["git"],
         )
 
         (repo / "y.txt").write_text("y\n")

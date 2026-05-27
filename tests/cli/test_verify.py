@@ -59,6 +59,7 @@ def _init_stag(tmp_path: Path, run_id: str = "run_test") -> dict:
         target_id="t",
         run_id=run_id,
         store_dir=_store_dir(tmp_path),
+        extensions=["git"],
         no_hooks=True,
     )
 

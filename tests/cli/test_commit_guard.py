@@ -27,6 +27,7 @@ def _init_run(tmp_path, run_id: str = "run_guard_test") -> dict:
         target_id="t",
         run_id=run_id,
         store_dir=_store_dir(tmp_path),
+        extensions=["git"],
     )
 
 

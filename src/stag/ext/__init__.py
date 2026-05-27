@@ -8,7 +8,6 @@ from stag.ext.base import Extension, ExtensionBase, InitContext, Violation
 _BUILTIN: dict[str, str] = {
     "git": "stag.ext.git:GitExtension",
 }
-_STANDARD_EXTENSIONS: tuple[str, ...] = ("git",)
 
 def _get_entry_points() -> dict[str, importlib.metadata.EntryPoint]:
     try:
@@ -61,16 +60,24 @@ def attach_extensions(handle, names: Iterable[str]):
     return handle
 
 
-def attach_standard_extensions(handle):
-    """Attach built-in extensions that ship as part of the default package API."""
-    return attach_extensions(handle, _STANDARD_EXTENSIONS)
-
-
-def register_standard_cli(subparsers) -> None:
-    """Register CLI namespaces provided by standard extensions."""
-    for name in _STANDARD_EXTENSIONS:
+def register_extension_cli(subparsers, names: Iterable[str]) -> None:
+    """Register CLI namespaces provided by enabled extensions."""
+    seen: set[str] = set()
+    for name in names:
+        if name in seen:
+            continue
         ext = load_extension(name)
         ext.register_cli(subparsers)
+        seen.add(ext.name)
+
+
+def register_enabled_cli(subparsers, run_dir: str | Path | None) -> None:
+    """Register CLI namespaces for extensions enabled in a run directory."""
+    if run_dir is None:
+        return
+    from stag.ext.enabled import load_enabled
+
+    register_extension_cli(subparsers, (item.name for item in load_enabled(run_dir)))
 
 
 def attach_enabled_extensions(handle, run_dir: str | Path):
@@ -87,8 +94,8 @@ __all__ = [
     "InitContext",
     "attach_enabled_extensions",
     "attach_extensions",
-    "attach_standard_extensions",
     "load_extension",
     "list_available",
-    "register_standard_cli",
+    "register_enabled_cli",
+    "register_extension_cli",
 ]

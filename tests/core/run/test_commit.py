@@ -17,11 +17,12 @@ from stag.core.schema.work_helpers import (
     make_session_pointer_event,
 )
 import stag
+from stag.ext import attach_extensions
 
 
 def _make_handle(run_id: str = "run_test"):
     req = Requirement(requirement_id="req1", target_type="task", target_id="t1")
-    handle = stag.init(req, run_id=run_id)
+    handle = attach_extensions(stag.init(req, run_id=run_id), ["git"])
     return handle
 
 

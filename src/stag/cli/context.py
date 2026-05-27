@@ -20,9 +20,8 @@ class ExtensionAwareStore:
 
     def load_run(self, run_id: str):
         handle = self._store.load_run(run_id)
-        from stag.ext import attach_enabled_extensions, attach_standard_extensions
+        from stag.ext import attach_enabled_extensions
 
-        attach_standard_extensions(handle)
         attach_enabled_extensions(handle, self._store.run_path(run_id))
         return handle
 

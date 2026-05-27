@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 import stag
 from stag.cli.context import resolve_store
@@ -142,21 +141,8 @@ def run_init_command(
         # Not inside a git repo — skip .stag-id creation silently.
         pass
 
-    # Install git hooks unless opted out.
     installed_hook_path: str | None = None
     hook_warning: str | None = None
-    if not no_hooks:
-        try:
-            repo_root_for_hooks = find_repo_root()
-            from stag.ext.git.cli.hook import run_hook_install  # noqa: PLC0415
-            hook_result = run_hook_install(repo_path=repo_root_for_hooks, force=False)
-            if hook_result["status"] == "installed":
-                installed_hook_path = hook_result["hook_path"]
-            elif hook_result["status"] == "skipped":
-                hook_warning = hook_result["message"]
-        except RuntimeError:
-            # Not inside a git repo — skip hook install silently.
-            pass
 
     # Activate requested extensions.
     enabled_extensions: list[str] = []
@@ -168,12 +154,31 @@ def run_init_command(
         for ext_name in extensions:
             ext = load_extension(ext_name)  # raises KeyError for unknown names
             opts = dict(extension_options or {})
+            if no_hooks:
+                opts["ext_git_no_hooks"] = True
+            git_hook_existed = False
+            if ext.name == "git" and not opts.get("ext_git_no_hooks"):
+                try:
+                    git_hook_existed = (
+                        find_repo_root() / ".git" / "hooks" / "post-rewrite"
+                    ).exists()
+                except RuntimeError:
+                    git_hook_existed = False
             ctx = InitContext(
                 run_id=handle.run_id,
                 run_dir=str(run_path),
                 options=opts,
             )
             ext.on_init(ctx)
+            if ext.name == "git" and not opts.get("ext_git_no_hooks"):
+                try:
+                    hook_path = find_repo_root() / ".git" / "hooks" / "post-rewrite"
+                    if hook_path.exists() and not git_hook_existed:
+                        installed_hook_path = str(hook_path)
+                    elif hook_path.exists() and git_hook_existed:
+                        hook_warning = f"hook already exists: {hook_path}"
+                except RuntimeError:
+                    pass
             add_enabled(run_path, EnabledExtension(name=ext.name, version=ext.version, config={}))
             enabled_extensions.append(ext_name)
 

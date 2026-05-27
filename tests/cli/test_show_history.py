@@ -28,6 +28,7 @@ def _init_run(td: str, run_id: str = "run_show") -> dict:
         target_id="t",
         run_id=run_id,
         store_dir=_store_dir(td),
+        extensions=["git"],
         no_hooks=True,
     )
 

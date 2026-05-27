@@ -5,8 +5,6 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import pytest
-
 from stag.cli.commands.init import run_init_command
 
 
@@ -39,6 +37,7 @@ class TestInitHooks:
             target_id="t",
             run_id="run_hook_test",
             store_dir=_store_dir(tmp_path),
+            extensions=["git"],
             no_hooks=False,
         )
 
@@ -56,6 +55,7 @@ class TestInitHooks:
             target_id="t",
             run_id="run_no_hooks",
             store_dir=_store_dir(tmp_path),
+            extensions=["git"],
             no_hooks=True,
         )
 
@@ -74,6 +74,7 @@ class TestInitHooks:
             target_id="t",
             run_id="run_outside_git",
             store_dir=_store_dir(tmp_path),
+            extensions=["git"],
             no_hooks=False,
         )
 
@@ -94,6 +95,7 @@ class TestInitHooks:
             target_id="t",
             run_id="run_existing_hook",
             store_dir=_store_dir(tmp_path),
+            extensions=["git"],
             no_hooks=False,
         )
 

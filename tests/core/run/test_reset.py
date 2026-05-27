@@ -13,11 +13,12 @@ from stag.core.schema.work_helpers import (
     latest_session_pointer,
 )
 import stag
+from stag.ext import attach_extensions
 
 
 def _make_handle(run_id: str = "run_test"):
     req = Requirement(requirement_id="req1", target_type="task", target_id="t1")
-    return stag.init(req, run_id=run_id)
+    return attach_extensions(stag.init(req, run_id=run_id), ["git"])
 
 
 def _ensure_session(handle, user_id: str = "user", ws_id: str = "ws_1") -> None:
@@ -273,7 +274,7 @@ class TestResetImplDryRun:
         # Try resetting "forward" — root is an ancestor of n1, not the reverse.
         # Create a second branch from the root to get a non-ancestor node.
         req = Requirement(requirement_id="req2", target_type="task", target_id="t2")
-        other = stag.init(req, run_id="run_other")
+        other = attach_extensions(stag.init(req, run_id="run_other"), ["git"])
         other.ensure_work_session(user_id="u", work_session_id="ws_o")
         other_t = other.git.commit(
             message="other",
