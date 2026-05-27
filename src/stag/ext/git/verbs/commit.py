@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 from stag.core.schema.graph import Transition
+from stag.ext.git.helpers.repo import resolve_worktree_path
 from stag.ext.git.verbs._forward_transition import (
     capture_git_info,
     check_branch_tip_consistency,
@@ -27,7 +28,7 @@ def commit_impl(
     dry_run: bool = False,
 ) -> Transition:
     """Drive a git commit and record the corresponding stag Transition."""
-    resolved_repo_path: Path = repo_path or Path.cwd()
+    resolved_repo_path: Path = resolve_worktree_path(repo_path)
 
     current_node_ids = resolve_current_node_ids(self, work_session_id)
 

@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from stag.ext.git.helpers.repo import resolve_worktree_path
+
 if TYPE_CHECKING:
     from stag.core.run.handle import RunHandle
 
@@ -58,7 +60,7 @@ def verify_impl(
     from stag.core.cuts import inactive_transition_ids  # noqa: PLC0415
 
     graph = self.run_graph
-    resolved_repo_path = repo_path or Path.cwd()
+    resolved_repo_path = resolve_worktree_path(repo_path)
 
     inactive = inactive_transition_ids(graph)
     violations: list[VerifyViolation] = []

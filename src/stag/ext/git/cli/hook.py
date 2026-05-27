@@ -11,6 +11,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from stag.ext.git.helpers.repo import resolve_worktree_path
+
 
 # ---------------------------------------------------------------------------
 # Hook script content
@@ -339,7 +341,7 @@ def run_hook_post_commit(
     import os  # noqa: PLC0415
     from stag.cli.context import resolve_store  # noqa: PLC0415
 
-    resolved_repo_path: Path = repo_path or Path.cwd()
+    resolved_repo_path: Path = resolve_worktree_path(repo_path)
 
     # Resolve user / session from env if not provided.
     if user_id is None:
@@ -523,7 +525,7 @@ def run_hook_post_merge(
     import os  # noqa: PLC0415
     from stag.cli.context import resolve_store  # noqa: PLC0415
 
-    resolved_repo_path: Path = repo_path or Path.cwd()
+    resolved_repo_path: Path = resolve_worktree_path(repo_path)
 
     if user_id is None:
         user_id = os.environ.get("STAG_USER_ID", "user")

@@ -10,9 +10,59 @@ writes git state.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from pathlib import Path
+
+STAG_GIT_WORKTREE_ENV = "STAG_GIT_WORKTREE"
+
+
+def resolve_worktree_path(explicit: str | Path | None = None) -> Path:
+    """Return the git working tree that stag git operations should target.
+
+    Resolution order:
+    1. *explicit* argument when provided.
+    2. ``STAG_GIT_WORKTREE`` environment variable.
+    3. The current working directory.
+
+    The path is not validated here; callers that need ``git`` to succeed
+    will surface ``subprocess.CalledProcessError`` if the location is
+    not a real worktree.
+    """
+    if explicit is not None:
+        return Path(explicit)
+    env = os.environ.get(STAG_GIT_WORKTREE_ENV)
+    if env:
+        return Path(env)
+    return Path.cwd()
+
+
+def common_dir(cwd: str | Path | None = None) -> Path:
+    """Return the shared ``.git`` directory for the repository.
+
+    Inside a worktree, ``git rev-parse --git-common-dir`` resolves to the
+    primary checkout's ``.git`` rather than the per-worktree pointer file,
+    so two worktrees of the same repo report the same path.
+    """
+    raw = _git(["rev-parse", "--git-common-dir"], cwd or ".")
+    path = Path(raw)
+    if not path.is_absolute():
+        path = (Path(cwd or ".") / path).resolve()
+    return path
+
+
+def primary_worktree_root(cwd: str | Path | None = None) -> Path:
+    """Return the path of the repository's primary (non-linked) worktree."""
+    raw = _git(["worktree", "list", "--porcelain"], cwd or ".")
+    first_path: str | None = None
+    for line in raw.splitlines():
+        if line.startswith("worktree "):
+            first_path = line[len("worktree "):]
+            break
+    if not first_path:
+        return find_repo_root(cwd)
+    return Path(first_path).resolve()
 
 
 def _git(args: list[str], cwd: str | Path) -> str:

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Literal
 
 from stag.core.cuts import cut_transition_ids
 from stag.ext.git.events import make_reset_event
+from stag.ext.git.helpers.repo import resolve_worktree_path
 from stag.core.schema.work_helpers import (
     latest_session_pointer,
     make_session_pointer_event,
@@ -63,7 +64,7 @@ def reset_impl(
         raise ValueError("to_node_id and to_sha are mutually exclusive")
 
     graph = self.run_graph
-    resolved_repo_path = repo_path or Path.cwd()
+    resolved_repo_path = resolve_worktree_path(repo_path)
 
     if to_sha is not None:
         t_id = graph.transition_by_sha(to_sha)
