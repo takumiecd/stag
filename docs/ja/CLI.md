@@ -60,6 +60,14 @@ git 連携は標準 extension です。正式な command namespace は `stag git
 - `stag git add --transition T --commit SHA` — Transition に commit hash を紐づける
 - `stag git list --transition T` — 紐づいた commit hash を表示
 - `stag git show --transition T` — GitChangePayload を表示
+- `stag git worktree add <path> [branch] [--base REF] [--existing-branch]` — `git worktree add` の薄いラッパ。`branch` 省略時はパス末尾の名前で新規 branch を作成。
+- `stag git worktree list` — `git worktree list --porcelain` を JSON にパースして表示。
+- `stag git worktree remove <path> [--force]` — `git worktree remove` の薄いラッパ。
+
+### Worktree attachment
+
+- `stag work-session start --worktree PATH` / `stag work-session env --new --worktree PATH` / `stag work-session spawn --worktree PATH -- <cmd>` — 解決済み worktree path (＋ current branch / `git --git-common-dir`) を `WorkSession.metadata["worktree"]` に記録し、`STAG_GIT_WORKTREE=PATH` を export する。
+- `STAG_GIT_WORKTREE` 環境変数 — セットされていると、すべての git verb (`stag git commit / revert / cherry-pick / merge / reset / verify` と post-rewrite hook) は git サブプロセスを `cwd=$STAG_GIT_WORKTREE` で実行する。`stag git worktree add` と組み合わせることで、同じ STAG run を共有しつつ各 agent に独立した checkout を渡せる。
 
 ### Graph
 

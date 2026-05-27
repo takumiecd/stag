@@ -60,6 +60,14 @@ Git integration is a standard extension. The canonical command namespace is
 - `stag git add --transition T --commit SHA`
 - `stag git list --transition T`
 - `stag git show --transition T`
+- `stag git worktree add <path> [branch] [--base REF] [--existing-branch]` — thin wrapper over `git worktree add`. Creates a new branch named after the path leaf when `branch` is omitted.
+- `stag git worktree list` — JSON-parsed `git worktree list --porcelain` output.
+- `stag git worktree remove <path> [--force]` — wrapper over `git worktree remove`.
+
+Worktree attachment:
+
+- `stag work-session start --worktree PATH` / `stag work-session env --new --worktree PATH` / `stag work-session spawn --worktree PATH -- <cmd>` — record the resolved worktree path (plus current branch and `git --git-common-dir`) on `WorkSession.metadata["worktree"]` and export `STAG_GIT_WORKTREE=PATH`.
+- `STAG_GIT_WORKTREE` env var — when set, every git verb (`stag git commit / revert / cherry-pick / merge / reset / verify` and the post-rewrite hook) runs its `git` subprocess with `cwd=$STAG_GIT_WORKTREE` instead of the shell cwd. Combine with `stag git worktree add` to give each agent an isolated checkout while still sharing one STAG run.
 
 Graph:
 
