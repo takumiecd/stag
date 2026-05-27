@@ -33,6 +33,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     from stag.ext.git.cli.reset import add_parser as add_reset_parser
     from stag.ext.git.cli.revert import add_parser as add_revert_parser
     from stag.ext.git.cli.verify import add_parser as add_verify_parser
+    from stag.ext.git.cli.worktree import add_parser as add_worktree_parser
 
     add_branch_parser(git_sub)
     add_cherry_pick_parser(git_sub)
@@ -42,6 +43,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     add_reset_parser(git_sub)
     add_revert_parser(git_sub)
     add_verify_parser(git_sub)
+    add_worktree_parser(git_sub)
 
     sp_list = git_sub.add_parser("list", help="List git_change payloads for a Transition")
     sp_list.add_argument("--transition", required=True, dest="transition_id")
@@ -110,6 +112,10 @@ def cli_git(args) -> int:
         return _cli_git_show(args)
     if args.git_command == "verify":
         return cli_verify(args)
+    if args.git_command == "worktree":
+        from stag.ext.git.cli.worktree import cli_worktree  # noqa: PLC0415
+
+        return cli_worktree(args)
     print(f"unknown git subcommand: {args.git_command}", file=sys.stderr)
     return 1
 

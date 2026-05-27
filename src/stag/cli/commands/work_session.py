@@ -44,6 +44,16 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     start.add_argument("--work-session", default=None)
     start.add_argument("--user", default=None)
     start.add_argument("--store-dir", default=None)
+    start.add_argument(
+        "--worktree",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Attach this work session to a git worktree at PATH. The path "
+            "is recorded in WorkSession.metadata and exported as "
+            "STAG_GIT_WORKTREE for child processes."
+        ),
+    )
     start.add_argument("--json", action="store_true", dest="as_json")
 
     env = work_sub.add_parser(
@@ -60,6 +70,16 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     env.add_argument("--new", action="store_true", dest="create_new")
     env.add_argument("--user", default=None)
     env.add_argument("--store-dir", default=None)
+    env.add_argument(
+        "--worktree",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Attach the session to a git worktree at PATH. With --new the "
+            "path is stored on the new WorkSession; the exports include "
+            "STAG_GIT_WORKTREE=PATH so subsequent git verbs run there."
+        ),
+    )
     env.add_argument("--json", action="store_true", dest="as_json")
 
     spawn = work_sub.add_parser(
@@ -75,6 +95,15 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     spawn.add_argument("--work-session", default=None)
     spawn.add_argument("--user", default=None)
     spawn.add_argument("--store-dir", default=None)
+    spawn.add_argument(
+        "--worktree",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Attach the child session to a git worktree at PATH and export "
+            "STAG_GIT_WORKTREE=PATH for the child command."
+        ),
+    )
     spawn.add_argument("command", nargs=argparse.REMAINDER)
 
     list_cmd = work_sub.add_parser("list", help="List work sessions in a run")
@@ -95,13 +124,19 @@ def run_work_session_start_command(
     work_session_id: str | None,
     user_id: str,
     store_dir: str,
+    worktree: str | None = None,
 ) -> dict:
     store = resolve_store(store_dir)
     if not store.run_path(run_id).exists():
         raise KeyError(f"unknown run_id: {run_id}")
     handle = store.load_run(run_id)
     ws_id = work_session_id or opaque_id("ws")
-    session = handle.ensure_work_session(user_id=user_id, work_session_id=ws_id)
+    metadata = _build_worktree_metadata(worktree)
+    session = handle.ensure_work_session(
+        user_id=user_id,
+        work_session_id=ws_id,
+        metadata=metadata or None,
+    )
     if session is None:
         raise RuntimeError("failed to create work session")
     if hasattr(store, "append_batch"):
@@ -117,7 +152,38 @@ def run_work_session_start_command(
         )
     else:
         store.save_run(handle)
-    return {"run_id": run_id, "work_session_id": ws_id, "user_id": user_id}
+    result = {"run_id": run_id, "work_session_id": ws_id, "user_id": user_id}
+    if worktree:
+        result["worktree"] = str(metadata["worktree"]["path"])
+    return result
+
+
+def _build_worktree_metadata(worktree: str | None) -> dict:
+    """Resolve worktree path to absolute path and capture branch / repo info.
+
+    Returns the metadata dict to store on the WorkSession, or an empty
+    dict when no worktree was requested. The path is normalised so that
+    it does not depend on the caller's cwd; the branch lookup is best
+    effort and silently degrades when git is unavailable or the path is
+    not a real worktree.
+    """
+    if not worktree:
+        return {}
+    from pathlib import Path  # noqa: PLC0415
+
+    path = Path(worktree).expanduser().resolve()
+    info: dict = {"path": str(path)}
+    try:
+        from stag.ext.git.helpers import repo as git_repo  # noqa: PLC0415
+
+        branch = git_repo.current_branch(path)
+        if branch is not None:
+            info["branch"] = branch
+        info["repo_common_dir"] = str(git_repo.common_dir(path))
+    except Exception:  # noqa: BLE001
+        # Recording the path is still useful; git lookups are best-effort.
+        pass
+    return {"worktree": info}
 
 
 def run_work_session_env_command(
@@ -127,6 +193,7 @@ def run_work_session_env_command(
     create_new: bool,
     user_id: str,
     store_dir: str,
+    worktree: str | None = None,
 ) -> dict:
     if create_new:
         return run_work_session_start_command(
@@ -134,10 +201,16 @@ def run_work_session_env_command(
             work_session_id=work_session_id,
             user_id=user_id,
             store_dir=store_dir,
+            worktree=worktree,
         )
     if not work_session_id:
         raise ValueError("work_session_id is required unless --new is used")
-    return {"run_id": run_id, "work_session_id": work_session_id, "user_id": user_id}
+    result = {"run_id": run_id, "work_session_id": work_session_id, "user_id": user_id}
+    if worktree:
+        from pathlib import Path  # noqa: PLC0415
+
+        result["worktree"] = str(Path(worktree).expanduser().resolve())
+    return result
 
 
 def run_work_session_list_command(*, run_id: str, store_dir: str) -> dict:
@@ -178,6 +251,7 @@ def cli_work_session(args) -> int:
                 work_session_id=args.work_session,
                 user_id=resolve_user_id_from_args(args),
                 store_dir=args.store_dir,
+                worktree=getattr(args, "worktree", None),
             )
             _print_result(result, as_json=args.as_json)
             return 0
@@ -189,6 +263,7 @@ def cli_work_session(args) -> int:
                 create_new=args.create_new,
                 user_id=resolve_user_id_from_args(args),
                 store_dir=args.store_dir,
+                worktree=getattr(args, "worktree", None),
             )
             if args.as_json:
                 print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -204,11 +279,14 @@ def cli_work_session(args) -> int:
                 work_session_id=args.work_session,
                 user_id=resolve_user_id_from_args(args),
                 store_dir=args.store_dir,
+                worktree=getattr(args, "worktree", None),
             )
             child_env = dict(environ)
             child_env["STAG_RUN_ID"] = result["run_id"]
             child_env["STAG_WORK_SESSION_ID"] = result["work_session_id"]
             child_env["STAG_USER_ID"] = result["user_id"]
+            if result.get("worktree"):
+                child_env["STAG_GIT_WORKTREE"] = result["worktree"]
             command = args.command[1:] if args.command[:1] == ["--"] else args.command
             return subprocess.call(command, env=child_env)
 
@@ -242,10 +320,11 @@ def _print_result(result: dict, *, as_json: bool) -> None:
 
 
 def _env_exports(result: dict) -> str:
-    return "\n".join(
-        [
-            f"export STAG_RUN_ID={shlex.quote(result['run_id'])}",
-            f"export STAG_WORK_SESSION_ID={shlex.quote(result['work_session_id'])}",
-            f"export STAG_USER_ID={shlex.quote(result['user_id'])}",
-        ]
-    )
+    lines = [
+        f"export STAG_RUN_ID={shlex.quote(result['run_id'])}",
+        f"export STAG_WORK_SESSION_ID={shlex.quote(result['work_session_id'])}",
+        f"export STAG_USER_ID={shlex.quote(result['user_id'])}",
+    ]
+    if result.get("worktree"):
+        lines.append(f"export STAG_GIT_WORKTREE={shlex.quote(result['worktree'])}")
+    return "\n".join(lines)
