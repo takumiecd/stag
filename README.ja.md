@@ -85,7 +85,30 @@ git add . && stag git commit -m "Codex: parallel map"
 
 両方の branch は同じ `RunGraph` 内の sibling transition として記録されます。実際に動く VHS デモは `examples/demo_cli.tape` と `examples/demo_env.sh` を参照してください。
 
-> **分離スコープの注意。** STAG の `work-session` が分離するのは run / session の履歴・actor attribution (誰がどの session で何をしたか) です。Git の working tree 自体は分離しません — 上記の 2 端末は同じチェックアウトを共有しています。本当に同時編集したい場合は `git worktree` や別の clone を使ってください。Git extension 側で git worktree-aware な workflow を first-class にするのは今後の roadmap です。
+> **分離スコープの注意。** STAG の `work-session` が分離するのは run / session の履歴・actor attribution (誰がどの session で何をしたか) です。Git の working tree 自体は work-session だけでは分離しません — 上記の 2 端末は同じチェックアウトを共有します。各 session を個別の `git worktree` に紐付けたい場合は次の節を参照してください。
+
+### 別々の worktree で並列に動かす
+
+`stag` は work-session 単位で git worktree を割り当てることができます。
+これにより、複数 agent が編集・stage・commit を踏み合わずに進められます:
+
+```bash
+# 2 つの worktree を独立した branch で作る。
+stag git worktree add ../wt-claude claude/vec
+stag git worktree add ../wt-codex  codex/map
+
+# 各 agent の work-session を worktree に紐付ける。
+# STAG_RUN_ID / STAG_WORK_SESSION_ID / STAG_USER_ID に加えて
+# STAG_GIT_WORKTREE が export され、以降の `stag git commit` は
+# その worktree 内でのみ実行される。
+eval $(stag work-session env --run demo --new --user claude \
+        --worktree ../wt-claude)
+eval $(stag work-session env --run demo --new --user codex \
+        --worktree ../wt-codex)
+```
+
+両 agent の commit は同じ `RunGraph` の sibling transition として記録され、
+worktree はあくまで物理的なチェックアウトを分けるだけです。
 
 ---
 
@@ -116,7 +139,8 @@ RunGraph
 | --- | --- |
 | `stag init <req-id>` | 新しい run を作成。`--extension git` で git 統合を有効化。 |
 | `stag git commit -m ...` | 実際の `git commit` を実行し、`Transition` と `GitChangePayload` を記録。 |
-| `stag work-session env --new --user <name>` | 端末/サブプロセス専用のシェル exports を出力。 |
+| `stag work-session env --new --user <name>` | 端末/サブプロセス専用のシェル exports を出力。`--worktree PATH` を付けると git 操作も指定 worktree に固定される。 |
+| `stag git worktree add <path> [branch]` | `git worktree add` の薄いラッパ。`work-session env --worktree` と組み合わせて、agent ごとに独立したチェックアウトを与える。 |
 | `stag transition create` | git なしで transition を追加。 |
 | `stag payload add` | 既存 Node / Transition に payload を attach。 |
 | `stag graph dump --format outline` | LLM 向けの indented spanning-tree でダンプ。 |

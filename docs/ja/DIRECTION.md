@@ -19,17 +19,27 @@ core は standalone で、git には依存しません。git 連携は標準 ext
 今後の UI は DAG を図として表示し、選択した node / transition の
 payload だけを詳細表示する方針です。
 
-## Roadmap: git worktree-aware な workflow
+## git worktree-aware な workflow
 
-現在の `work-session` が分離するのは STAG run / session の attribution のみで、
-Git の working tree 自体は分離しません。本格的に複数 agent が同時編集する
-ワークフローを first-class にするため、Git extension 側に worktree awareness
-を持たせる予定です:
+Git extension は worktree-aware になっています。`WorkSession` を特定の
+`git worktree` に紐付けると、その session 内で動く git verb はリンクされた
+working tree に対して実行されます:
 
-- Git extension が最終的に `git worktree` を管理 / attach する。
-- `WorkSession` の metadata に workspace の種別・path・branch・base ref・
-  repo root を記録できるようにする。
-- これにより、各 agent には物理的な workspace が割り当てられつつ、STAG は
-  context / 試行 / 決定の論理グラフを引き続き保持する。
+- `STAG_GIT_WORKTREE` がセットされていると、すべての git verb
+  (`stag git commit / revert / cherry-pick / merge / reset / verify`)
+  の cwd がその worktree に切り替わります。
+- `stag work-session start / env / spawn --worktree PATH` は解決済みの
+  絶対パス・current branch・`git --git-common-dir` を
+  `WorkSession.metadata["worktree"]` に記録し、子プロセス向けに
+  `STAG_GIT_WORKTREE` を export します。
+- `stag git worktree {add,list,remove}` は `git worktree` の薄いラッパです。
+  ライフサイクル管理は git 側に寄せているため、STAG の外で作成した
+  worktree もそのまま attach できます。
 
-実装はまだコミットされていません。あくまで方向性メモです。
+今後の検討事項:
+
+- `stag work-session list` / TUI に worktree path を表示する。
+- 1 session 内で worktree を跨いだ場合、transition ごとに workspace path
+  を記録する。
+- `work-session env --new --worktree PATH` が存在しないディレクトリを
+  指したとき、自動で worktree を作成する。

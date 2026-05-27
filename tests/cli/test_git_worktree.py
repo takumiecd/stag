@@ -10,12 +10,9 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import shlex
 import subprocess
 from pathlib import Path
-
-import pytest
 
 from stag.cli.commands.init import run_init_command
 from stag.cli.commands.work_session import (
@@ -47,7 +44,7 @@ def _store_dir(tmp_path: Path) -> str:
     return str(tmp_path / "stag_home" / "runs")
 
 
-def _init_stag(repo: Path, tmp_path: Path, run_id: str = "run_wt") -> dict:
+def _init_stag(repo: Path, tmp_path: Path, run_id: str = "run_wt") -> dict:  # noqa: ARG001
     return run_init_command(
         requirement_id="req1",
         target_type="task",

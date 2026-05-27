@@ -85,7 +85,30 @@ git add . && stag git commit -m "Codex: parallel map"
 
 Both branches land in the same `RunGraph` as sibling transitions. See `examples/demo_cli.tape` and `examples/demo_env.sh` for the runnable VHS recording of this scenario.
 
-> **Note on isolation.** A STAG `work-session` isolates STAG run/session attribution (who did what, in which session). It does **not** isolate the Git working tree — both terminals above still share the same checkout. For true concurrent editing, use separate `git worktree` directories or independent clones. Making git worktree-aware workflows first-class is on the Git extension roadmap.
+> **Note on isolation.** A STAG `work-session` isolates STAG run/session attribution (who did what, in which session). It does **not** isolate the Git working tree by itself — both terminals above share the same checkout unless you attach each session to its own `git worktree`. See the next section for the worktree-aware variant.
+
+### Parallel agents in separate worktrees
+
+`stag` can pin each agent to a dedicated `git worktree` so two terminals
+can edit, stage, and commit without trampling each other:
+
+```bash
+# Set up two worktrees on independent branches.
+stag git worktree add ../wt-claude claude/vec
+stag git worktree add ../wt-codex  codex/map
+
+# Each agent attaches its work-session to one worktree.
+# This exports STAG_RUN_ID / STAG_WORK_SESSION_ID / STAG_USER_ID *and*
+# STAG_GIT_WORKTREE, so subsequent `stag git commit` runs inside that
+# worktree only.
+eval $(stag work-session env --run demo --new --user claude \
+        --worktree ../wt-claude)
+eval $(stag work-session env --run demo --new --user codex \
+        --worktree ../wt-codex)
+```
+
+Both agents still land their commits as sibling transitions in the same
+`RunGraph`; the worktrees only separate the physical checkout.
 
 ---
 
@@ -116,7 +139,8 @@ Activity ("is this node still in scope?") is computed at read time from `RunGrap
 | --- | --- |
 | `stag init <req-id>` | Start a new run. Add `--extension git` for git integration. |
 | `stag git commit -m ...` | Drive a real `git commit` and record a `Transition` with `GitChangePayload`. |
-| `stag work-session env --new --user <name>` | Print shell exports so a terminal or subprocess gets its own session. |
+| `stag work-session env --new --user <name>` | Print shell exports so a terminal or subprocess gets its own session. Add `--worktree PATH` to also pin git operations to a linked worktree. |
+| `stag git worktree add <path> [branch]` | Thin wrapper over `git worktree add`. Combine with `--worktree` on `work-session env` to give each agent an isolated checkout. |
 | `stag transition create` | Add a transition without git. |
 | `stag payload add` | Attach a payload to an existing Node / Transition. |
 | `stag graph dump --format outline` | LLM-friendly indented spanning-tree dump of the whole run. |

@@ -16,17 +16,26 @@ default aliases such as `stag commit` for common workflows.
 Future UI work should render the DAG visually and show payload details only for
 the focused node or transition.
 
-## Roadmap: git worktree-aware workflows
+## Git worktree-aware workflows
 
-The current `work-session` isolates STAG run / session attribution only; it
-does not isolate the Git working tree. To make truly concurrent multi-agent
-editing first-class, the Git extension is expected to grow worktree
-awareness:
+The Git extension is worktree-aware. A `WorkSession` can be attached to
+a specific `git worktree`, and STAG commands inside that session run
+their git subprocesses inside the linked working tree:
 
-- Git extension should eventually manage or attach `git worktree`s.
-- `WorkSession` metadata may record workspace kind, path, branch, base ref,
-  and repo root.
-- This gives each agent a physical workspace while STAG keeps the logical
-  graph of context, attempts, and decisions.
+- `STAG_GIT_WORKTREE` overrides the cwd for every git verb
+  (`stag git commit / revert / cherry-pick / merge / reset / verify`).
+- `stag work-session start / env / spawn --worktree PATH` records the
+  resolved path (plus current branch and `git --git-common-dir`) on
+  `WorkSession.metadata["worktree"]` and exports `STAG_GIT_WORKTREE`
+  for downstream processes.
+- `stag git worktree {add,list,remove}` is a thin wrapper around the
+  upstream `git worktree` plumbing. Lifecycle stays in git so that
+  worktrees created outside STAG can still be attached.
 
-No implementation is committed yet; this is a direction note.
+Possible follow-ups:
+
+- Surface the worktree path in `stag work-session list` / TUI views.
+- Record a per-transition workspace path when an agent moves between
+  worktrees during a single session.
+- Auto-create a worktree when `work-session env --new --worktree PATH`
+  points at a missing directory.
