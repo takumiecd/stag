@@ -2,7 +2,7 @@ import importlib.metadata
 from pathlib import Path
 from typing import Iterable
 
-from stag.ext.base import Extension, ExtensionBase, InitContext, Violation
+from stag.ext.base import CliCommand, Extension, ExtensionBase, InitContext, Violation
 
 # Built-in extensions. (name -> "module:Class")
 _BUILTIN: dict[str, str] = {
@@ -67,7 +67,9 @@ def register_extension_cli(subparsers, names: Iterable[str]) -> None:
         if name in seen:
             continue
         ext = load_extension(name)
-        ext.register_cli(subparsers)
+        for command in ext.cli_commands():
+            parser = command.add_parser(subparsers)
+            parser.set_defaults(_stag_handler=command.handler)
         seen.add(ext.name)
 
 
@@ -90,6 +92,7 @@ def attach_enabled_extensions(handle, run_dir: str | Path):
 __all__ = [
     "Extension",
     "ExtensionBase",
+    "CliCommand",
     "Violation",
     "InitContext",
     "attach_enabled_extensions",

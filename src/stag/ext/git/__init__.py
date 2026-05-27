@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from stag.ext.base import ExtensionBase, InitContext, Violation
+from stag.ext.base import CliCommand, ExtensionBase, InitContext, Violation
 
 if TYPE_CHECKING:
     import argparse
@@ -91,11 +91,10 @@ class GitExtension(ExtensionBase):
             return
         setattr(handle, self.name, GitNamespace(handle))
 
-    def register_cli(self, subparsers: "argparse._SubParsersAction") -> None:
+    def cli_commands(self) -> list[CliCommand]:
         from stag.cli.commands.git import add_parser, cli_git
 
-        parser = add_parser(subparsers)
-        parser.set_defaults(_stag_handler=cli_git)
+        return [CliCommand(name=self.name, add_parser=add_parser, handler=cli_git)]
 
     def default_aliases(self) -> dict[str, str]:
         return {

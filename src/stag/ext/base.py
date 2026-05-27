@@ -14,10 +14,11 @@ See docs/ja/EXTENSION_FRAMEWORK.md for the full design.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Callable, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     import argparse
+
     from stag.core.run.handle import RunHandle
 
 
@@ -50,6 +51,15 @@ class InitContext:
     options: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class CliCommand:
+    """A top-level CLI command contributed by an extension."""
+
+    name: str
+    add_parser: Callable[["argparse._SubParsersAction"], "argparse.ArgumentParser"]
+    handler: Callable[["argparse.Namespace"], int]
+
+
 @runtime_checkable
 class Extension(Protocol):
     """Stable contract for extensions."""
@@ -59,7 +69,7 @@ class Extension(Protocol):
 
     def register_schema(self) -> None: ...
     def register_verbs(self, handle: "RunHandle") -> None: ...
-    def register_cli(self, subparsers: "argparse._SubParsersAction") -> None: ...
+    def cli_commands(self) -> list[CliCommand]: ...
     def default_aliases(self) -> dict[str, str]: ...
     def register_init_options(self, parser: "argparse.ArgumentParser") -> None: ...
     def on_init(self, ctx: InitContext) -> None: ...
@@ -81,8 +91,8 @@ class ExtensionBase:
     def register_verbs(self, handle: "RunHandle") -> None:
         del handle
 
-    def register_cli(self, subparsers: "argparse._SubParsersAction") -> None:
-        del subparsers
+    def cli_commands(self) -> list[CliCommand]:
+        return []
 
     def default_aliases(self) -> dict[str, str]:
         return {}
