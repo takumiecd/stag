@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 
 from stag.cli.context import resolve_store
-from stag.cli.paths import find_repo_root, resolve_store_dir, write_stag_id
+from stag.cli.paths import find_repo_root, resolve_store_dir, stag_id_path, write_stag_id
 
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
     """Register the ``use`` subcommand parser."""
-    parser = subparsers.add_parser("use", help="Set the current run (writes .stag-id)")
+    parser = subparsers.add_parser(
+        "use", help="Set the current run (writes <gitdir>/stag-id)"
+    )
     parser.add_argument("run_id", help="Run identifier")
     parser.add_argument(
         "--store-dir",
@@ -25,7 +27,7 @@ def run_use_command(
     run_id: str,
     store_dir: str | None,
 ) -> dict:
-    """Set the current run by writing its id to ``.stag-id``.
+    """Set the current run by writing its id to ``<gitdir>/stag-id``.
 
     Parameters
     ----------
@@ -52,7 +54,7 @@ def run_use_command(
         raise KeyError(f"unknown run_id: {run_id}")
     repo_root = find_repo_root()
     write_stag_id(repo_root, run_id)
-    return {"run_id": run_id, "stag_id_path": str(repo_root / ".stag-id")}
+    return {"run_id": run_id, "stag_id_path": str(stag_id_path(repo_root))}
 
 
 def cli_use(args) -> int:

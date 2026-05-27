@@ -11,7 +11,7 @@ from stag.cli.paths import find_repo_root, read_stag_id, resolve_stag_home
 
 def add_parser(subparsers) -> argparse.ArgumentParser:
     """Register the ``current`` subcommand parser."""
-    parser = subparsers.add_parser("current", help="Show the current run (from .stag-id)")
+    parser = subparsers.add_parser("current", help="Show the current run (from <gitdir>/stag-id)")
     parser.add_argument(
         "--store-dir",
         default=None,
@@ -30,13 +30,13 @@ def run_current_command(
     *,
     store_dir: str | None = None,
 ) -> dict:
-    """Show the current run resolved from ``.stag-id``.
+    """Show the current run resolved from ``<gitdir>/stag-id``.
 
     Parameters
     ----------
     store_dir:
         Ignored (kept for API compatibility). The run path is derived from
-        STAG_HOME and the run_id in ``.stag-id``.
+        STAG_HOME and the run_id in ``<gitdir>/stag-id``.
 
     Returns
     -------
@@ -45,7 +45,7 @@ def run_current_command(
     Raises
     ------
     RuntimeError
-        If not in a git repo or no ``.stag-id`` is present.
+        If not in a git repo or no ``<gitdir>/stag-id`` is present.
     """
     repo_root = find_repo_root()
     run_id = read_stag_id(repo_root)

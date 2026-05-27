@@ -26,7 +26,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
             "Create and use work sessions. Use explicit mode with --work-session on "
             "mutating commands, or fixed mode via `eval \"$(stag work-session env "
             "--run RUN --new)\"`. Fixed mode writes only shell environment variables, "
-            "so parallel terminals and child processes do not share .stag-id state."
+            "so parallel terminals and child processes do not share the <gitdir>/stag-id pointer."
         ),
     )
     work_sub = parser.add_subparsers(dest="work_session_command", required=True)

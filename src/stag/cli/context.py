@@ -40,7 +40,7 @@ def resolve_run_id(
 
     1. Explicit *run_id* if provided.
     2. ``STAG_RUN_ID`` environment variable.
-    3. ``.stag-id`` file in the nearest git repo root.
+    3. Active-run pointer at ``<gitdir>/stag-id`` in the nearest git repo.
 
     Raises
     ------
@@ -52,7 +52,7 @@ def resolve_run_id(
     env = os.environ.get("STAG_RUN_ID")
     if env:
         return env
-    # Walk up from cwd to find .stag-id
+    # Walk up from cwd to find the gitdir, then read <gitdir>/stag-id.
     try:
         repo_root = find_repo_root()
         stag_id = read_stag_id(repo_root)
@@ -70,8 +70,8 @@ def resolve_run_id(
 def resolve_run_id_from_args(args) -> str:
     """Resolve a run_id from a parsed argparse namespace.
 
-    Reads the ``--run`` flag and falls back to the env var and
-    ``.stag-id`` file.
+    Reads the ``--run`` flag and falls back to the env var and the
+    ``<gitdir>/stag-id`` pointer.
     """
     return resolve_run_id(getattr(args, "run", None), args.store_dir)
 

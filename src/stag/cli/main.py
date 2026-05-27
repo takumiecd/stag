@@ -27,7 +27,7 @@ def _build_parser(*, run_dir: str | None = None) -> argparse.ArgumentParser:
 def _resolve_run_dir_for_alias(tokens: list[str]) -> str | None:
     """Best-effort resolution of run_dir for alias loading.
 
-    Reads ``--run`` / ``STAG_RUN_ID`` / ``.stag-id``.  Returns None if no
+    Reads ``--run`` / ``STAG_RUN_ID`` / ``<gitdir>/stag-id``. Returns None if no
     run can be resolved without side-effects.
     """
     import os
@@ -50,7 +50,7 @@ def _resolve_run_dir_for_alias(tokens: list[str]) -> str | None:
         run_id = os.environ.get("STAG_RUN_ID")
 
     if run_id is None:
-        # Try .stag-id
+        # Try <gitdir>/stag-id
         try:
             from stag.cli.paths import find_repo_root, read_stag_id  # noqa: PLC0415
 

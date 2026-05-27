@@ -6,7 +6,7 @@ import argparse
 
 import stag
 from stag.cli.context import resolve_store
-from stag.cli.paths import find_repo_root, resolve_store_dir, write_stag_id
+from stag.cli.paths import find_repo_root, resolve_store_dir, stag_id_path, write_stag_id
 from stag.core.schema.requirements import Requirement
 
 
@@ -33,11 +33,6 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
         "--store-dir",
         default=None,
         help="Directory to save runs (default: <STAG_HOME>/runs)",
-    )
-    parser.add_argument(
-        "--no-stag-id-commit",
-        action="store_true",
-        help="Create .stag-id but skip suggesting git add (no-op flag for scripting)",
     )
     parser.add_argument(
         "--no-hooks",
@@ -105,7 +100,8 @@ def run_init_command(
     Returns
     -------
     dict with at least ``run_id``, ``root_node_id``, and ``stag_id_path``
-    (the path where ``.stag-id`` was written, or None if not in a git repo).
+    (the path where the active-run pointer was written under ``<gitdir>/``,
+    or None if not in a git repo).
 
     Raises
     ------
@@ -131,14 +127,16 @@ def run_init_command(
 
     store.save_run(handle)
 
-    # Write .stag-id in the repo root if we are inside a git repo.
+    # Write the active-run pointer under <gitdir>/stag-id if we are
+    # inside a git repo. Living under .git/ means git itself never
+    # tracks it, so there is no risk of accidental commits.
     written_stag_id_path: str | None = None
     try:
         repo_root = find_repo_root()
         write_stag_id(repo_root, handle.run_id)
-        written_stag_id_path = str(repo_root / ".stag-id")
+        written_stag_id_path = str(stag_id_path(repo_root))
     except RuntimeError:
-        # Not inside a git repo — skip .stag-id creation silently.
+        # Not inside a git repo — skip pointer creation silently.
         pass
 
     installed_hook_path: str | None = None
@@ -215,11 +213,6 @@ def cli_init(args) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(result["run_id"])
-    if result.get("stag_id_path"):
-        print(
-            f"hint: run 'git add {result['stag_id_path']}' to track this run in git",
-            file=sys.stderr,
-        )
     if result.get("hook_path"):
         print(
             f"hint: git hook installed at {result['hook_path']}",

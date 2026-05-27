@@ -1,4 +1,4 @@
-"""Integration tests for S1: .stag-id based run resolution."""
+"""Integration tests for S1: stag-id based run resolution."""
 
 from __future__ import annotations
 
@@ -51,9 +51,11 @@ def test_init_writes_stag_id(tmp_path, monkeypatch):
     )
 
     assert result["run_id"] == "run_s1"
-    stag_id_file = repo / ".stag-id"
-    assert stag_id_file.exists(), ".stag-id should be written in repo root"
+    stag_id_file = repo / ".git" / "stag-id"
+    assert stag_id_file.exists(), "stag-id should be written under <gitdir>"
     assert read_stag_id(repo) == "run_s1"
+    # Ensure no legacy file is left in the repo working tree.
+    assert not (repo / ".stag-id").exists()
 
 
 def test_init_creates_run_under_stag_home(tmp_path, monkeypatch):
@@ -74,7 +76,7 @@ def test_init_creates_run_under_stag_home(tmp_path, monkeypatch):
 
 
 def test_init_without_git_repo_still_creates_run(tmp_path, monkeypatch):
-    """When not inside a git repo, init should succeed without writing .stag-id."""
+    """When not inside a git repo, init should succeed without writing stag-id."""
     monkeypatch.setenv("STAG_HOME", str(_stag_home(tmp_path)))
     # tmp_path has no .git — find_repo_root should fail silently
     monkeypatch.chdir(tmp_path)
@@ -93,7 +95,7 @@ def test_init_without_git_repo_still_creates_run(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# resolve_run_id resolves from .stag-id
+# resolve_run_id resolves from <gitdir>/stag-id
 # ---------------------------------------------------------------------------
 
 
@@ -137,7 +139,7 @@ def test_resolve_run_id_raises_when_no_stag_id(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# stag use: writes .stag-id in git repo
+# stag use: writes stag-id in git repo
 # ---------------------------------------------------------------------------
 
 

@@ -95,7 +95,7 @@ def run_commit_command(
     branch:
         Branch name override (None → infer from git).
     run_id:
-        Explicit run id. If None, resolved from env / .stag-id.
+        Explicit run id. If None, resolved from env / <gitdir>/stag-id.
     store_dir:
         Store directory. If None, resolved from STAG_HOME.
     user_id:

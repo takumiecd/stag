@@ -1,4 +1,4 @@
-"""Unit tests for stag.cli.paths — STAG_HOME resolution and .stag-id helpers."""
+"""Unit tests for stag.cli.paths — STAG_HOME resolution and stag-id helpers."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import pytest
 from stag.cli.paths import (
     find_repo_root,
     read_stag_id,
+    resolve_git_dir,
     resolve_stag_home,
     resolve_store_dir,
     runs_dir,
@@ -69,12 +70,29 @@ def test_resolve_store_dir_returns_str(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# stag_id_path
+# stag_id_path / resolve_git_dir
 # ---------------------------------------------------------------------------
 
 
-def test_stag_id_path_is_dot_stag_id(tmp_path):
-    assert stag_id_path(tmp_path) == tmp_path / ".stag-id"
+def test_stag_id_path_is_inside_gitdir(tmp_path):
+    (tmp_path / ".git").mkdir()
+    assert stag_id_path(tmp_path) == tmp_path / ".git" / "stag-id"
+
+
+def test_resolve_git_dir_follows_worktree_pointer(tmp_path):
+    # Simulate a linked worktree: .git is a *file* containing
+    # ``gitdir: <path>``.
+    main_repo = tmp_path / "main"
+    main_repo.mkdir()
+    real_gitdir = main_repo / ".git" / "worktrees" / "wt1"
+    real_gitdir.mkdir(parents=True)
+    worktree = tmp_path / "wt1"
+    worktree.mkdir()
+    (worktree / ".git").write_text(
+        f"gitdir: {real_gitdir}\n", encoding="utf-8"
+    )
+    assert resolve_git_dir(worktree) == real_gitdir
+    assert stag_id_path(worktree) == real_gitdir / "stag-id"
 
 
 # ---------------------------------------------------------------------------
@@ -83,29 +101,47 @@ def test_stag_id_path_is_dot_stag_id(tmp_path):
 
 
 def test_read_stag_id_returns_none_when_missing(tmp_path):
+    (tmp_path / ".git").mkdir()
     assert read_stag_id(tmp_path) is None
 
 
 def test_write_and_read_stag_id_roundtrip(tmp_path):
+    (tmp_path / ".git").mkdir()
     run_id = "run_abc123"
     write_stag_id(tmp_path, run_id)
     assert read_stag_id(tmp_path) == run_id
 
 
 def test_write_stag_id_includes_trailing_newline(tmp_path):
+    (tmp_path / ".git").mkdir()
     write_stag_id(tmp_path, "run_xyz")
-    content = (tmp_path / ".stag-id").read_text(encoding="utf-8")
+    content = (tmp_path / ".git" / "stag-id").read_text(encoding="utf-8")
     assert content == "run_xyz\n"
 
 
 def test_read_stag_id_strips_whitespace(tmp_path):
-    (tmp_path / ".stag-id").write_text("  run_trimmed  \n", encoding="utf-8")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "stag-id").write_text(
+        "  run_trimmed  \n", encoding="utf-8"
+    )
     assert read_stag_id(tmp_path) == "run_trimmed"
 
 
 def test_read_stag_id_returns_none_for_empty_file(tmp_path):
-    (tmp_path / ".stag-id").write_text("", encoding="utf-8")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "stag-id").write_text("", encoding="utf-8")
     assert read_stag_id(tmp_path) is None
+
+
+def test_read_stag_id_migrates_legacy_file(tmp_path):
+    """Legacy ``<repo_root>/.stag-id`` files are migrated on read."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".stag-id").write_text("run_legacy\n", encoding="utf-8")
+    assert read_stag_id(tmp_path) == "run_legacy"
+    # After migration, the canonical location holds the id and the
+    # legacy file is gone.
+    assert (tmp_path / ".git" / "stag-id").read_text(encoding="utf-8").strip() == "run_legacy"
+    assert not (tmp_path / ".stag-id").exists()
 
 
 # ---------------------------------------------------------------------------
