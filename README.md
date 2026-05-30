@@ -1,5 +1,9 @@
 # ARCTX
 
+> **Git tracks what changed. ARCTX tracks why you changed it — and what you decided not to.**
+>
+> An append-only DAG for reasoning history, parallel agent collaboration, and abandoned branches that stay in the graph.
+
 ## Packages
 
 This repository distributes three packages:
@@ -20,12 +24,7 @@ handle = arctx.init(arctx.Requirement(requirement_id="r", target_type="code", ta
 
 ---
 
-**ARCTX is an append-only graph for thought, work context, and parallel exploration.**
-
-Git tracks how files changed.
-ARCTX tracks how work moved: what was tried, why it was tried, what happened, and which branches were later abandoned or merged.
-
-It is not an agent framework, planner, or executor.
+ARCTX is **not** an agent framework, planner, or executor.  
 It is the graph layer underneath them.
 
 ![ARCTX CLI Demo](examples/demo_cli.gif)

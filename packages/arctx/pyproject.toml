@@ -5,13 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "arctx"
 version = "0.2.0b2"
-description = "ARCTX: append-only DAG for thought, work context, and parallel exploration"
+description = "Append-only DAG for reasoning history, parallel agent collaboration, and thought tracking"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Takumi Ishida"},
 ]
+keywords = ["dag", "agents", "multi-agent", "reasoning", "traceability", "workflow", "history", "graph"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -20,6 +21,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Version Control",
 ]
 dependencies = [
     "typing-extensions>=4.0.0",
@@ -38,8 +41,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/takumiecd/stag"
-Repository = "https://github.com/takumiecd/stag"
+Homepage = "https://github.com/takumiecd/arctx"
+Repository = "https://github.com/takumiecd/arctx"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/arctx"]

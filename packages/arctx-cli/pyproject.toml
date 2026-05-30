@@ -5,13 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "arctx-cli"
 version = "0.2.0b2"
-description = "ARCTX CLI: command-line interface for arctx"
+description = "CLI for ARCTX — append-only DAG for reasoning history and parallel agent work"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Takumi Ishida"},
 ]
+keywords = ["cli", "arctx", "dag", "agents", "developer-tools", "workflow"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -20,6 +21,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities",
 ]
 dependencies = [
     "arctx>=0.2.0b2",
@@ -38,8 +41,8 @@ dev = [
 arctx = "arctx_cli.main:main"
 
 [project.urls]
-Homepage = "https://github.com/takumiecd/stag"
-Repository = "https://github.com/takumiecd/stag"
+Homepage = "https://github.com/takumiecd/arctx"
+Repository = "https://github.com/takumiecd/arctx"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/arctx_cli"]

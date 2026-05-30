@@ -5,13 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "arctx-tui"
 version = "0.2.0b2"
-description = "ARCTX TUI: Textual interface for arctx"
+description = "Textual TUI for ARCTX — append-only DAG for reasoning history and parallel agent work"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Takumi Ishida"},
 ]
+keywords = ["tui", "textual", "arctx", "dag", "agents", "developer-tools"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -20,6 +21,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities",
 ]
 dependencies = [
     "arctx>=0.2.0b2",
@@ -39,8 +42,8 @@ dev = [
 arctx-tui = "arctx_tui.main:main"
 
 [project.urls]
-Homepage = "https://github.com/takumiecd/stag"
-Repository = "https://github.com/takumiecd/stag"
+Homepage = "https://github.com/takumiecd/arctx"
+Repository = "https://github.com/takumiecd/arctx"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/arctx_tui"]
