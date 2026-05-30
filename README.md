@@ -69,6 +69,52 @@ ARCTX is *not* an executor, planner, or agent framework. It is the substrate for
 
 ---
 
+### Example 1: Benchmark-driven optimization
+
+You try variant A, it gets slower. You try variant B, it gets faster. Three months later you need to explain *why* variant A was abandoned.
+
+```bash
+# 1. Baseline
+arctx init optimize --extension git --run-id bench
+arctx git commit -m "baseline: naive loop"
+
+# 2. Hypothesis A — add a cache layer
+git checkout -b feat/cache
+# ...edit...
+git add . && arctx git commit -m "add cache (hypothesis A)"
+arctx payload add --target transition:latest \
+  --payload-type benchmark \
+  --field elapsed_ms=1200 \
+  --field note="slower than baseline"
+
+# 3. Abandon A — it stays in the graph, just marked inactive
+arctx cut transition $(arctx show --latest transition)
+
+# 4. Hypothesis B — vectorize
+git checkout main && git checkout -b feat/vectorize
+# ...edit...
+git add . && arctx git commit -m "vectorize (hypothesis B)"
+arctx payload add --target transition:latest \
+  --payload-type benchmark \
+  --field elapsed_ms=180 \
+  --field note="5x faster than baseline"
+```
+
+The resulting graph tells the whole story:
+
+```text
+n_root
+└─ t_baseline ── n_1
+   ├─ t_cache_hypothesis_A ── n_2 ✂
+   │     payload: benchmark {elapsed_ms: 1200, note: "slower than baseline"}
+   └─ t_vectorize_hypothesis_B ── n_3
+         payload: benchmark {elapsed_ms: 180, note: "5x faster than baseline"}
+```
+
+No spreadsheet, no stale Confluence page — the *reasoning* lives next to the *code*.
+
+---
+
 ## 30-second Quick Start
 
 From inside a git repository:
