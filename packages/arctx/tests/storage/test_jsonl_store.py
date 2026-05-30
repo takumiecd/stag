@@ -173,3 +173,38 @@ def test_append_batch_rejects_work_session_user_mismatch():
                     events=(),
                 )
             )
+
+
+def test_round_trip_preserves_objective():
+    """Requirement.objective must survive a save/load round-trip."""
+    req = Requirement(
+        requirement_id="r",
+        target_type="task",
+        target_id="t",
+        objective={"goal": "speed", "metric": "p95"},
+    )
+    run = init(req, run_id="rt_objective")
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlRunStore(td)
+        store.save_run(run)
+        loaded = store.load_run("rt_objective")
+
+    assert loaded.requirement.objective == {"goal": "speed", "metric": "p95"}
+
+
+def test_concurrent_save_run_does_not_clobber():
+    """Two independent handles saving the same run must both survive (merge)."""
+    with tempfile.TemporaryDirectory() as td:
+        store = JsonlRunStore(td)
+        store.save_run(init(_req(), run_id="rt_concurrent"))
+
+        a = store.load_run("rt_concurrent")
+        b = store.load_run("rt_concurrent")
+        ta = a.transition([a.root_node_id], _tp("a"))
+        tb = b.transition([b.root_node_id], _tp("b"))
+        store.save_run(a)
+        store.save_run(b)  # stale snapshot — must not erase ta
+
+        loaded = store.load_run("rt_concurrent")
+        assert ta.transition_id in loaded.run_graph.transitions
+        assert tb.transition_id in loaded.run_graph.transitions

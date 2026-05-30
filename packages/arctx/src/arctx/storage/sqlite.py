@@ -14,7 +14,7 @@ from arctx.core.run import RunHandle
 from arctx.core.run_graph import RunGraph
 from arctx.core.schema.graph import Node, Transition
 from arctx.core.schema.payloads import payload_from_dict
-from arctx.core.schema.requirements import Requirement
+from arctx.core.schema.requirements import requirement_from_dict
 from arctx.core.schema.work import WorkEvent, work_event_from_dict, work_session_from_dict
 from arctx.storage._cache import load_cache, save_cache
 
@@ -62,30 +62,49 @@ class SqliteRunStore:
             },
         )
         db_path = run_path / "run.db"
-        # Alpha: drop and recreate on schema mismatch rather than migrate.
-        con = sqlite3.connect(db_path)
+        con = sqlite3.connect(db_path, timeout=30)
         try:
             _setup_db(con)
+            # Serialize with concurrent writers (append_batch / another
+            # save_run) via SQLite's write lock, and merge instead of replacing
+            # so a concurrent writer's records are never clobbered.
+            con.execute("BEGIN IMMEDIATE")
             con.execute("DELETE FROM run_meta")
             con.execute(
                 "INSERT INTO run_meta(key, data_json) VALUES (?, ?)",
                 ("graph", _dumps({"metadata": dict(run.run_graph.metadata)})),
             )
-            _replace_records(con, "nodes", "node_id", run.run_graph.nodes.values())
-            _replace_records(
+            _merge_records(con, "nodes", "node_id", run.run_graph.nodes.values())
+            _merge_records(
                 con, "transitions", "transition_id", run.run_graph.transitions.values()
             )
-            _replace_records(con, "payloads", "payload_id", run.run_graph.payloads.values())
-            _replace_records(con, "views", "view_id", run.run_graph.views.values())
-            _replace_records(
+            _merge_records(con, "payloads", "payload_id", run.run_graph.payloads.values())
+            _merge_records(con, "views", "view_id", run.run_graph.views.values())
+            _merge_records(
                 con, "work_sessions", "work_session_id", run.run_graph.work_sessions.values()
             )
-            _replace_work_events(con, run.run_graph.work_events)
+            _merge_work_events(con, run.run_graph.work_events)
             con.commit()
+        except Exception:
+            con.rollback()
+            raise
         finally:
             con.close()
 
-        save_cache(run_path, self._row_counts(run_path), run.run_graph)
+        # Only refresh the cache when the in-memory graph matches disk exactly;
+        # if a concurrent writer added records, disk is a superset, so let the
+        # row-count mismatch rebuild the cache on next load.
+        mem_counts = (
+            len(run.run_graph.nodes),
+            len(run.run_graph.transitions),
+            len(run.run_graph.payloads),
+            len(run.run_graph.views),
+            len(run.run_graph.work_sessions),
+            len(run.run_graph.work_events),
+        )
+        disk_counts = self._row_counts(run_path)
+        if mem_counts == disk_counts:
+            save_cache(run_path, disk_counts, run.run_graph)
         return run_path
 
     def append_batch(self, batch: AppendBatch) -> AppendResult:
@@ -173,7 +192,7 @@ class SqliteRunStore:
         manifest = _read_json(run_path / "run.json")
         row_counts = self._row_counts(run_path)
         cached_graph = load_cache(run_path, row_counts)
-        requirement = _requirement_from_dict(manifest["requirement"])
+        requirement = requirement_from_dict(manifest["requirement"])
         if cached_graph is not None:
             return RunHandle(
                 run_id=manifest["run_id"],
@@ -305,21 +324,21 @@ def _rows(con: sqlite3.Connection, table: str) -> list[dict[str, Any]]:
     ]
 
 
-def _replace_records(con: sqlite3.Connection, table: str, id_col: str, records) -> None:
-    con.execute(f"DELETE FROM {table}")
+def _merge_records(con: sqlite3.Connection, table: str, id_col: str, records) -> None:
+    """Insert records by ID, preserving any already present (idempotent merge)."""
     for record in records:
         record_id = getattr(record, id_col)
         con.execute(
-            f"INSERT INTO {table}({id_col}, data_json) VALUES (?, ?)",
+            f"INSERT OR IGNORE INTO {table}({id_col}, data_json) VALUES (?, ?)",
             (record_id, _dumps(record.to_dict())),
         )
 
 
-def _replace_work_events(con: sqlite3.Connection, events: list[WorkEvent]) -> None:
-    con.execute("DELETE FROM work_events")
+def _merge_work_events(con: sqlite3.Connection, events: list[WorkEvent]) -> None:
+    """Insert work events by ID, preserving any already present."""
     for event in events:
         con.execute(
-            "INSERT INTO work_events(event_id, data_json) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO work_events(event_id, data_json) VALUES (?, ?)",
             (event.event_id, _dumps(event.to_dict())),
         )
 
@@ -343,13 +362,3 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
 
 def _read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _requirement_from_dict(data: dict[str, Any]) -> Requirement:
-    return Requirement(
-        requirement_id=str(data["requirement_id"]),
-        target_type=str(data["target_type"]),
-        target_id=str(data["target_id"]),
-        constraints=dict(data.get("constraints") or {}),
-        metadata=dict(data.get("metadata") or {}),
-    )

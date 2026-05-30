@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
-import itertools
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,7 @@ from arctx.core.run import RunHandle
 from arctx.core.run_graph import RunGraph
 from arctx.core.schema.graph import Node, Transition
 from arctx.core.schema.payloads import payload_from_dict
-from arctx.core.schema.requirements import Requirement
+from arctx.core.schema.requirements import requirement_from_dict
 from arctx.core.schema.work import work_event_from_dict, work_session_from_dict
 from arctx.storage._cache import load_cache, save_cache
 
@@ -77,58 +78,61 @@ class JsonlRunStore:
         run_path = self.run_path(run.run_id)
         run_path.mkdir(parents=True, exist_ok=True)
 
-        self._write_json(
-            run_path / "run.json",
-            {
-                "run_id": run.run_id,
-                "requirement": run.requirement.to_dict(),
-                "counters": dict(run._counters),
-            },
-        )
-        self._write_json(
-            run_path / "graph.json",
-            {"metadata": dict(run.run_graph.metadata)},
-        )
-        self._append_jsonl(
-            run_path / "nodes.jsonl",
-            list(run.run_graph.nodes.values()),
-            lambda node: node.to_dict(),
-        )
-        self._append_jsonl(
-            run_path / "transitions.jsonl",
-            list(run.run_graph.transitions.values()),
-            lambda transition: transition.to_dict(),
-        )
-        self._append_jsonl(
-            run_path / "payloads.jsonl",
-            list(run.run_graph.payloads.values()),
-            lambda payload: payload.to_dict(),
-        )
-        self._append_jsonl(
-            run_path / "views.jsonl",
-            list(run.run_graph.views.values()),
-            lambda v: v.to_dict(),
-        )
-        self._append_jsonl(
-            run_path / "work_sessions.jsonl",
-            list(run.run_graph.work_sessions.values()),
-            lambda s: s.to_dict(),
-        )
-        self._append_jsonl(
-            run_path / "work_events.jsonl",
-            list(run.run_graph.work_events),
-            lambda e: e.to_dict(),
-        )
+        with _run_lock(run_path):
+            self._write_json(
+                run_path / "run.json",
+                {
+                    "run_id": run.run_id,
+                    "requirement": run.requirement.to_dict(),
+                    "counters": dict(run._counters),
+                },
+            )
+            self._write_json(
+                run_path / "graph.json",
+                {"metadata": dict(run.run_graph.metadata)},
+            )
+            self._merge_jsonl(
+                run_path / "nodes.jsonl", run.run_graph.nodes.values(), "node_id"
+            )
+            self._merge_jsonl(
+                run_path / "transitions.jsonl",
+                run.run_graph.transitions.values(),
+                "transition_id",
+            )
+            self._merge_jsonl(
+                run_path / "payloads.jsonl",
+                run.run_graph.payloads.values(),
+                "payload_id",
+            )
+            self._merge_jsonl(
+                run_path / "views.jsonl", run.run_graph.views.values(), "view_id"
+            )
+            self._merge_jsonl(
+                run_path / "work_sessions.jsonl",
+                run.run_graph.work_sessions.values(),
+                "work_session_id",
+            )
+            self._merge_jsonl(
+                run_path / "work_events.jsonl",
+                run.run_graph.work_events,
+                "event_id",
+            )
 
-        row_counts = (
-            len(run.run_graph.nodes),
-            len(run.run_graph.transitions),
-            len(run.run_graph.payloads),
-            len(run.run_graph.views),
-            len(run.run_graph.work_sessions),
-            len(run.run_graph.work_events),
-        )
-        save_cache(run_path, row_counts, run.run_graph)
+            # Only refresh the cache when the in-memory graph matches disk
+            # exactly. If a concurrent writer added records, disk is a superset
+            # and caching the in-memory graph would under-report; skip and let
+            # the row-count mismatch trigger a rebuild on next load.
+            mem_counts = (
+                len(run.run_graph.nodes),
+                len(run.run_graph.transitions),
+                len(run.run_graph.payloads),
+                len(run.run_graph.views),
+                len(run.run_graph.work_sessions),
+                len(run.run_graph.work_events),
+            )
+            disk_counts = self._row_counts(run_path)
+            if mem_counts == disk_counts:
+                save_cache(run_path, disk_counts, run.run_graph)
 
         return run_path
 
@@ -193,7 +197,7 @@ class JsonlRunStore:
     def load_run(self, run_id: str) -> RunHandle:
         run_path = self.run_path(run_id)
         manifest = self._read_json(run_path / "run.json")
-        requirement = _requirement_from_dict(manifest["requirement"])
+        requirement = requirement_from_dict(manifest["requirement"])
 
         # --- Cache fast path ---
         row_counts = self._row_counts(run_path)
@@ -271,34 +275,30 @@ class JsonlRunStore:
         )
 
     @staticmethod
-    def _append_jsonl(path: Path, records: list, to_dict) -> None:
-        """Append only new records to a JSONL file."""
-        disk_count = 0
-        if path.exists():
-            with path.open("r", encoding="utf-8") as f:
-                disk_count = sum(1 for line in f if line.strip())
+    def _merge_jsonl(path: Path, records, id_attr: str) -> None:
+        """Atomically rewrite *path* as the union (by ID) of disk rows and *records*.
 
-        mem_count = len(records)
-        if disk_count > mem_count:
-            raise RuntimeError(
-                f"{path.name}: disk has {disk_count} lines but memory has {mem_count} records. "
-                "The run directory may be corrupt or was modified externally."
-            )
-
-        new_records = list(itertools.islice(records, disk_count, None))
-        if not new_records:
-            return
-
-        mode = "a" if disk_count > 0 else "w"
-        with path.open(mode, encoding="utf-8") as f:
-            for rec in new_records:
-                f.write(_fast_json.dumps(to_dict(rec)) + "\n")
+        Rows already on disk are kept (including any a concurrent writer added);
+        only records whose ID is not present yet are appended. The whole file is
+        written via a temp file + fsync + os.replace, so a crash never leaves a
+        torn line. Callers must hold the run lock.
+        """
+        existing = JsonlRunStore._read_jsonl(path)
+        seen = {str(row[id_attr]) for row in existing if id_attr in row}
+        merged = list(existing)
+        for rec in records:
+            rid = str(getattr(rec, id_attr))
+            if rid in seen:
+                continue
+            seen.add(rid)
+            merged.append(rec.to_dict())
+        _atomic_write_text(path, "".join(_fast_json.dumps(row) + "\n" for row in merged))
 
     @staticmethod
     def _write_json(path: Path, data: dict[str, Any]) -> None:
-        path.write_text(
+        _atomic_write_text(
+            path,
             json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
         )
 
     @staticmethod
@@ -316,15 +316,21 @@ class JsonlRunStore:
         ]
 
 
-def _requirement_from_dict(data: dict[str, Any]) -> Requirement:
-    return Requirement(
-        requirement_id=data["requirement_id"],
-        target_type=data["target_type"],
-        target_id=data["target_id"],
-        objective=dict(data.get("objective") or {}),
-        constraints=dict(data.get("constraints") or {}),
-        metadata=dict(data.get("metadata") or {}),
-    )
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write *text* to *path* atomically and durably (temp + fsync + replace)."""
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.tmp_")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 @contextlib.contextmanager
