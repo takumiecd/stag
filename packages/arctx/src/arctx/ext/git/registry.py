@@ -117,12 +117,17 @@ def write_repo_marker(repo_root: str | Path, repo_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def resolve_repo_id(handle: "RunHandle", repo_path: str | Path) -> str:
+def resolve_repo_id(
+    handle: "RunHandle", repo_path: str | Path, *, slug: str | None = None
+) -> str:
     """Resolve *repo_path* to a repo_id in this run, registering it if new.
 
     Order: (1) ``.arctx-repo`` marker, (2) canonical match against the run's
     registry via the repo's git remotes, (3) register a fresh entry (works for
     purely local repos with no remote — opaque id only).
+
+    *slug* overrides the display name only when registering a fresh entry; an
+    already-registered repo keeps its recorded slug.
     """
     from arctx.ext.git.helpers import repo as git_repo
 
@@ -151,7 +156,7 @@ def resolve_repo_id(handle: "RunHandle", repo_path: str | Path) -> str:
         payload_id=handle._next_id("pl"),
         target_id=_root_node_id(graph),
         repo_id=repo_id,
-        slug=slug_from_canonical(canonical),
+        slug=slug or slug_from_canonical(canonical),
         remotes=tuple(RemoteRef(kind=k, url=u) for k, u in remote_pairs),
         canonical=canonical,
         local_path=local_path,
